@@ -31,7 +31,8 @@
     "tscw": "npm run tsc:watch",
     "update": "nx migrate latest",
     "migrate": "npx nx migrate --run-migrations",
-    "version": "node ./version-bump.mjs && git add apps/plugin/src/assets/manifest.json apps/plugin/src/assets/versions.json"
+    "version": "node ./version-bump.mjs && git add apps/plugin/src/assets/manifest.json apps/plugin/src/assets/versions.json",
+    "watch": "nx watch --projects=plugin -- npm run build:dev"
   },
   "private": true,
   "devDependencies": {
