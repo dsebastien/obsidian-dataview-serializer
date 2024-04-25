@@ -1,22 +1,46 @@
-# vscode
-.vscode 
+# See http://help.github.com/ignore-files/ for more about ignoring files.
 
-# Intellij
-*.iml
-.idea
+# compiled output
+/dist
+/tmp
+/out-tsc
 
-# npm
+# dependencies
 node_modules
 
-# Don't include the compiled main.js file in the repo.
-# They should be uploaded to GitHub releases instead.
-main.js
+# IDEs and editors
+/.idea
+.project
+.classpath
+.c9/
+*.launch
+.settings/
+*.sublime-workspace
 
-# Exclude sourcemaps
-*.map
+# IDE - VSCode
+.vscode/*
+!.vscode/settings.json
+!.vscode/tasks.json
+!.vscode/launch.json
+!.vscode/extensions.json
 
-# obsidian
+# misc
+/.sass-cache
+/connect.lock
+/coverage
+/libpeerconnection.log
+npm-debug.log
+yarn-error.log
+testem.log
+/typings
+
+# System Files
+.DS_Store
+Thumbs.db
+
+# Obsidian
 data.json
 
-# Exclude macOS Finder (System Explorer) View States
-.DS_Store
+# Nx
+tools/**/*.js
+.nx/cache
