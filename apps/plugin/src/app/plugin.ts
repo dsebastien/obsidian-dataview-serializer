@@ -2,7 +2,7 @@ import { Plugin } from 'obsidian';
 import { DEFAULT_SETTINGS, PluginSettings } from './types';
 import { SettingsTab } from './settingTab';
 import { log } from './utils/log';
-import {produce} from "immer";
+import { produce } from 'immer';
 
 export class MyPlugin extends Plugin {
   /**
@@ -35,12 +35,12 @@ export class MyPlugin extends Plugin {
 
     if (!loadedSettings) {
       log('Using default settings', 'debug');
-      loadedSettings = produce(DEFAULT_SETTINGS, () => DEFAULT_SETTINGS);;
+      loadedSettings = produce(DEFAULT_SETTINGS, () => DEFAULT_SETTINGS);
     }
 
-    this.settings = produce(this.settings, (draft => {
+    this.settings = produce(this.settings, (draft) => {
       draft.enabled = loadedSettings.enabled;
-    }));
+    });
     log(`Settings loaded`, 'debug', loadedSettings);
   }
 
