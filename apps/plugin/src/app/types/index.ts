@@ -1,11 +1,11 @@
 export interface PluginSettings {
-  /**
-   * Enable
-   */
   enabled: boolean;
-  // TODO add excluded folders
+  ignoredFolders: string[]; // FIXME rename to foldersToKeepUpdatedAutomatically
+  filesWithQueriesToSerialize: string[];
 }
 
 export const DEFAULT_SETTINGS: PluginSettings = {
   enabled: false,
+  ignoredFolders: [],
+  filesWithQueriesToSerialize: [],
 };
