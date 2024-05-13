@@ -73,7 +73,7 @@ jobs:
           asset_content_type: application/json
 
       - name: Upload styles.css
-        id: upload-css
+        id: upload-styles
         uses: actions/upload-release-asset@v1
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
