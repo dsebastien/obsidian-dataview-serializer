@@ -80,21 +80,11 @@ export class DataviewSerializerPlugin extends Plugin {
 
     this.settings = produce(this.settings, (draft: Draft<PluginSettings>) => {
       if (
-        loadedSettings.enabled !== undefined &&
-        loadedSettings.enabled !== null
+        loadedSettings.foldersToWatch !== undefined &&
+        loadedSettings.foldersToWatch !== null &&
+        Array.isArray(loadedSettings.foldersToWatch)
       ) {
-        draft.enabled = loadedSettings.enabled;
-      } else {
-        log('The loaded settings miss the [enabled] property', 'debug');
-        needToSaveSettings = true;
-      }
-
-      if (
-        loadedSettings.ignoredFolders !== undefined &&
-        loadedSettings.ignoredFolders !== null &&
-        Array.isArray(loadedSettings.ignoredFolders)
-      ) {
-        draft.ignoredFolders = loadedSettings.ignoredFolders;
+        draft.foldersToWatch = loadedSettings.foldersToWatch;
       } else {
         log('The loaded settings miss the [ignoredFolders] property', 'debug');
         needToSaveSettings = true;
@@ -136,10 +126,7 @@ export class DataviewSerializerPlugin extends Plugin {
 
     this.registerEvent(
       this.app.vault.on('modify', (file) => {
-        if (this.settings.enabled) {
-          return this.processFile(file);
-        }
-        return;
+        return this.processFile(file);
       })
     );
 

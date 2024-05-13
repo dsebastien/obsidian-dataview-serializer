@@ -19,35 +19,23 @@ export class SettingsTab extends PluginSettingTab {
 
     containerEl.empty();
 
-    new Setting(containerEl).setName('Enabled').addToggle((toggle) =>
-      toggle.setValue(this.plugin.settings.enabled).onChange(async (value) => {
-        this.plugin.settings = produce(
-          this.plugin.settings,
-          (draft: Draft<PluginSettings>) => {
-            draft.enabled = value;
-          }
-        );
-        await this.plugin.saveSettings();
-      })
-    );
-
-    this.addExcludedFoldersSetting();
+    this.addAutoUpdatedFolders();
   }
 
-  addExcludedFoldersSetting(): void {
+  addAutoUpdatedFolders(): void {
     this.doSearchAndRemoveList({
-      currentList: this.plugin.settings.ignoredFolders,
+      currentList: this.plugin.settings.foldersToWatch,
       setValue: async (newValue) => {
         this.plugin.settings = produce(
           this.plugin.settings,
           (draft: Draft<PluginSettings>) => {
-            draft.ignoredFolders = newValue;
+            draft.foldersToWatch = newValue;
           }
         );
       },
-      name: 'Folders to exclude',
+      name: 'Folders to watch',
       description:
-        'Any file updated in this folder will not trigger an updated and created update.',
+        'Any file located in one of these folders and containing queries to serialize will automatically be updated.',
     });
   }
 
