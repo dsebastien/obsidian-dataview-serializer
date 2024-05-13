@@ -1,4 +1,4 @@
-import { Notice, Plugin, TAbstractFile, TFile } from 'obsidian';
+import { debounce, Notice, Plugin, TAbstractFile, TFile } from 'obsidian';
 import { DEFAULT_SETTINGS, PluginSettings } from './types';
 import { SettingsTab } from './settingTab';
 import { log } from './utils/log';
@@ -7,6 +7,7 @@ import { isExcalidrawFile } from './utils/is-excalidraw-file.fn';
 import {
   DEFAULT_CANVAS_FILE_NAME,
   MARKDOWN_FILE_EXTENSION,
+  MINIMUM_MS_BETWEEN_EVENTS,
   MINIMUM_SECONDS_BETWEEN_UPDATES,
   NOTICE_TIMEOUT,
   QUERY_FLAG_CLOSE,
@@ -21,6 +22,7 @@ import { DataviewApi } from 'obsidian-dataview/lib/api/plugin-api';
 import { add, isBefore } from 'date-fns';
 import { serializeQuery } from './utils/serialize-query.fn';
 import { findQueries } from './utils/find-queries.fn';
+import { escapeRegExp } from './utils/escape-reg-exp.fn';
 
 export class DataviewSerializerPlugin extends Plugin {
   /**
@@ -31,8 +33,34 @@ export class DataviewSerializerPlugin extends Plugin {
    * The API of the Dataview plugin
    */
   dataviewApi: DataviewApi | undefined;
-
+  /**
+   * When a recently updated file can be updated again
+   */
   nextPossibleUpdates: Map<string, Date> = new Map<string, Date>();
+  /**
+   * List of recently updated files in the vault
+   * Those will be processed by the next scheduled update
+   */
+  recentlyUpdatedFiles: Set<TAbstractFile> = new Set<TAbstractFile>();
+
+  /**
+   * Debounce file updates
+   */
+  scheduleUpdate = debounce(
+    this.processRecentlyUpdatedFiles.bind(this),
+    MINIMUM_MS_BETWEEN_EVENTS,
+    true
+  );
+
+  /**
+   * Process all the identified recently updated files
+   */
+  async processRecentlyUpdatedFiles(): Promise<void> {
+    this.recentlyUpdatedFiles.forEach((file) => {
+      this.processFile(file);
+    });
+    this.recentlyUpdatedFiles.clear();
+  }
 
   /**
    * Executed as soon as the plugin loads
@@ -59,6 +87,27 @@ export class DataviewSerializerPlugin extends Plugin {
 
     // Add a settings screen for the plugin
     this.addSettingTab(new SettingsTab(this.app, this));
+
+    // Add commands
+    this.addCommand({
+      id: 'serialize-all-dataview-queries',
+      name: 'Scan and serialize all Dataview queries',
+      callback: async () => {
+        log('Scanning and serializing all Dataview queries', 'debug');
+        const allVaultFiles = this.app.vault.getMarkdownFiles();
+
+        let updatedFilesCount = 0;
+
+        for (const vaultFile of allVaultFiles) {
+          this.settings.foldersToScan.some(async (ignoredFolder) => {
+            if (vaultFile.path.startsWith(ignoredFolder)) {
+              await this.processFile(vaultFile);
+              updatedFilesCount++;
+            }
+          });
+        }
+      },
+    });
   }
 
   // eslint-disable-next-line @typescript-eslint/no-empty-function
@@ -80,24 +129,24 @@ export class DataviewSerializerPlugin extends Plugin {
 
     this.settings = produce(this.settings, (draft: Draft<PluginSettings>) => {
       if (
-        loadedSettings.foldersToWatch !== undefined &&
-        loadedSettings.foldersToWatch !== null &&
-        Array.isArray(loadedSettings.foldersToWatch)
+        loadedSettings.foldersToScan !== undefined &&
+        loadedSettings.foldersToScan !== null &&
+        Array.isArray(loadedSettings.foldersToScan)
       ) {
-        draft.foldersToWatch = loadedSettings.foldersToWatch;
+        draft.foldersToScan = loadedSettings.foldersToScan;
       } else {
-        log('The loaded settings miss the [ignoredFolders] property', 'debug');
+        log('The loaded settings miss the [foldersToScan] property', 'debug');
         needToSaveSettings = true;
       }
 
       if (
-        loadedSettings.filesWithQueriesToSerialize !== undefined &&
-        loadedSettings.filesWithQueriesToSerialize !== null &&
-        Array.isArray(loadedSettings.filesWithQueriesToSerialize)
+        loadedSettings.ignoredFolders !== undefined &&
+        loadedSettings.ignoredFolders !== null &&
+        Array.isArray(loadedSettings.ignoredFolders)
       ) {
-        draft.filesWithQueriesToSerialize =
-          loadedSettings.filesWithQueriesToSerialize;
+        draft.ignoredFolders = loadedSettings.ignoredFolders;
       } else {
+        log('The loaded settings miss the [ignoredFolders] property', 'debug');
         needToSaveSettings = true;
       }
     });
@@ -122,26 +171,32 @@ export class DataviewSerializerPlugin extends Plugin {
    * Add the event handlers
    */
   setupEventHandlers() {
-    log('Adding event handlers');
+    // Register events after layout is built to avoid initial wave of 'create' events
+    this.app.workspace.onLayoutReady(async () => {
+      log('Adding event handlers', 'debug');
 
-    this.registerEvent(
-      this.app.vault.on('modify', (file) => {
-        return this.processFile(file);
-      })
-    );
+      this.registerEvent(
+        this.app.vault.on('create', (file) => {
+          this.recentlyUpdatedFiles.add(file);
+          this.scheduleUpdate();
+        })
+      );
 
-    /*
-    this.registerEvent(
-      this.app.vault.on("delete", (file) => {
-        if (this.settings.enabled) {
-          // FIXME handle plugin configuration cleanup (if deleted file was known to contain a query, then it should be removed)
-          //return this.handleFileDelete(file);
-        }
-      })
-    );
-    */
+      this.registerEvent(
+        this.app.vault.on('rename', (file) => {
+          this.recentlyUpdatedFiles.add(file);
+          this.scheduleUpdate();
+        })
+      );
 
-    // TODO add command to force update of all known queries
+      this.registerEvent(
+        this.app.vault.on('modify', (file) => {
+          this.recentlyUpdatedFiles.add(file);
+
+          this.scheduleUpdate();
+        })
+      );
+    });
   }
 
   async processFile(file: TAbstractFile): Promise<void> {
@@ -155,14 +210,13 @@ export class DataviewSerializerPlugin extends Plugin {
     }
 
     try {
-      log(`Processing file: ${file.path}`);
+      log(`Processing file: ${file.path}`, 'debug');
 
       const text = await this.app.vault.cachedRead(file);
       const foundQueries: string[] = findQueries(text);
 
       if (foundQueries.length === 0) {
-        log(`No queries to serialize found in file`, 'debug', file);
-        // FIXME remove this once we handle side effects
+        // No queries to serialize found in the file
         return;
       }
 
@@ -171,7 +225,7 @@ export class DataviewSerializerPlugin extends Plugin {
 
       // Remove existing serialized queries if any
       updatedText = updatedText.replace(serializedQueriesRegex, '');
-      //log("Cleaned up: ", 'debug', updatedText);
+      log('Cleaned up: ', 'debug', updatedText);
 
       // Serialize the supported queries in memory
       for (const foundQuery of foundQueries) {
@@ -184,15 +238,18 @@ export class DataviewSerializerPlugin extends Plugin {
           foundQuery,
           this.dataviewApi!
         );
-        log('Serialized query: ', 'debug', serializedQuery);
+        //log('Serialized query: ', 'debug', serializedQuery);
 
         if ('' !== serializedQuery) {
+          let escapedQuery = escapeRegExp(foundQuery);
+
           const queryToSerializeRegex = new RegExp(
-            `${QUERY_FLAG_OPEN}${foundQuery}.*${QUERY_FLAG_CLOSE}\\n`,
+            `${QUERY_FLAG_OPEN}${escapedQuery}.*${QUERY_FLAG_CLOSE}\\n`,
             'gm'
           );
 
           const queryAndSerializedQuery = `${QUERY_FLAG_OPEN}${foundQuery}${QUERY_FLAG_CLOSE}\n${SERIALIZED_QUERY_START}${foundQuery}${QUERY_FLAG_CLOSE}\n${serializedQuery}${SERIALIZED_QUERY_END}\n`;
+          //log('Query to serialize regex: ', 'debug', queryToSerializeRegex);
 
           //log('Updated text before: ', 'debug', updatedText);
           updatedText = updatedText.replace(
@@ -211,27 +268,12 @@ export class DataviewSerializerPlugin extends Plugin {
 
       // Save the updated version
       await this.app.vault.modify(file, updatedText);
-
-      // FIXME process side-effects
-      /*
-      this.settings.ignoredFolders.some((ignoredFolder) => {
-      if (file.path.startsWith(ignoredFolder)) {
-        log(
-          `Skipping because the file is part of an ignored folder: [${ignoredFolder}]`
-        );
-        return true;
-      } else {
-        return false;
-      }
-    });
-       */
     } catch (e: unknown) {
       log('Failed to process the file', 'warn', e);
     }
   }
 
   async shouldFileBeIgnored(file: TFile): Promise<boolean> {
-    log(`Checking if the file should be ignored: ${file.path}`, 'debug');
     if (!file.path) {
       return true;
     }
@@ -267,6 +309,15 @@ export class DataviewSerializerPlugin extends Plugin {
       }
     }
 
-    return false;
+    return this.settings.ignoredFolders.some((ignoredFolder) => {
+      if (file.path.startsWith(ignoredFolder)) {
+        log(
+          `Skipping because the file is part of an ignored folder: [${ignoredFolder}]`
+        );
+        return true;
+      } else {
+        return false;
+      }
+    });
   }
 }

@@ -1,9 +1,9 @@
 export interface PluginSettings {
-  foldersToWatch: string[]; // FIXME rename to foldersToKeepUpdatedAutomatically
-  filesWithQueriesToSerialize: string[];
+  foldersToScan: string[];
+  ignoredFolders: string[];
 }
 
 export const DEFAULT_SETTINGS: PluginSettings = {
-  foldersToWatch: [],
-  filesWithQueriesToSerialize: [],
+  foldersToScan: [],
+  ignoredFolders: [],
 };

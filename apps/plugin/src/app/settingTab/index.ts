@@ -19,23 +19,55 @@ export class SettingsTab extends PluginSettingTab {
 
     containerEl.empty();
 
-    this.addAutoUpdatedFolders();
+    this.renderSupportHeader(containerEl);
+    this.renderFoldersToScan();
+    this.renderFoldersToIgnore();
   }
 
-  addAutoUpdatedFolders(): void {
+  renderSupportHeader(containerEl: HTMLElement) {
+    new Setting(containerEl).setName('Support').setHeading();
+
+    const supportDesc = new DocumentFragment();
+    supportDesc.createDiv({
+      text: 'Buy me a coffee to support the development of this plugin ❤️',
+    });
+
+    new Setting(containerEl).setDesc(supportDesc);
+
+    this.renderBuyMeACoffeeBadge(containerEl);
+    const spacing = containerEl.createDiv();
+    spacing.style.marginBottom = '0.75em';
+  }
+
+  renderFoldersToScan(): void {
     this.doSearchAndRemoveList({
-      currentList: this.plugin.settings.foldersToWatch,
+      currentList: this.plugin.settings.foldersToScan,
       setValue: async (newValue) => {
         this.plugin.settings = produce(
           this.plugin.settings,
           (draft: Draft<PluginSettings>) => {
-            draft.foldersToWatch = newValue;
+            draft.foldersToScan = newValue;
           }
         );
       },
-      name: 'Folders to watch',
-      description:
-        'Any file located in one of these folders and containing queries to serialize will automatically be updated.',
+      name: 'Folders to scan',
+      description: 'Folders to scan when looking for queries to serialize.',
+    });
+  }
+
+  renderFoldersToIgnore(): void {
+    this.doSearchAndRemoveList({
+      currentList: this.plugin.settings.ignoredFolders,
+      setValue: async (newValue) => {
+        this.plugin.settings = produce(
+          this.plugin.settings,
+          (draft: Draft<PluginSettings>) => {
+            draft.ignoredFolders = newValue;
+          }
+        );
+      },
+      name: 'Folders to ignore',
+      description: 'Folders to ignore when processing added/modified files.',
     });
   }
 
@@ -81,5 +113,19 @@ export class SettingsTab extends PluginSettingTab {
         })
       )
     );
+  }
+
+  renderBuyMeACoffeeBadge(
+    contentEl: HTMLElement | DocumentFragment,
+    width = 175
+  ) {
+    const linkEl = contentEl.createEl('a', {
+      href: 'https://www.buymeacoffee.com/dsebastien',
+    });
+    const imgEl = linkEl.createEl('img');
+    imgEl.src =
+      'https://github.com/dsebastien/obsidian-dataview-serializer/blob/master/apps/plugin/src/assets/buy-me-a-coffee.png?raw=true';
+    imgEl.alt = 'Buy me a coffee';
+    imgEl.width = width;
   }
 }
