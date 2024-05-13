@@ -96,13 +96,10 @@ export class DataviewSerializerPlugin extends Plugin {
         log('Scanning and serializing all Dataview queries', 'debug');
         const allVaultFiles = this.app.vault.getMarkdownFiles();
 
-        let updatedFilesCount = 0;
-
         for (const vaultFile of allVaultFiles) {
           this.settings.foldersToScan.some(async (ignoredFolder) => {
             if (vaultFile.path.startsWith(ignoredFolder)) {
               await this.processFile(vaultFile);
-              updatedFilesCount++;
             }
           });
         }
@@ -236,12 +233,13 @@ export class DataviewSerializerPlugin extends Plugin {
         // Reference: https://github.com/IdreesInc/Waypoint/blob/master/main.ts
         const serializedQuery = await serializeQuery(
           foundQuery,
+          // eslint-disable-next-line  @typescript-eslint/no-non-null-assertion
           this.dataviewApi!
         );
         //log('Serialized query: ', 'debug', serializedQuery);
 
         if ('' !== serializedQuery) {
-          let escapedQuery = escapeRegExp(foundQuery);
+          const escapedQuery = escapeRegExp(foundQuery);
 
           const queryToSerializeRegex = new RegExp(
             `${QUERY_FLAG_OPEN}${escapedQuery}.*${QUERY_FLAG_CLOSE}\\n`,
@@ -299,6 +297,7 @@ export class DataviewSerializerPlugin extends Plugin {
 
     // Make sure the file was not modified too recently (avoid update loops)
     if (this.nextPossibleUpdates.has(file.path)) {
+      // eslint-disable-next-line  @typescript-eslint/no-non-null-assertion
       const nextPossibleUpdateForFile = this.nextPossibleUpdates.get(
         file.path
       )!;
