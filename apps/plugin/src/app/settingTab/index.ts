@@ -124,7 +124,7 @@ export class SettingsTab extends PluginSettingTab {
     });
     const imgEl = linkEl.createEl('img');
     imgEl.src =
-      'https://github.com/dsebastien/obsidian-dataview-serializer/blob/master/apps/plugin/src/assets/buy-me-a-coffee.png?raw=true';
+      'https://github.com/dsebastien/obsidian-plugin-template/raw/main/apps/plugin/src/assets/buy-me-a-coffee.png';
     imgEl.alt = 'Buy me a coffee';
     imgEl.width = width;
   }
