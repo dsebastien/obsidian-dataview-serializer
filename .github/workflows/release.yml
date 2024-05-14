@@ -10,7 +10,7 @@ permissions:
   contents: write
 
 env:
-  PLUGIN_NAME: obsidian-update-time
+  PLUGIN_NAME: obsidian-dataview-serializer
 
 jobs:
   build:
