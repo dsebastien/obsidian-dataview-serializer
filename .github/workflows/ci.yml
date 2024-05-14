@@ -25,11 +25,11 @@ jobs:
       # Cache node_modules
       - uses: actions/setup-node@v3
         with:
-          node-version: 20
+          node-version-file: '.nvmrc'
           cache: 'npm'
       - run: npm ci
-      - uses: nrwl/nx-set-shas@v4
 
+      - uses: nrwl/nx-set-shas@v4
       - run: git branch --track main origin/main
         if: ${{ github.event_name == 'pull_request' }}
 

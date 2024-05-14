@@ -21,7 +21,7 @@
     "build:prod": "nx build plugin --prod && zip -r ./dist/apps/plugin/obsidian-dataview-serializer.zip ./dist/apps/plugin/",
     "postbuild:prod": "npm run version && npm run copy:assets",
     "prepare": "npx husky install",
-    "copy:assets": "cp -r ./apps/plugin/src/assets/* ./dist/apps/plugin/ && cp ./manifest.json ./dist/apps/plugin/ && cp versions.json ./dist/apps/plugin/",
+    "copy:assets": "cp -r ./apps/plugin/src/assets/* ./dist/apps/plugin/ && cp ./manifest.json ./dist/apps/plugin/ && cp ./versions.json ./dist/apps/plugin/",
     "test": "nx affected:test --all --parallel --maxParallel 10",
     "test:watch": "npm run test -- --watch",
     "tsc": "tsc --noEmit --project ./apps/plugin/tsconfig.app.json",
