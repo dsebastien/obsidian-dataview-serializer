@@ -22,7 +22,7 @@ jobs:
       # The "--stop-agents-after" is optional, but allows idle agents to shut down once the "build" targets have been requested
       # - run: npx nx-cloud start-ci-run --distribute-on="5 linux-medium-js" --stop-agents-after="build"
 
-      # Cache node_modules
+      # Install dependencies and cache node modules
       - uses: actions/setup-node@v3
         with:
           node-version-file: '.nvmrc'

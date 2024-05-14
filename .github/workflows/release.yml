@@ -5,24 +5,33 @@ on:
     tags:
       - '*'
 
+permissions:
+  actions: read
+  contents: write
+
 env:
-  PLUGIN_NAME: obsidian-dataview-serializer
+  PLUGIN_NAME: obsidian-update-time
 
 jobs:
   build:
     runs-on: ubuntu-latest
 
     steps:
-      - uses: actions/checkout@v2
-      - name: Use Node.js
-        uses: actions/setup-node@v1
+      - uses: actions/checkout@v4
         with:
-          node-version: '20.11.0'
+          fetch-depth: 0
 
+      # Install node and install dependencies
+      - uses: actions/setup-node@v3
+        with:
+          node-version-file: '.nvmrc'
+          cache: 'npm'
+      - run: npm install
+
+      # Build the production version
       - name: Build
         id: build
         run: |
-          npm install
           npm run build:prod
           ls ./dist/apps/plugin
           echo "::set-output name=tag_name::$(git tag --sort version:refname | tail -n 1)"
