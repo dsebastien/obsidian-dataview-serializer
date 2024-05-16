@@ -16,7 +16,6 @@ import {
   SERIALIZED_QUERY_START,
   serializedQueriesRegex,
 } from './constants';
-import { isTFile } from './utils/is-tfile.fn';
 import { getAPI } from 'obsidian-dataview';
 import { DataviewApi } from 'obsidian-dataview/lib/api/plugin-api';
 import { add, isBefore } from 'date-fns';
@@ -196,10 +195,13 @@ export class DataviewSerializerPlugin extends Plugin {
     });
   }
 
-  async processFile(file: TAbstractFile): Promise<void> {
-    if (!isTFile(file)) {
+  async processFile(_file: TAbstractFile): Promise<void> {
+    if (!(_file instanceof TFile)) {
       return;
     }
+
+    // Safe from here on
+    const file = _file as TFile;
 
     const shouldBeIgnored = await this.shouldFileBeIgnored(file);
     if (shouldBeIgnored) {
