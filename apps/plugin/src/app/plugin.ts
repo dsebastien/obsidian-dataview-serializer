@@ -238,7 +238,7 @@ export class DataviewSerializerPlugin extends Plugin {
           // eslint-disable-next-line  @typescript-eslint/no-non-null-assertion
           this.dataviewApi!
         );
-        //log('Serialized query: ', 'debug', serializedQuery);
+        log('Serialized query: ', 'debug', serializedQuery);
 
         if ('' !== serializedQuery) {
           const escapedQuery = escapeRegExp(foundQuery);
@@ -249,14 +249,14 @@ export class DataviewSerializerPlugin extends Plugin {
           );
 
           const queryAndSerializedQuery = `${QUERY_FLAG_OPEN}${foundQuery}${QUERY_FLAG_CLOSE}\n${SERIALIZED_QUERY_START}${foundQuery}${QUERY_FLAG_CLOSE}\n${serializedQuery}${SERIALIZED_QUERY_END}\n`;
-          //log('Query to serialize regex: ', 'debug', queryToSerializeRegex);
+          log('Query to serialize regex: ', 'debug', queryToSerializeRegex);
 
-          //log('Updated text before: ', 'debug', updatedText);
+          log('Updated text before: ', 'debug', updatedText);
           updatedText = updatedText.replace(
             queryToSerializeRegex,
             queryAndSerializedQuery
           );
-          //log("Updated text after: ", 'debug', updatedText);
+          log('Updated text after: ', 'debug', updatedText);
         }
       }
 
@@ -313,7 +313,8 @@ export class DataviewSerializerPlugin extends Plugin {
     return this.settings.ignoredFolders.some((ignoredFolder) => {
       if (file.path.startsWith(ignoredFolder)) {
         log(
-          `Skipping because the file is part of an ignored folder: [${ignoredFolder}]`
+          `Skipping because the file is part of an ignored folder: [${ignoredFolder}]`,
+          'debug'
         );
         return true;
       } else {
