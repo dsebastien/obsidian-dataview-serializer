@@ -2,7 +2,7 @@
 
 Obsidian plugin that gives you the power of [Dataview](https://github.com/blacksmithgu/obsidian-dataview), but generates Markdown, making it compatible with Obsidian Publish, and making the links appear on the Graph.
 
-This plugin was inspired by the [Waypoint plugin](https://github.com/IdreesInc/Waypoint), which does vaguely similar, but without providing as much flexibility.
+This plugin was inspired by the [Waypoint plugin](https://github.com/IdreesInc/Waypoint), which enables something vaguely similar, but without providing as much flexibility.
 
 ## Features
 
