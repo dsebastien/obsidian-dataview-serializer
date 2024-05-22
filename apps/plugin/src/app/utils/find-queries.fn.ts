@@ -1,6 +1,5 @@
 import { QUERY_FLAG_CLOSE, QUERY_FLAG_OPEN } from '../constants';
 import { isSupportedQueryType } from './is-supported-query-type.fn';
-import { log } from './log';
 
 /**
  * Detect the queries in the given string. Ignores duplicates and ignores unsupported query types
@@ -23,7 +22,6 @@ export const findQueries = (text: string): string[] => {
       // Ignore duplicates
       // Make sure it is a supported query
       if (!retVal.includes(foundQuery) && isSupportedQueryType(foundQuery)) {
-        log('Found query: ', 'debug', foundQuery); // Example: "LIST FROM #one"
         retVal.push(foundQuery);
       }
     }

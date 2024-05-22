@@ -169,7 +169,7 @@ export class DataviewSerializerPlugin extends Plugin {
   setupEventHandlers() {
     // Register events after layout is built to avoid initial wave of 'create' events
     this.app.workspace.onLayoutReady(async () => {
-      log('Adding event handlers', 'debug');
+      //log('Adding event handlers', 'debug');
 
       this.registerEvent(
         this.app.vault.on('create', (file) => {
@@ -209,7 +209,7 @@ export class DataviewSerializerPlugin extends Plugin {
     }
 
     try {
-      log(`Processing file: ${file.path}`, 'debug');
+      //log(`Processing file: ${file.path}`, 'debug');
 
       const text = await this.app.vault.cachedRead(file);
       const foundQueries: string[] = findQueries(text);
@@ -224,21 +224,18 @@ export class DataviewSerializerPlugin extends Plugin {
 
       // Remove existing serialized queries if any
       updatedText = updatedText.replace(serializedQueriesRegex, '');
-      log('Cleaned up: ', 'debug', updatedText);
+      //log('Cleaned up: ', 'debug', updatedText);
 
       // Serialize the supported queries in memory
       for (const foundQuery of foundQueries) {
-        log(
-          `Processing query: [${foundQuery}] in file [${file.path}]`,
-          'debug'
-        );
+        //log(`Processing query: [${foundQuery}] in file [${file.path}]`, 'debug');
         // Reference: https://github.com/IdreesInc/Waypoint/blob/master/main.ts
         const serializedQuery = await serializeQuery(
           foundQuery,
           // eslint-disable-next-line  @typescript-eslint/no-non-null-assertion
           this.dataviewApi!
         );
-        log('Serialized query: ', 'debug', serializedQuery);
+        //log('Serialized query: ', 'debug', serializedQuery);
 
         if ('' !== serializedQuery) {
           const escapedQuery = escapeRegExp(foundQuery);
@@ -249,14 +246,14 @@ export class DataviewSerializerPlugin extends Plugin {
           );
 
           const queryAndSerializedQuery = `${QUERY_FLAG_OPEN}${foundQuery}${QUERY_FLAG_CLOSE}\n${SERIALIZED_QUERY_START}${foundQuery}${QUERY_FLAG_CLOSE}\n${serializedQuery}${SERIALIZED_QUERY_END}\n`;
-          log('Query to serialize regex: ', 'debug', queryToSerializeRegex);
+          //log('Query to serialize regex: ', 'debug', queryToSerializeRegex);
 
-          log('Updated text before: ', 'debug', updatedText);
+          //log('Updated text before: ', 'debug', updatedText);
           updatedText = updatedText.replace(
             queryToSerializeRegex,
             queryAndSerializedQuery
           );
-          log('Updated text after: ', 'debug', updatedText);
+          //log('Updated text after: ', 'debug', updatedText);
         }
       }
 
@@ -305,17 +302,14 @@ export class DataviewSerializerPlugin extends Plugin {
       )!;
 
       if (isBefore(file.stat.mtime, nextPossibleUpdateForFile)) {
-        log('File has been updated recently. Ignoring', 'debug', file.path);
+        //log('File has been updated recently. Ignoring', 'debug', file.path);
         return true;
       }
     }
 
     return this.settings.ignoredFolders.some((ignoredFolder) => {
       if (file.path.startsWith(ignoredFolder)) {
-        log(
-          `Skipping because the file is part of an ignored folder: [${ignoredFolder}]`,
-          'debug'
-        );
+        //log(`Skipping because the file is part of an ignored folder: [${ignoredFolder}]`, 'debug');
         return true;
       } else {
         return false;
