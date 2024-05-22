@@ -12,6 +12,12 @@ export const serializeQuery = async (
   let serializedQuery = '';
   try {
     serializedQuery = await dataviewApi.tryQueryMarkdown(query);
+    // Reference: https://github.com/dsebastien/obsidian-dataview-serializer/issues/3
+    if (query.toLocaleLowerCase().contains('table')) {
+      serializedQuery = serializedQuery
+        .replaceAll('\\\\', '\\')
+        .replaceAll('\n<', '<');
+    }
   } catch (err: unknown) {
     log('Failed to serialize query', 'warn', err);
   }
