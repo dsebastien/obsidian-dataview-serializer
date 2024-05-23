@@ -36,7 +36,7 @@ export class SettingsTab extends PluginSettingTab {
 
     this.renderBuyMeACoffeeBadge(containerEl);
     const spacing = containerEl.createDiv();
-    spacing.style.marginTop = '0.75em';
+    spacing.classList.add('support-header-margin');
   }
 
   renderFoldersToScan(): void {
