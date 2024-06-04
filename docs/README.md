@@ -16,4 +16,4 @@ Currently, this plugin is only compatible with `LIST` and `TABLE` queries. `CALE
 
 This plugin is an [open source project](https://github.com/dsebastien/obsidian-dataview-serializer), created by [Sébastien Dubois](https://dsebastien.net/).
 
-Sébastien is a Personal Knowledge Management expert, and [community leader](https://dsebastien.net/pkm-community). You can find his newsletter [here](https://newsletter.dsebastien.net/). Note that Sébastien has also created the [Obsidian Starter Kit](https://obsidianstarterkit.com), a popular template for Obsidian.
+[Sébastien](https://www.dsebastien.net/about/) is a Personal Knowledge Management expert, and [community leader](https://dsebastien.net/pkm-community). You can find his newsletter [here](https://newsletter.dsebastien.net/). Sébastien has also created the [Obsidian Starter Kit](https://obsidianstarterkit.com), a popular template for Obsidian, as well as various projects and [courses](https://knowledge-management-for-beginners.com/).
