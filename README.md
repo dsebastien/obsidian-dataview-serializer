@@ -1,8 +1,7 @@
 # Obsidian Dataview Serializer
 
-Obsidian plugin that gives you the power of [Dataview](https://github.com/blacksmithgu/obsidian-dataview), but generates Markdown, making it compatible with Obsidian Publish, and making the links appear on the Graph.
-
-This plugin was inspired by the [Waypoint plugin](https://github.com/IdreesInc/Waypoint), which enables something vaguely similar, but without providing as much flexibility.
+Obsidian plugin that gives you the power of [Dataview](https://github.com/blacksmithgu/obsidian-dataview), but generates Markdown. Thanks to this, the output of your queries is saved in the notes, and the links actually appear on the Graph, making it even more useful.
+Turning Dataview queries into Markdown also ensures that the generated content appears on Obsidian Publish websites, which is not the case with the Dataview plugin.
 
 ## Documentation
 You can find the documentation [here](https://developassion.gitbook.io/obsidian-dataview-serializer).
