@@ -34,4 +34,4 @@ There is a minimal delay between the executions of this plugin, to avoid issues 
 
 ### Commands
 
-The plugin also includes a command you can use to scan and update all the Dataview queries in the folders to scan: Hit CTRL/CMD + P then type "Scan and serialize all Dataview queries" to invoke it.
+The plugin also includes a command you can use to scan and update all the Dataview queries to serialize in the folders to scan: Hit CTRL/CMD + P then type "Scan and serialize all Dataview queries" to invoke it.
