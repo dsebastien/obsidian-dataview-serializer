@@ -31,3 +31,7 @@ Whenever you update that note, the query will be executed and serialized, replac
 Note that a single note can include multiple queries. As soon as a file is modified, this plugin reads it and tries to located queries to serialize. It starts by removing all the serialized queries, recognized by the `<!--SerializedQuery: END -->`line. Then, it serializes all the found queries to Markdown and saves the file again.
 
 There is a minimal delay between the executions of this plugin, to avoid issues with file synchronization systems.
+
+### Commands
+
+The plugin also includes a command you can use to scan and update all the Dataview queries in the folders to scan: Hit CTRL/CMD + P then type "Scan and serialize all Dataview queries" to invoke it.
