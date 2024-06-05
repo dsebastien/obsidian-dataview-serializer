@@ -96,11 +96,7 @@ export class DataviewSerializerPlugin extends Plugin {
         const allVaultFiles = this.app.vault.getMarkdownFiles();
 
         for (const vaultFile of allVaultFiles) {
-          this.settings.foldersToScan.some(async (ignoredFolder) => {
-            if (vaultFile.path.startsWith(ignoredFolder)) {
-              await this.processFile(vaultFile);
-            }
-          });
+          await this.processFile(vaultFile);
         }
       },
     });
