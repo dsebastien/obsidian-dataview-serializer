@@ -226,11 +226,12 @@ export class DataviewSerializerPlugin extends Plugin {
       for (const foundQuery of foundQueries) {
         //log(`Processing query: [${foundQuery}] in file [${file.path}]`, 'debug');
         // Reference: https://github.com/IdreesInc/Waypoint/blob/master/main.ts
-        const serializedQuery = await serializeQuery(
-          foundQuery,
+        const serializedQuery = await serializeQuery({
+          query: foundQuery,
+          originFile: file.path,
           // eslint-disable-next-line  @typescript-eslint/no-non-null-assertion
-          this.dataviewApi!
-        );
+          dataviewApi: this.dataviewApi!,
+        });
         //log('Serialized query: ', 'debug', serializedQuery);
 
         if ('' !== serializedQuery) {

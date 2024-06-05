@@ -5,15 +5,23 @@
 import { DataviewApi } from 'obsidian-dataview/lib/api/plugin-api';
 import { log } from './log';
 
+interface SerializeQueryParams {
+  query: string;
+  originFile: string;
+  dataviewApi: DataviewApi;
+}
+
 export const serializeQuery = async (
-  query: string,
-  dataviewApi: DataviewApi
+  params: SerializeQueryParams
 ): Promise<string> => {
   let serializedQuery = '';
   try {
-    serializedQuery = await dataviewApi.tryQueryMarkdown(query);
+    serializedQuery = await params.dataviewApi.tryQueryMarkdown(
+      params.query,
+      params.originFile
+    );
     // Reference: https://github.com/dsebastien/obsidian-dataview-serializer/issues/3
-    if (query.toLocaleLowerCase().contains('table')) {
+    if (params.query.toLocaleLowerCase().contains('table')) {
       serializedQuery = serializedQuery
         .replaceAll('\\\\', '\\')
         .replaceAll('\n<', '<');
