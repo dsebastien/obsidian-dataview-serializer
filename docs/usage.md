@@ -28,7 +28,9 @@ As you can see above, the result of the query gets added as Markdown below the q
 
 Whenever you update that note, the query will be executed and serialized, replacing the previous serialized version.
 
-Note that a single note can include multiple queries. As soon as a file is modified, this plugin reads it and tries to located queries to serialize. It starts by removing all the serialized queries, recognized by the `<!--SerializedQuery: END -->`line. Then, it serializes all the found queries to Markdown and saves the file again.
+WARNING: For now, the queries can only be put on a single line. Take a look at [this issue](https://github.com/dsebastien/obsidian-dataview-serializer/issues/12) for details/updates.
+
+Note that a single note can include multiple queries. As soon as a file is modified, this plugin reads it and tries to locate queries to serialize. It starts by removing all the serialized queries, recognized by the `<!--SerializedQuery: END -->`line. Then, it serializes all the found queries to Markdown and saves the file again.
 
 There is a minimal delay between the executions of this plugin, to avoid issues with file synchronization systems.
 
