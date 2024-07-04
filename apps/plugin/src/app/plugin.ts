@@ -22,6 +22,7 @@ import { add, isBefore } from 'date-fns';
 import { serializeQuery } from './utils/serialize-query.fn';
 import { findQueries } from './utils/find-queries.fn';
 import { escapeRegExp } from './utils/escape-reg-exp.fn';
+import { isTableQuery } from './utils/is-table-query.fn';
 
 export class DataviewSerializerPlugin extends Plugin {
   /**
@@ -241,7 +242,12 @@ export class DataviewSerializerPlugin extends Plugin {
             'gm'
           );
 
-          const queryAndSerializedQuery = `${QUERY_FLAG_OPEN}${foundQuery}${QUERY_FLAG_CLOSE}\n${SERIALIZED_QUERY_START}${foundQuery}${QUERY_FLAG_CLOSE}\n${serializedQuery}${SERIALIZED_QUERY_END}\n`;
+          let queryAndSerializedQuery = '';
+          if (isTableQuery(foundQuery)) {
+            queryAndSerializedQuery = `${QUERY_FLAG_OPEN}${foundQuery}${QUERY_FLAG_CLOSE}\n${SERIALIZED_QUERY_START}${foundQuery}${QUERY_FLAG_CLOSE}\n\n${serializedQuery}${SERIALIZED_QUERY_END}\n`;
+          } else {
+            queryAndSerializedQuery = `${QUERY_FLAG_OPEN}${foundQuery}${QUERY_FLAG_CLOSE}\n${SERIALIZED_QUERY_START}${foundQuery}${QUERY_FLAG_CLOSE}\n${serializedQuery}${SERIALIZED_QUERY_END}\n`;
+          }
           //log('Query to serialize regex: ', 'debug', queryToSerializeRegex);
 
           //log('Updated text before: ', 'debug', updatedText);

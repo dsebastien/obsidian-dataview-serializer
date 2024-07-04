@@ -22,4 +22,7 @@ export const MINIMUM_SECONDS_BETWEEN_UPDATES = 5;
 
 export const MINIMUM_MS_BETWEEN_EVENTS = 500;
 
-export const SUPPORTED_QUERY_TYPES = ['list', 'table'];
+export const QUERY_TYPE_LIST = 'list';
+export const QUERY_TYPE_TABLE = 'table';
+
+export const SUPPORTED_QUERY_TYPES = [QUERY_TYPE_LIST, QUERY_TYPE_TABLE];
