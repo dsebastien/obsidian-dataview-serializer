@@ -21,7 +21,20 @@ export class SettingsTab extends PluginSettingTab {
 
     this.renderFoldersToScan();
     this.renderFoldersToIgnore();
+    this.renderFollowButton(containerEl);
     this.renderSupportHeader(containerEl);
+  }
+
+  renderFollowButton(containerEl: HTMLElement) {
+    new Setting(containerEl)
+      .setName('Follow me on X')
+      .setDesc('@dSebastien')
+      .addButton((button) => {
+        button.setCta();
+        button.setButtonText('Follow me on X').onClick(() => {
+          window.open('https://x.com/dSebastien');
+        });
+      });
   }
 
   renderSupportHeader(containerEl: HTMLElement) {
