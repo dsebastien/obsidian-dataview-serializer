@@ -204,7 +204,7 @@ export class DataviewSerializerPlugin extends Plugin {
     }
 
     try {
-      log(`Processing file: ${file.path}`, 'debug');
+      //log(`Processing file: ${file.path}`, 'debug');
 
       const text = await this.app.vault.cachedRead(file);
       const foundQueries: string[] = findQueries(text);
