@@ -4,6 +4,7 @@
 /dist
 /tmp
 /out-tsc
+/Drive
 
 # dependencies
 node_modules

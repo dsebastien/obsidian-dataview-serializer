@@ -184,7 +184,6 @@ export class DataviewSerializerPlugin extends Plugin {
       this.registerEvent(
         this.app.vault.on('modify', (file) => {
           this.recentlyUpdatedFiles.add(file);
-
           this.scheduleUpdate();
         })
       );
@@ -205,7 +204,7 @@ export class DataviewSerializerPlugin extends Plugin {
     }
 
     try {
-      //log(`Processing file: ${file.path}`, 'debug');
+      log(`Processing file: ${file.path}`, 'debug');
 
       const text = await this.app.vault.cachedRead(file);
       const foundQueries: string[] = findQueries(text);
@@ -261,7 +260,11 @@ export class DataviewSerializerPlugin extends Plugin {
       this.nextPossibleUpdates.set(file.path, nextPossibleUpdateTimeForFile);
 
       // Save the updated version
-      await this.app.vault.modify(file, updatedText);
+
+      if (updatedText !== text) {
+        //log('The file content has changed. Saving the modifications', 'info');
+        await this.app.vault.modify(file, updatedText);
+      }
     } catch (e: unknown) {
       log('Failed to process the file', 'warn', e);
     }
@@ -299,8 +302,14 @@ export class DataviewSerializerPlugin extends Plugin {
       )!;
 
       if (isBefore(file.stat.mtime, nextPossibleUpdateForFile)) {
-        //log('File has been updated recently. Ignoring', 'debug', file.path);
+        log('File has been updated recently. Ignoring', 'debug', file.path);
         return true;
+      } else {
+        log(
+          'File has not been updated recently. Processing',
+          'debug',
+          file.path
+        );
       }
     }
 

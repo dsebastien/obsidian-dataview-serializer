@@ -18,7 +18,7 @@ export const serializedQueriesRegex = new RegExp(
   'g'
 );
 
-export const MINIMUM_SECONDS_BETWEEN_UPDATES = 3;
+export const MINIMUM_SECONDS_BETWEEN_UPDATES = 5;
 
 export const MINIMUM_MS_BETWEEN_EVENTS = 500;
 

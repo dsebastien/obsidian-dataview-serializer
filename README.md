@@ -4,6 +4,7 @@ Obsidian plugin that gives you the power of [Dataview](https://github.com/blacks
 Turning Dataview queries into Markdown also ensures that the generated content appears on Obsidian Publish websites, which is not the case with the Dataview plugin.
 
 ## Pre-requisites
+
 The [Dataview](https://github.com/blacksmithgu/obsidian-dataview) plugin MUST be installed for this plugin to function correctly.
 
 ## Documentation
