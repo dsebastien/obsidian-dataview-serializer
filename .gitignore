@@ -45,3 +45,4 @@ data.json
 # Nx
 tools/**/*.js
 .nx/cache
+.vscode/tasks.json
