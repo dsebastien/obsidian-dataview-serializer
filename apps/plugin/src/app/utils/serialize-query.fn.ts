@@ -23,7 +23,6 @@ export const serializeQuery = async (
   // readability.
   function isNameUnique(name: string): boolean {
     const occurrences = allVaultFiles.filter((x: TFile) => x.name == name);
-    console.log(occurrences);
     return occurrences.length <= 1;
   }
 
