@@ -21,7 +21,6 @@ export class SettingsTab extends PluginSettingTab {
 
     this.renderFoldersToScan();
     this.renderFoldersToIgnore();
-    this.renderPureLinks();
     this.renderFollowButton(containerEl);
     this.renderSupportHeader(containerEl);
   }
@@ -139,21 +138,5 @@ export class SettingsTab extends PluginSettingTab {
       'https://github.com/dsebastien/obsidian-plugin-template/raw/main/apps/plugin/src/assets/buy-me-a-coffee.png';
     imgEl.alt = 'Buy me a coffee';
     imgEl.width = width;
-  }
-
-  renderPureLinks() {
-    new Setting(this.containerEl)
-      .setName('Use pure (short) links')
-      .setDesc(
-        'If set, only the note title will be output. Otherwise the full path name is used. If you have multiple notes with the same title, you name need to leave this disabled.'
-      )
-      .addToggle((toggle) =>
-        toggle
-          .setValue(this.plugin.settings.enablePureLinks)
-          .onChange(async () => {
-            await this.plugin.saveSettings();
-            this.display();
-          })
-      );
   }
 }
