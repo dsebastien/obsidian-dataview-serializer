@@ -26,6 +26,11 @@ export const serializeQuery = async (
     return occurrences.length <= 1;
   }
 
+  // Determine if the note name and alias are different
+  function isValidAlias(name: string, alias: string): boolean {
+    return path.parse(name).name !== alias;
+  }
+
   let serializedQuery = '';
   try {
     serializedQuery = await params.dataviewApi.tryQueryMarkdown(
@@ -41,7 +46,7 @@ export const serializeQuery = async (
 
       // Set up to match the pattern
       // [[path to note\|alias]] - we are only interested in the path and \| that follow it
-      const linkExp = new RegExp(/\[\[(.+?)\\\|.+?\]\]/g);
+      const linkExp = new RegExp(/\[\[(.+?)\\\|(.+?)\]\]/g);
 
       // Returned links are delivered as the full path to the .md (or other filetype) file, aliased to the note name
       const matchedLinks = [...serializedQuery.matchAll(linkExp)];
@@ -49,8 +54,21 @@ export const serializeQuery = async (
         // Matched array
         // mathc[0]: Full matched string
         // match{1]: Matched group 1 = filepath
-        if (isNameUnique(path.basename(match[1]))) {
-          serializedQuery = serializedQuery.replace(match[1] + '\\|', '');
+        // match[2]: Alias
+        const name = path.basename(match[1]);
+        const alias = match[2];
+        if (isNameUnique(name)) {
+          // The name is unique, so ok to replace the path
+          if (!isValidAlias(name, alias)) {
+            // Name and alias match. Can replace the lot and leave what is the alias as the link
+            serializedQuery = serializedQuery.replace(match[1] + '\\|', '');
+          } else {
+            // Name and alias are different. Need to remove the path and keep the alias
+            serializedQuery = serializedQuery.replace(
+              match[1],
+              path.parse(name).name
+            );
+          }
         }
       }
     } else {
