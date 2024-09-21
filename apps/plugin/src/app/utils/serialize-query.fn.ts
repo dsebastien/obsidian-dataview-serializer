@@ -64,10 +64,16 @@ export const serializeQuery = async (
             serializedQuery = serializedQuery.replace(match[1] + '\\|', '');
           } else {
             // Name and alias are different. Need to remove the path and keep the alias
-            serializedQuery = serializedQuery.replace(
-              match[1],
-              path.parse(name).name
-            );
+            if (name.endsWith('.md')) {
+              // For .md we can keep just the note name without extension
+              serializedQuery = serializedQuery.replace(
+                match[1],
+                path.parse(name).name
+              );
+            } else {
+              // File types not .md need to keep full filename
+              serializedQuery = serializedQuery.replace(match[1], name);
+            }
           }
         }
       }
@@ -83,6 +89,8 @@ export const serializeQuery = async (
         // Matched array
         // mathc[0]: Full matched string
         // match{1]: Matched group 1 = filepath
+        // mathc[2]: alias
+        console.log(serializedQuery);
         if (isNameUnique(path.basename(match[1]))) {
           serializedQuery = serializedQuery.replace(match[1] + '|', '');
         }
