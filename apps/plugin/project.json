@@ -9,7 +9,7 @@
       "executor": "@nx/esbuild:esbuild",
       "outputs": ["{options.outputPath}"],
       "options": {
-        "platform": "node",
+        "platform": "browser",
         "outputPath": "dist/apps/plugin",
         "outputFileName": "main.js",
         "format": ["cjs"],
