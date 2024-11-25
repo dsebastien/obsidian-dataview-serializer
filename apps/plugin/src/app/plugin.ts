@@ -52,6 +52,17 @@ export class DataviewSerializerPlugin extends Plugin {
     true
   );
 
+  scheduleFullUpdate = debounce(
+    this.processAllFiles.bind(this),
+    MINIMUM_MS_BETWEEN_EVENTS * 20,
+    true
+  );
+
+  async processAllFiles(): Promise<void> {
+    this.app.vault.getMarkdownFiles().forEach((file) => {
+      this.processFile(file);
+    });
+  }
   /**
    * Process all the identified recently updated files
    */
@@ -172,6 +183,7 @@ export class DataviewSerializerPlugin extends Plugin {
         this.app.vault.on('create', (file) => {
           this.recentlyUpdatedFiles.add(file);
           this.scheduleUpdate();
+          this.scheduleFullUpdate();
         })
       );
 
@@ -179,6 +191,7 @@ export class DataviewSerializerPlugin extends Plugin {
         this.app.vault.on('rename', (file) => {
           this.recentlyUpdatedFiles.add(file);
           this.scheduleUpdate();
+          this.scheduleFullUpdate();
         })
       );
 
@@ -186,6 +199,7 @@ export class DataviewSerializerPlugin extends Plugin {
         this.app.vault.on('modify', (file) => {
           this.recentlyUpdatedFiles.add(file);
           this.scheduleUpdate();
+          this.scheduleFullUpdate();
         })
       );
     });
@@ -207,13 +221,15 @@ export class DataviewSerializerPlugin extends Plugin {
     try {
       //log(`Processing file: ${file.path}`, 'debug');
 
-      const text = await this.app.vault.cachedRead(file);
-      const foundQueries: string[] = findQueries(text);
+      const cachedText = await this.app.vault.cachedRead(file);
+      const foundQueries: string[] = findQueries(cachedText);
 
       if (foundQueries.length === 0) {
         // No queries to serialize found in the file
         return;
       }
+
+      const text = await this.app.vault.read(file);
 
       // Process the modified file
       let updatedText = `${text}`; // To ensure we have access to replaceAll...
@@ -261,7 +277,7 @@ export class DataviewSerializerPlugin extends Plugin {
       }
 
       // Keep track of the last time this file was updated to avoid modification loops
-      const nextPossibleUpdateTimeForFile = add(new Date(file.stat.mtime), {
+      const nextPossibleUpdateTimeForFile = add(new Date(), {
         seconds: MINIMUM_SECONDS_BETWEEN_UPDATES,
       });
       this.nextPossibleUpdates.set(file.path, nextPossibleUpdateTimeForFile);
@@ -308,7 +324,7 @@ export class DataviewSerializerPlugin extends Plugin {
         file.path
       )!;
 
-      if (isBefore(file.stat.mtime, nextPossibleUpdateForFile)) {
+      if (isBefore(new Date(), nextPossibleUpdateForFile)) {
         log('File has been updated recently. Ignoring', 'debug', file.path);
         return true;
       } else {
