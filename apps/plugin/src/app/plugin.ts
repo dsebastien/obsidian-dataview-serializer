@@ -52,6 +52,42 @@ export class DataviewSerializerPlugin extends Plugin {
     true
   );
 
+  scheduleForcedUpdate = debounce(
+    this.processForceUpdateFiles.bind(this),
+    MINIMUM_MS_BETWEEN_EVENTS * 20,
+    true
+  );
+
+  /**
+   * Process updates for folders which are marked as forced updates.
+   * These files are updated on any modification, useful for scenarios
+   * where there's an index file that holds queries that could be impacted
+   * by file updates elsewhere. This can be run with an empty argument list,
+   * or with `true` passed as a value to the single optional parameter to
+   * update all files. The command palette command uses this behavior.
+   */
+  async processForceUpdateFiles(allFiles?: boolean): Promise<void> {
+    this.app.vault
+      .getMarkdownFiles()
+      .filter((file) => {
+        if (allFiles) {
+          // Ignore the configuration and update all queries when this parameter is true
+          return true;
+        }
+        let isUpdateable = false;
+        this.settings.foldersToForceUpdate.forEach((folder) => {
+          if (file.path.startsWith(folder)) {
+            isUpdateable = true;
+          }
+        });
+
+        return isUpdateable;
+      })
+      .forEach(async (file) => {
+        await this.processFile(file);
+      });
+  }
+
   /**
    * Process all the identified recently updated files
    */
@@ -94,11 +130,7 @@ export class DataviewSerializerPlugin extends Plugin {
       name: 'Scan and serialize all Dataview queries',
       callback: async () => {
         log('Scanning and serializing all Dataview queries', 'debug');
-        const allVaultFiles = this.app.vault.getMarkdownFiles();
-
-        for (const vaultFile of allVaultFiles) {
-          await this.processFile(vaultFile);
-        }
+        this.processForceUpdateFiles(true);
       },
     });
   }
@@ -142,6 +174,19 @@ export class DataviewSerializerPlugin extends Plugin {
         log('The loaded settings miss the [ignoredFolders] property', 'debug');
         needToSaveSettings = true;
       }
+      if (
+        loadedSettings.foldersToForceUpdate !== undefined &&
+        loadedSettings.foldersToForceUpdate !== null &&
+        Array.isArray(loadedSettings.foldersToForceUpdate)
+      ) {
+        draft.foldersToForceUpdate = loadedSettings.foldersToForceUpdate;
+      } else {
+        log(
+          'The loaded settings miss the [foldersToForceUpdate] property',
+          'debug'
+        );
+        needToSaveSettings = true;
+      }
     });
 
     log(`Settings loaded`, 'debug', loadedSettings);
@@ -172,6 +217,7 @@ export class DataviewSerializerPlugin extends Plugin {
         this.app.vault.on('create', (file) => {
           this.recentlyUpdatedFiles.add(file);
           this.scheduleUpdate();
+          this.scheduleForcedUpdate();
         })
       );
 
@@ -179,6 +225,7 @@ export class DataviewSerializerPlugin extends Plugin {
         this.app.vault.on('rename', (file) => {
           this.recentlyUpdatedFiles.add(file);
           this.scheduleUpdate();
+          this.scheduleForcedUpdate();
         })
       );
 
@@ -186,6 +233,7 @@ export class DataviewSerializerPlugin extends Plugin {
         this.app.vault.on('modify', (file) => {
           this.recentlyUpdatedFiles.add(file);
           this.scheduleUpdate();
+          this.scheduleForcedUpdate();
         })
       );
     });
@@ -207,13 +255,17 @@ export class DataviewSerializerPlugin extends Plugin {
     try {
       //log(`Processing file: ${file.path}`, 'debug');
 
-      const text = await this.app.vault.cachedRead(file);
-      const foundQueries: string[] = findQueries(text);
+      // check cached text for queries
+      const cachedText = await this.app.vault.cachedRead(file);
+      const foundQueries: string[] = findQueries(cachedText);
 
       if (foundQueries.length === 0) {
         // No queries to serialize found in the file
         return;
       }
+
+      // get text from filesystem, per documentation, since we'll likely be changing it
+      const text = await this.app.vault.read(file);
 
       // Process the modified file
       let updatedText = `${text}`; // To ensure we have access to replaceAll...
@@ -270,6 +322,7 @@ export class DataviewSerializerPlugin extends Plugin {
 
       if (updatedText !== text) {
         //log('The file content has changed. Saving the modifications', 'info');
+
         await this.app.vault.modify(file, updatedText);
       }
     } catch (e: unknown) {
