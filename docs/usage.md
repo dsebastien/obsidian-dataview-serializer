@@ -16,7 +16,7 @@ If the above line is present in one of your notes, this plugin will detect it, a
 
 ```
 <!-- QueryToSerialize: LIST FROM #quotes WHERE public_note = true SORT file.name ASC -->
-<!-- SerializedQuery: LIST FROM #quotes WHERE public_note = true SORT file.name ASC -->
+<!-- SerializedQuery: -->
 - [[20 years from now, the only people who will remember that you worked late are your kids]]
 - [[A beautiful book is a victory won in all the battlefields of human thought.md|A beautiful book is a victory won in all the battlefields of human thought]]
 - [[A busy mind accelerates the perceived passage of time. Buy more time by cultivating peace of mind]]
@@ -24,11 +24,23 @@ If the above line is present in one of your notes, this plugin will detect it, a
 <!-- SerializedQuery: END -->
 ```
 
-As you can see above, the result of the query gets added as Markdown below the query. Notice that the serialized version is surrounded by `<!-- SerializedQuery: <query> -->` and `<!-- SerializedQuery END -->`. Those allow the plugin to know what to replace. They should not be removed.
+As you can see above, the result of the query gets added as Markdown below the query. Notice that the serialized version is surrounded by `<!-- SerializedQuery: -->` and `<!-- SerializedQuery END -->` to delimit the serialized query.
 
 Whenever you update that note, the query will be executed and serialized, replacing the previous serialized version.
 
-WARNING: For now, the queries can only be put on a single line. Take a look at [this issue](https://github.com/dsebastien/obsidian-dataview-serializer/issues/12) for details/updates.
+Multiple line queries are now supported, here is an example:
+```
+<!-- QueryToSerialize: 
+TABLE
+	dateformat(release-date, "yyyy-MM-dd") AS "Release Date",
+	dateformat(started-date, "yyyy-MM-dd") AS "Started Date",
+	dateformat(finished-date, "yyyy-MM-dd") AS "Finished Date",
+	rating-out-of-ten + choice(recommended, " ❤️", "") AS "Note"
+FROM "Y. Content/Games" OR "03 - Resources/Games"
+WHERE file.name != "🏠 Games"
+SORT finished-date DESC
+-->
+```
 
 Note that a single note can include multiple queries. As soon as a file is modified, this plugin reads it and tries to locate queries to serialize. It starts by removing all the serialized queries, recognized by the `<!--SerializedQuery: END -->`line. Then, it serializes all the found queries to Markdown and saves the file again.
 
