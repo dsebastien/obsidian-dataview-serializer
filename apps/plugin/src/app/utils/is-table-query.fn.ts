@@ -7,7 +7,7 @@ import { QUERY_TYPE_TABLE } from '../constants';
 export const isTableQuery = (query: string): boolean => {
   let retVal = false;
 
-  const queryLower = query.toLowerCase();
+  const queryLower = query.trim().toLowerCase();
 
   if (queryLower.startsWith(QUERY_TYPE_TABLE)) {
     retVal = true;

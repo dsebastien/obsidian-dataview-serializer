@@ -7,25 +7,44 @@ import { isSupportedQueryType } from './is-supported-query-type.fn';
  */
 export const findQueries = (text: string): string[] => {
   const retVal: string[] = [];
+  let isCapturing = false;
+  let foundQuery = '';
 
   const lines: string[] = text.split('\n');
   for (const line of lines) {
-    const trimmedLine = line.trim();
-    if (
-      trimmedLine.startsWith(QUERY_FLAG_OPEN) &&
-      trimmedLine.endsWith(QUERY_FLAG_CLOSE)
-    ) {
-      let foundQuery = trimmedLine.replace(QUERY_FLAG_OPEN, '');
-      foundQuery = foundQuery.replace(QUERY_FLAG_CLOSE, '');
-      foundQuery = foundQuery.trim();
+    if (isCapturing) {
+      if (line.includes(QUERY_FLAG_CLOSE)) {
+        const endIndex = line.indexOf(QUERY_FLAG_CLOSE);
+        foundQuery += `${line.substring(0, endIndex)}`;
 
-      // Ignore duplicates
-      // Make sure it is a supported query
-      if (!retVal.includes(foundQuery) && isSupportedQueryType(foundQuery)) {
-        retVal.push(foundQuery);
+        if (!retVal.includes(foundQuery) && isSupportedQueryType(foundQuery)) {
+          retVal.push(foundQuery);
+          isCapturing = false;
+          foundQuery = '';
+        }
+      } else {
+        // Accumulate the current line if capturing multi-line query
+        foundQuery += `${line}\n`;
+      }
+    }
+    // Detect QUERY FLAG OPEN and single line comments
+    if (!isCapturing && line.includes(QUERY_FLAG_OPEN)) {
+      isCapturing = true;
+      const startIndex = line.indexOf(QUERY_FLAG_OPEN) + QUERY_FLAG_OPEN.length;
+      foundQuery = line.substring(startIndex) + '\n';
+      if (line.includes(QUERY_FLAG_CLOSE)) {
+        const endIndex = line.indexOf(QUERY_FLAG_CLOSE);
+        foundQuery = line.substring(startIndex, endIndex);
+
+        // Ignore duplicates
+        // Make sure it is a supported query
+        if (!retVal.includes(foundQuery) && isSupportedQueryType(foundQuery)) {
+          retVal.push(foundQuery);
+          isCapturing = false;
+          foundQuery = '';
+        }
       }
     }
   }
-
   return retVal;
 };

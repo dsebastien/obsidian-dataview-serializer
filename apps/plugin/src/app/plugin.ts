@@ -21,7 +21,6 @@ import { DataviewApi } from 'obsidian-dataview/lib/api/plugin-api';
 import { add, isBefore } from 'date-fns';
 import { serializeQuery } from './utils/serialize-query.fn';
 import { findQueries } from './utils/find-queries.fn';
-import { escapeRegExp } from './utils/escape-reg-exp.fn';
 import { isTableQuery } from './utils/is-table-query.fn';
 
 export class DataviewSerializerPlugin extends Plugin {
@@ -227,7 +226,7 @@ export class DataviewSerializerPlugin extends Plugin {
         //log(`Processing query: [${foundQuery}] in file [${file.path}]`, 'debug');
         // Reference: https://github.com/IdreesInc/Waypoint/blob/master/main.ts
         const serializedQuery = await serializeQuery({
-          query: foundQuery,
+          query: foundQuery.trim(),
           originFile: file.path,
           // eslint-disable-next-line  @typescript-eslint/no-non-null-assertion
           dataviewApi: this.dataviewApi!,
@@ -236,24 +235,18 @@ export class DataviewSerializerPlugin extends Plugin {
         //log('Serialized query: ', 'debug', serializedQuery);
 
         if ('' !== serializedQuery) {
-          const escapedQuery = escapeRegExp(foundQuery);
-
-          const queryToSerializeRegex = new RegExp(
-            `${QUERY_FLAG_OPEN}${escapedQuery}.*${QUERY_FLAG_CLOSE}\\n`,
-            'gm'
-          );
-
           let queryAndSerializedQuery = '';
           if (isTableQuery(foundQuery)) {
-            queryAndSerializedQuery = `${QUERY_FLAG_OPEN}${foundQuery}${QUERY_FLAG_CLOSE}\n${SERIALIZED_QUERY_START}${foundQuery}${QUERY_FLAG_CLOSE}\n\n${serializedQuery}${SERIALIZED_QUERY_END}\n`;
+            queryAndSerializedQuery = `${QUERY_FLAG_OPEN}${foundQuery}${QUERY_FLAG_CLOSE}\n${SERIALIZED_QUERY_START}${QUERY_FLAG_CLOSE}\n\n${serializedQuery}${SERIALIZED_QUERY_END}\n`;
           } else {
-            queryAndSerializedQuery = `${QUERY_FLAG_OPEN}${foundQuery}${QUERY_FLAG_CLOSE}\n${SERIALIZED_QUERY_START}${foundQuery}${QUERY_FLAG_CLOSE}\n${serializedQuery}${SERIALIZED_QUERY_END}\n`;
+            queryAndSerializedQuery = `${QUERY_FLAG_OPEN}${foundQuery}${QUERY_FLAG_CLOSE}\n${SERIALIZED_QUERY_START}${QUERY_FLAG_CLOSE}\n${serializedQuery}${SERIALIZED_QUERY_END}\n`;
           }
           //log('Query to serialize regex: ', 'debug', queryToSerializeRegex);
 
           //log('Updated text before: ', 'debug', updatedText);
+          const searchedString = `${QUERY_FLAG_OPEN}${foundQuery}${QUERY_FLAG_CLOSE}`;
           updatedText = updatedText.replace(
-            queryToSerializeRegex,
+            searchedString,
             queryAndSerializedQuery
           );
           //log('Updated text after: ', 'debug', updatedText);

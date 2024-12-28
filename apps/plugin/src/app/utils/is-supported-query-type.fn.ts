@@ -7,7 +7,7 @@ import { SUPPORTED_QUERY_TYPES } from '../constants';
 export const isSupportedQueryType = (query: string): boolean => {
   let retVal = false;
 
-  const queryLower = query.toLowerCase();
+  const queryLower = query.trim().toLowerCase();
 
   for (const queryType of SUPPORTED_QUERY_TYPES) {
     if (queryLower.startsWith(queryType)) {
