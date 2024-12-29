@@ -237,9 +237,9 @@ export class DataviewSerializerPlugin extends Plugin {
         if ('' !== serializedQuery) {
           let queryAndSerializedQuery = '';
           if (isTableQuery(foundQuery)) {
-            queryAndSerializedQuery = `${QUERY_FLAG_OPEN}${foundQuery}${QUERY_FLAG_CLOSE}\n${SERIALIZED_QUERY_START}${QUERY_FLAG_CLOSE}\n\n${serializedQuery}${SERIALIZED_QUERY_END}\n`;
+            queryAndSerializedQuery = `${QUERY_FLAG_OPEN}${foundQuery}${QUERY_FLAG_CLOSE}\n${SERIALIZED_QUERY_START}${QUERY_FLAG_CLOSE}\n\n${serializedQuery}${SERIALIZED_QUERY_END}`;
           } else {
-            queryAndSerializedQuery = `${QUERY_FLAG_OPEN}${foundQuery}${QUERY_FLAG_CLOSE}\n${SERIALIZED_QUERY_START}${QUERY_FLAG_CLOSE}\n${serializedQuery}${SERIALIZED_QUERY_END}\n`;
+            queryAndSerializedQuery = `${QUERY_FLAG_OPEN}${foundQuery}${QUERY_FLAG_CLOSE}\n${SERIALIZED_QUERY_START}${QUERY_FLAG_CLOSE}\n${serializedQuery}${SERIALIZED_QUERY_END}`;
           }
           //log('Query to serialize regex: ', 'debug', queryToSerializeRegex);
 
