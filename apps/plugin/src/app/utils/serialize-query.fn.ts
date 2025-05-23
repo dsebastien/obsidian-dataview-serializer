@@ -12,6 +12,7 @@ interface SerializeQueryParams {
   originFile: string;
   dataviewApi: DataviewApi;
   app: App;
+  indentation?: string;
 }
 
 export const serializeQuery = async (
@@ -107,6 +108,19 @@ export const serializeQuery = async (
     }
   } catch (err: unknown) {
     log('Failed to serialize query', 'warn', err);
+  }
+
+  // Apply indentation if provided
+  if (params.indentation && serializedQuery) {
+    const lines = serializedQuery.split('\n');
+    const indentedLines = lines.map((line) => {
+      // Don't indent empty lines
+      if (line.trim() === '') {
+        return line;
+      }
+      return params.indentation + line;
+    });
+    serializedQuery = indentedLines.join('\n');
   }
 
   return serializedQuery;

@@ -20,7 +20,7 @@ import { getAPI } from 'obsidian-dataview';
 import { DataviewApi } from 'obsidian-dataview/lib/api/plugin-api';
 import { add, isBefore } from 'date-fns';
 import { serializeQuery } from './utils/serialize-query.fn';
-import { findQueries } from './utils/find-queries.fn';
+import { findQueries, QueryWithContext } from './utils/find-queries.fn';
 import { escapeRegExp } from './utils/escape-reg-exp.fn';
 import { isTableQuery } from './utils/is-table-query.fn';
 
@@ -208,7 +208,7 @@ export class DataviewSerializerPlugin extends Plugin {
       //log(`Processing file: ${file.path}`, 'debug');
 
       const text = await this.app.vault.cachedRead(file);
-      const foundQueries: string[] = findQueries(text);
+      const foundQueries: QueryWithContext[] = findQueries(text);
 
       if (foundQueries.length === 0) {
         // No queries to serialize found in the file
@@ -223,7 +223,9 @@ export class DataviewSerializerPlugin extends Plugin {
       //log('Cleaned up: ', 'debug', updatedText);
 
       // Serialize the supported queries in memory
-      for (const foundQuery of foundQueries) {
+      for (const queryWithContext of foundQueries) {
+        const foundQuery = queryWithContext.query;
+        const indentation = queryWithContext.indentation;
         //log(`Processing query: [${foundQuery}] in file [${file.path}]`, 'debug');
         // Reference: https://github.com/IdreesInc/Waypoint/blob/master/main.ts
         const serializedQuery = await serializeQuery({
@@ -232,22 +234,24 @@ export class DataviewSerializerPlugin extends Plugin {
           // eslint-disable-next-line  @typescript-eslint/no-non-null-assertion
           dataviewApi: this.dataviewApi!,
           app: this.app,
+          indentation: indentation,
         });
         //log('Serialized query: ', 'debug', serializedQuery);
 
         if ('' !== serializedQuery) {
           const escapedQuery = escapeRegExp(foundQuery);
 
+          const escapedIndentation = escapeRegExp(indentation);
           const queryToSerializeRegex = new RegExp(
-            `${QUERY_FLAG_OPEN}${escapedQuery}.*${QUERY_FLAG_CLOSE}\\n`,
+            `^${escapedIndentation}${QUERY_FLAG_OPEN}${escapedQuery}.*${QUERY_FLAG_CLOSE}\\n`,
             'gm'
           );
 
           let queryAndSerializedQuery = '';
           if (isTableQuery(foundQuery)) {
-            queryAndSerializedQuery = `${QUERY_FLAG_OPEN}${foundQuery}${QUERY_FLAG_CLOSE}\n${SERIALIZED_QUERY_START}${foundQuery}${QUERY_FLAG_CLOSE}\n\n${serializedQuery}${SERIALIZED_QUERY_END}\n`;
+            queryAndSerializedQuery = `${indentation}${QUERY_FLAG_OPEN}${foundQuery}${QUERY_FLAG_CLOSE}\n${indentation}${SERIALIZED_QUERY_START}${foundQuery}${QUERY_FLAG_CLOSE}\n\n${serializedQuery}${indentation}${SERIALIZED_QUERY_END}\n`;
           } else {
-            queryAndSerializedQuery = `${QUERY_FLAG_OPEN}${foundQuery}${QUERY_FLAG_CLOSE}\n${SERIALIZED_QUERY_START}${foundQuery}${QUERY_FLAG_CLOSE}\n${serializedQuery}${SERIALIZED_QUERY_END}\n`;
+            queryAndSerializedQuery = `${indentation}${QUERY_FLAG_OPEN}${foundQuery}${QUERY_FLAG_CLOSE}\n${indentation}${SERIALIZED_QUERY_START}${foundQuery}${QUERY_FLAG_CLOSE}\n${serializedQuery}${indentation}${SERIALIZED_QUERY_END}\n`;
           }
           //log('Query to serialize regex: ', 'debug', queryToSerializeRegex);
 
