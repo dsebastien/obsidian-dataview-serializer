@@ -22,7 +22,7 @@ export const findQueries = (text: string): QueryWithContext[] => {
     const trimmedLine = line.trim();
     if (
       trimmedLine.includes(QUERY_FLAG_OPEN) &&
-      trimmedLine.endsWith(QUERY_FLAG_CLOSE)
+      trimmedLine.includes(QUERY_FLAG_CLOSE)
     ) {
       // Extract the indentation (everything before the QUERY_FLAG_OPEN)
       const indentation = trimmedLine.substring(
