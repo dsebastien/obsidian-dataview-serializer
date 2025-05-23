@@ -6,6 +6,7 @@ import { DataviewApi } from 'obsidian-dataview/lib/api/plugin-api';
 import { log } from './log';
 import { App, TFile } from 'obsidian';
 import path from 'path';
+import { SERIALIZED_QUERY_END, SERIALIZED_QUERY_START } from '../constants';
 
 interface SerializeQueryParams {
   query: string;
@@ -114,6 +115,14 @@ export const serializeQuery = async (
   if (params.indentation && serializedQuery) {
     const lines = serializedQuery.split('\n');
     const indentedLines = lines.map((line) => {
+      // DO NOT indent the serialized query start and end marker lines
+      // This is important to be able to find the serialized queries (e.g., when updating those)
+      if (
+        line.startsWith(SERIALIZED_QUERY_START) ||
+        line.startsWith(SERIALIZED_QUERY_END)
+      ) {
+        return line;
+      }
       return params.indentation + line;
     });
     serializedQuery = indentedLines.join('\n');
