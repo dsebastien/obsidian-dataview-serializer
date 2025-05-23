@@ -101,6 +101,39 @@ export class DataviewSerializerPlugin extends Plugin {
         }
       },
     });
+
+    // Add command to insert dataview serializer block
+    this.addCommand({
+      id: 'insert-dataview-serializer-block',
+      name: 'Insert Dataview serializer block',
+      editorCallback: (editor) => {
+        const cursor = editor.getCursor();
+        const line = editor.getLine(cursor.line);
+        const indentation = line.match(/^(\s*)/)?.[1] || '';
+
+        // Insert the dataview serializer block template
+        const template = `${indentation}${QUERY_FLAG_OPEN}LIST FROM #foo ${QUERY_FLAG_CLOSE}`;
+
+        editor.replaceRange(template, cursor);
+
+        // Position cursor after "LIST" so user can replace it with their query
+        const listStartPos = template.indexOf('LIST FROM #foo');
+        const newCursor = {
+          line: cursor.line,
+          ch: cursor.ch + listStartPos,
+        };
+        const newCursorEnd = {
+          line: cursor.line,
+          ch: cursor.ch + listStartPos + 14, // Length of "LIST FROM #foo"
+        };
+
+        editor.setSelection(newCursor, newCursorEnd);
+
+        new Notice(
+          'Dataview serializer block inserted. Replace "LIST FROM #foo" with your query.'
+        );
+      },
+    });
   }
 
   // eslint-disable-next-line @typescript-eslint/no-empty-function
