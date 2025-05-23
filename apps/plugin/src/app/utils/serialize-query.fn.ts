@@ -67,14 +67,23 @@ export const serializeQuery = async (
             if (name.endsWith('.md')) {
               // For .md we can keep just the note name without extension
               serializedQuery = serializedQuery.replace(
-                match[1],
-                path.parse(name).name
+                match[1] + '\\|',
+                path.parse(name).name + '|'
               );
             } else {
               // File types not .md need to keep full filename
-              serializedQuery = serializedQuery.replace(match[1], name);
+              serializedQuery = serializedQuery.replace(
+                match[1] + '\\|',
+                name + '|'
+              );
             }
           }
+        } else {
+          // Name is not unique, keep the full path but remove the backslash from the pipe
+          serializedQuery = serializedQuery.replace(
+            match[1] + '\\|',
+            match[1] + '|'
+          );
         }
       }
     } else {
