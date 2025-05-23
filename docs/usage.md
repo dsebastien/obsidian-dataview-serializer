@@ -36,4 +36,10 @@ There is a minimal delay between the executions of this plugin, to avoid issues 
 
 ### Commands
 
+#### Manual scan of all queries
+
 The plugin also includes a command you can use to scan and update all the Dataview queries to serialize in the folders to scan: Hit CTRL/CMD + P then type "Scan and serialize all Dataview queries" to invoke it.
+
+#### Add a new Dataview Serializer query
+
+The plugin includes a command called "Insert Dataview serializer block" that can be used to quickly add a new Dataview Serializer query to the current note.
