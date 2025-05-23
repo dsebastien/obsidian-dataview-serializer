@@ -240,7 +240,6 @@ export class DataviewSerializerPlugin extends Plugin {
 
         if ('' !== serializedQuery) {
           const escapedQuery = escapeRegExp(foundQuery);
-
           const escapedIndentation = escapeRegExp(indentation);
           const queryToSerializeRegex = new RegExp(
             `^${escapedIndentation}${QUERY_FLAG_OPEN}${escapedQuery}.*${QUERY_FLAG_CLOSE}\\n`,
@@ -249,9 +248,13 @@ export class DataviewSerializerPlugin extends Plugin {
 
           let queryAndSerializedQuery = '';
           if (isTableQuery(foundQuery)) {
-            queryAndSerializedQuery = `${indentation}${QUERY_FLAG_OPEN}${foundQuery}${QUERY_FLAG_CLOSE}\n${indentation}${SERIALIZED_QUERY_START}${foundQuery}${QUERY_FLAG_CLOSE}\n\n${serializedQuery}${indentation}${SERIALIZED_QUERY_END}\n`;
+            queryAndSerializedQuery = `${indentation}${QUERY_FLAG_OPEN}${foundQuery}${QUERY_FLAG_CLOSE}\n${SERIALIZED_QUERY_START}${foundQuery}${QUERY_FLAG_CLOSE}\n\n${serializedQuery}${
+              indentation.length > 0 ? '\n' : ''
+            }${SERIALIZED_QUERY_END}\n`;
           } else {
-            queryAndSerializedQuery = `${indentation}${QUERY_FLAG_OPEN}${foundQuery}${QUERY_FLAG_CLOSE}\n${indentation}${SERIALIZED_QUERY_START}${foundQuery}${QUERY_FLAG_CLOSE}\n${serializedQuery}${indentation}${SERIALIZED_QUERY_END}\n`;
+            queryAndSerializedQuery = `${indentation}${QUERY_FLAG_OPEN}${foundQuery}${QUERY_FLAG_CLOSE}\n${SERIALIZED_QUERY_START}${foundQuery}${QUERY_FLAG_CLOSE}\n${serializedQuery}${
+              indentation.length > 0 ? '\n' : ''
+            }${SERIALIZED_QUERY_END}\n`;
           }
           //log('Query to serialize regex: ', 'debug', queryToSerializeRegex);
 

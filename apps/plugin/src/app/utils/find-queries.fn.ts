@@ -24,15 +24,15 @@ export const findQueries = (text: string): QueryWithContext[] => {
       trimmedLine.includes(QUERY_FLAG_OPEN) &&
       trimmedLine.includes(QUERY_FLAG_CLOSE)
     ) {
-      // Extract the indentation (everything before the QUERY_FLAG_OPEN)
-      const indentation = trimmedLine.substring(
-        0,
-        trimmedLine.indexOf(QUERY_FLAG_OPEN)
-      );
-      let foundQuery = trimmedLine.replace(indentation, ''); // Remove indentation
-      foundQuery = trimmedLine.replace(QUERY_FLAG_OPEN, ''); // Remove the opening flag
-      foundQuery = foundQuery.replace(QUERY_FLAG_CLOSE, ''); // Remove the closing flag
-      foundQuery = foundQuery.trim(); // Remove any leading/trailing whitespace
+      // Extract the indentation (everything before the QUERY_FLAG_OPEN in the original line)
+      const indentation = line.substring(0, line.indexOf(QUERY_FLAG_OPEN));
+
+      // Extract the query content between the flags
+      const openFlagIndex = trimmedLine.indexOf(QUERY_FLAG_OPEN);
+      const closeFlagIndex = trimmedLine.indexOf(QUERY_FLAG_CLOSE);
+      const foundQuery = trimmedLine
+        .substring(openFlagIndex + QUERY_FLAG_OPEN.length, closeFlagIndex)
+        .trim();
 
       // Ignore duplicates
       // Make sure it is a supported query
