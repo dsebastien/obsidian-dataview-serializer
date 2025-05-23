@@ -114,10 +114,6 @@ export const serializeQuery = async (
   if (params.indentation && serializedQuery) {
     const lines = serializedQuery.split('\n');
     const indentedLines = lines.map((line) => {
-      // Don't indent empty lines
-      if (line.trim() === '') {
-        return line;
-      }
       return params.indentation + line;
     });
     serializedQuery = indentedLines.join('\n');

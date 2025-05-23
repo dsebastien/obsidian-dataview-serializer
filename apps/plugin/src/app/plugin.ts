@@ -234,7 +234,7 @@ export class DataviewSerializerPlugin extends Plugin {
           // eslint-disable-next-line  @typescript-eslint/no-non-null-assertion
           dataviewApi: this.dataviewApi!,
           app: this.app,
-          indentation: indentation,
+          indentation,
         });
         //log('Serialized query: ', 'debug', serializedQuery);
 
