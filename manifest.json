@@ -2,7 +2,7 @@
   "id": "dataview-serializer",
   "name": "Dataview Serializer",
   "description": "Serialize Dataview queries to Markdown, and keep the Markdown representation up to date.",
-  "version": "1.8.0",
+  "version": "1.8.1",
   "minAppVersion": "0.15.0",
   "isDesktopOnly": false,
   "author": "Sébastien Dubois",
