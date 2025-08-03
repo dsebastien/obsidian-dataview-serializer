@@ -30,9 +30,8 @@ In addition to the classic (npm/node, installation, etc), make sure to define th
 
 ## Releasing a new version
 
-- Update the `minAppVersion` manually in `manifest.json` if needed
-- Run `npm version patch`, `npm version minor` or `npm version major` to update the `manifest.json` and `package.json` files
 - Commit all changes
-- Tag with the correct version number (e.g., 1.1.0)
-- Push the changes and the tag
+- Update the `minAppVersion` manually in `manifest.json` if needed (if the plugin requires a newer version of Obsidian)
+- Run `npm version patch`, `npm version minor` or `npm version major` to update the `manifest.json` and `package.json` files and create the tag
+- Push the changes and the tag: `git push && git push --tags`
 - The GitHub workflow will create the GitHub release and will add the necessary files as binary attachments
