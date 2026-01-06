@@ -19,10 +19,41 @@ export class SettingsTab extends PluginSettingTab {
 
     containerEl.empty();
 
+    this.renderAutomaticUpdatesToggle();
     this.renderFoldersToScan();
     this.renderFoldersToIgnore();
     this.renderFollowButton(containerEl);
     this.renderSupportHeader(containerEl);
+  }
+
+  renderAutomaticUpdatesToggle(): void {
+    new Setting(this.containerEl)
+      .setName('Disable automatic updates')
+      .setDesc(
+        'When enabled, the plugin will not automatically serialize queries when files are created, modified, or renamed. You can still manually serialize queries using the command palette.'
+      )
+      .addToggle((toggle) => {
+        toggle
+          .setValue(this.plugin.settings.disableAutomaticUpdates)
+          .onChange(async (value) => {
+            this.plugin.settings = produce(
+              this.plugin.settings,
+              (draft: Draft<PluginSettings>) => {
+                draft.disableAutomaticUpdates = value;
+              }
+            );
+            await this.plugin.saveSettings();
+
+            // Immediately register or unregister event handlers based on new value
+            if (value) {
+              // User enabled "disable automatic updates" - unregister handlers
+              this.plugin.unregisterEventHandlers();
+            } else {
+              // User disabled "disable automatic updates" - register handlers
+              this.plugin.setupEventHandlers();
+            }
+          });
+      });
   }
 
   renderFollowButton(containerEl: HTMLElement) {

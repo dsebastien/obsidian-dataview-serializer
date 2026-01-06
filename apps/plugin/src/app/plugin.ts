@@ -1,4 +1,11 @@
-import { debounce, Notice, Plugin, TAbstractFile, TFile } from 'obsidian';
+import {
+  debounce,
+  EventRef,
+  Notice,
+  Plugin,
+  TAbstractFile,
+  TFile,
+} from 'obsidian';
 import { DEFAULT_SETTINGS, PluginSettings } from './types';
 import { SettingsTab } from './settingTab';
 import { log } from './utils/log';
@@ -42,6 +49,13 @@ export class DataviewSerializerPlugin extends Plugin {
    * Those will be processed by the next scheduled update
    */
   recentlyUpdatedFiles: Set<TAbstractFile> = new Set<TAbstractFile>();
+  /**
+   * Event handler references for create, modify, rename events
+   * Stored to allow unregistering when automatic updates are disabled
+   */
+  private createEventRef: EventRef | null = null;
+  private modifyEventRef: EventRef | null = null;
+  private renameEventRef: EventRef | null = null;
 
   /**
    * Debounce file updates
@@ -83,7 +97,10 @@ export class DataviewSerializerPlugin extends Plugin {
 
     await this.loadSettings();
 
-    this.setupEventHandlers();
+    // Only set up automatic event handlers if the user hasn't disabled them
+    if (!this.settings.disableAutomaticUpdates) {
+      this.setupEventHandlers();
+    }
 
     // Add a settings screen for the plugin
     this.addSettingTab(new SettingsTab(this.app, this));
@@ -175,6 +192,20 @@ export class DataviewSerializerPlugin extends Plugin {
         log('The loaded settings miss the [ignoredFolders] property', 'debug');
         needToSaveSettings = true;
       }
+
+      if (
+        loadedSettings.disableAutomaticUpdates !== undefined &&
+        loadedSettings.disableAutomaticUpdates !== null &&
+        typeof loadedSettings.disableAutomaticUpdates === 'boolean'
+      ) {
+        draft.disableAutomaticUpdates = loadedSettings.disableAutomaticUpdates;
+      } else {
+        log(
+          'The loaded settings miss the [disableAutomaticUpdates] property',
+          'debug'
+        );
+        needToSaveSettings = true;
+      }
     });
 
     log(`Settings loaded`, 'debug', loadedSettings);
@@ -197,31 +228,54 @@ export class DataviewSerializerPlugin extends Plugin {
    * Add the event handlers
    */
   setupEventHandlers() {
+    // Only register if not already registered
+    if (this.createEventRef || this.modifyEventRef || this.renameEventRef) {
+      log('Event handlers already registered, skipping setup', 'debug');
+      return;
+    }
+
     // Register events after layout is built to avoid initial wave of 'create' events
     this.app.workspace.onLayoutReady(async () => {
-      //log('Adding event handlers', 'debug');
+      this.createEventRef = this.app.vault.on('create', (file) => {
+        this.recentlyUpdatedFiles.add(file);
+        this.scheduleUpdate();
+      });
+      this.registerEvent(this.createEventRef);
 
-      this.registerEvent(
-        this.app.vault.on('create', (file) => {
-          this.recentlyUpdatedFiles.add(file);
-          this.scheduleUpdate();
-        })
-      );
+      this.renameEventRef = this.app.vault.on('rename', (file) => {
+        this.recentlyUpdatedFiles.add(file);
+        this.scheduleUpdate();
+      });
+      this.registerEvent(this.renameEventRef);
 
-      this.registerEvent(
-        this.app.vault.on('rename', (file) => {
-          this.recentlyUpdatedFiles.add(file);
-          this.scheduleUpdate();
-        })
-      );
+      this.modifyEventRef = this.app.vault.on('modify', (file) => {
+        this.recentlyUpdatedFiles.add(file);
+        this.scheduleUpdate();
+      });
+      this.registerEvent(this.modifyEventRef);
 
-      this.registerEvent(
-        this.app.vault.on('modify', (file) => {
-          this.recentlyUpdatedFiles.add(file);
-          this.scheduleUpdate();
-        })
-      );
+      log('Event handlers registered for automatic updates', 'debug');
     });
+  }
+
+  /**
+   * Remove the event handlers for automatic updates
+   */
+  unregisterEventHandlers() {
+    if (this.createEventRef) {
+      this.app.vault.offref(this.createEventRef);
+      this.createEventRef = null;
+    }
+    if (this.modifyEventRef) {
+      this.app.vault.offref(this.modifyEventRef);
+      this.modifyEventRef = null;
+    }
+    if (this.renameEventRef) {
+      this.app.vault.offref(this.renameEventRef);
+      this.renameEventRef = null;
+    }
+
+    log('Event handlers unregistered for automatic updates', 'debug');
   }
 
   async processFile(_file: TAbstractFile): Promise<void> {
