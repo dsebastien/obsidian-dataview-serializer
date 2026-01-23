@@ -129,6 +129,28 @@ export class DataviewSerializerPlugin extends Plugin {
             }
         })
 
+        this.addCommand({
+            id: 'serialize-current-file-dataview-queries',
+            name: 'Scan and serialize Dataview queries in current file',
+            callback: async () => {
+                const activeFile = this.app.workspace.getActiveFile()
+
+                if (!activeFile) {
+                    new Notice('No active file')
+                    return
+                }
+
+                if (activeFile.extension !== MARKDOWN_FILE_EXTENSION) {
+                    new Notice('The active file is not a Markdown file')
+                    return
+                }
+
+                log(`Scanning and serializing Dataview queries in: ${activeFile.path}`, 'debug')
+                await this.processFile(activeFile, true)
+                new Notice(`Dataview queries serialized in: ${activeFile.name}`)
+            }
+        })
+
         // Add command to insert dataview serializer block
         this.addCommand({
             id: 'insert-dataview-serializer-block',
