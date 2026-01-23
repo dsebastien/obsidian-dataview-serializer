@@ -30,6 +30,7 @@ import { serializeQuery } from './utils/serialize-query.fn';
 import { findQueries, QueryWithContext } from './utils/find-queries.fn';
 import { escapeRegExp } from './utils/escape-reg-exp.fn';
 import { isTableQuery } from './utils/is-table-query.fn';
+import { refreshButtonExtension } from './refresh-button-extension';
 
 export class DataviewSerializerPlugin extends Plugin {
   /**
@@ -56,6 +57,12 @@ export class DataviewSerializerPlugin extends Plugin {
   private createEventRef: EventRef | null = null;
   private modifyEventRef: EventRef | null = null;
   private renameEventRef: EventRef | null = null;
+
+  /**
+   * Set of files to ignore during the next file event.
+   * Used to prevent infinite loops or unwanted side effects when the plugin modifies a file.
+   */
+  private filesToIgnoreFileEvents: Set<string> = new Set();
 
   /**
    * Debounce file updates
@@ -151,6 +158,14 @@ export class DataviewSerializerPlugin extends Plugin {
         );
       },
     });
+
+    this.registerEditorExtension(
+      refreshButtonExtension(
+        this.app,
+        () => this.settings,
+        this.processFile.bind(this)
+      )
+    );
   }
 
   // eslint-disable-next-line @typescript-eslint/no-empty-function
@@ -206,6 +221,20 @@ export class DataviewSerializerPlugin extends Plugin {
         );
         needToSaveSettings = true;
       }
+
+      if (
+        loadedSettings.showRefreshButton !== undefined &&
+        loadedSettings.showRefreshButton !== null &&
+        typeof loadedSettings.showRefreshButton === 'boolean'
+      ) {
+        draft.showRefreshButton = loadedSettings.showRefreshButton;
+      } else {
+        log(
+          'The loaded settings miss the [showRefreshButton] property',
+          'debug'
+        );
+        needToSaveSettings = true;
+      }
     });
 
     log(`Settings loaded`, 'debug', loadedSettings);
@@ -249,6 +278,18 @@ export class DataviewSerializerPlugin extends Plugin {
       this.registerEvent(this.renameEventRef);
 
       this.modifyEventRef = this.app.vault.on('modify', (file) => {
+        if (
+          file instanceof TFile &&
+          this.filesToIgnoreFileEvents.has(file.path)
+        ) {
+          log(
+            `Ignoring modify event for ${file.path} as it was triggered by the plugin itself`,
+            'debug'
+          );
+          this.filesToIgnoreFileEvents.delete(file.path);
+          return;
+        }
+
         this.recentlyUpdatedFiles.add(file);
         this.scheduleUpdate();
       });
@@ -278,7 +319,11 @@ export class DataviewSerializerPlugin extends Plugin {
     log('Event handlers unregistered for automatic updates', 'debug');
   }
 
-  async processFile(_file: TAbstractFile): Promise<void> {
+  async processFile(
+    _file: TAbstractFile,
+    force = false,
+    targetQuery?: string
+  ): Promise<void> {
     if (!(_file instanceof TFile)) {
       return;
     }
@@ -286,7 +331,7 @@ export class DataviewSerializerPlugin extends Plugin {
     // Safe from here on
     const file = _file as TFile;
 
-    const shouldBeIgnored = await this.shouldFileBeIgnored(file);
+    const shouldBeIgnored = await this.shouldFileBeIgnored(file, force);
     if (shouldBeIgnored) {
       return;
     }
@@ -305,13 +350,20 @@ export class DataviewSerializerPlugin extends Plugin {
       // Process the modified file
       let updatedText = `${text}`; // To ensure we have access to replaceAll...
 
-      // Remove existing serialized queries if any
-      updatedText = updatedText.replace(serializedQueriesRegex, '');
-      //log('Cleaned up: ', 'debug', updatedText);
+      // Remove existing serialized queries if any, ONLY if we are doing a full update
+      if (!targetQuery) {
+        updatedText = updatedText.replace(serializedQueriesRegex, '');
+      }
 
       // Serialize the supported queries in memory
       for (const queryWithContext of foundQueries) {
         const foundQuery = queryWithContext.query;
+
+        // If we are targeting a specific query, skip others
+        if (targetQuery && foundQuery !== targetQuery) {
+          continue;
+        }
+
         const indentation = queryWithContext.indentation;
         //log(`Processing query: [${foundQuery}] in file [${file.path}]`, 'debug');
         // Reference: https://github.com/IdreesInc/Waypoint/blob/master/main.ts
@@ -328,18 +380,28 @@ export class DataviewSerializerPlugin extends Plugin {
         if ('' !== serializedQuery) {
           const escapedQuery = escapeRegExp(foundQuery);
           const escapedIndentation = escapeRegExp(indentation);
+
+          // Match the Query Definition Line, optionally followed by an existing Serialized Block
+          const escapedSerializedStart = escapeRegExp(SERIALIZED_QUERY_START);
+          const escapedSerializedEnd = escapeRegExp(SERIALIZED_QUERY_END);
+          const escapedQueryClose = escapeRegExp(QUERY_FLAG_CLOSE);
+
+          // Regex breakdown:
+          // Group 1: The Query Definition line (preserved)
+          // Non-capturing Group: The optional existing serialized block (replaced)
           const queryToSerializeRegex = new RegExp(
-            `^${escapedIndentation}${QUERY_FLAG_OPEN}${escapedQuery}.*${QUERY_FLAG_CLOSE}\\n`,
+            `^(${escapedIndentation}${QUERY_FLAG_OPEN}${escapedQuery}.*${escapedQueryClose}\\n)(?:${escapedSerializedStart}${escapedQuery}${escapedQueryClose}\\n[\\s\\S]*?${escapedSerializedEnd}\\n)?`,
             'gm'
           );
 
           let queryAndSerializedQuery = '';
+
           if (isTableQuery(foundQuery)) {
-            queryAndSerializedQuery = `${indentation}${QUERY_FLAG_OPEN}${foundQuery}${QUERY_FLAG_CLOSE}\n${SERIALIZED_QUERY_START}${foundQuery}${QUERY_FLAG_CLOSE}\n\n${serializedQuery}${
+            queryAndSerializedQuery = `${indentation}${QUERY_FLAG_OPEN}${foundQuery}${QUERY_FLAG_CLOSE}\n${SERIALIZED_QUERY_START}${foundQuery}${QUERY_FLAG_CLOSE}\n\n${serializedQuery}\n${
               indentation.length > 0 ? '\n' : ''
             }${SERIALIZED_QUERY_END}\n`;
           } else {
-            queryAndSerializedQuery = `${indentation}${QUERY_FLAG_OPEN}${foundQuery}${QUERY_FLAG_CLOSE}\n${SERIALIZED_QUERY_START}${foundQuery}${QUERY_FLAG_CLOSE}\n${serializedQuery}${
+            queryAndSerializedQuery = `${indentation}${QUERY_FLAG_OPEN}${foundQuery}${QUERY_FLAG_CLOSE}\n${SERIALIZED_QUERY_START}${foundQuery}${QUERY_FLAG_CLOSE}\n${serializedQuery}\n${
               indentation.length > 0 ? '\n' : ''
             }${SERIALIZED_QUERY_END}\n`;
           }
@@ -355,7 +417,7 @@ export class DataviewSerializerPlugin extends Plugin {
       }
 
       // Keep track of the last time this file was updated to avoid modification loops
-      const nextPossibleUpdateTimeForFile = add(new Date(file.stat.mtime), {
+      const nextPossibleUpdateTimeForFile = add(new Date(), {
         seconds: MINIMUM_SECONDS_BETWEEN_UPDATES,
       });
       this.nextPossibleUpdates.set(file.path, nextPossibleUpdateTimeForFile);
@@ -363,15 +425,29 @@ export class DataviewSerializerPlugin extends Plugin {
       // Save the updated version
 
       if (updatedText !== text) {
+        if (targetQuery) {
+          this.filesToIgnoreFileEvents.add(file.path);
+          // Safety net: ensure the file is eventually removed from the ignore list
+          // even if the modify event doesn't fire or an error occurs.
+          window.setTimeout(() => {
+            if (this.filesToIgnoreFileEvents.has(file.path)) {
+              this.filesToIgnoreFileEvents.delete(file.path);
+            }
+          }, 2000);
+        }
         //log('The file content has changed. Saving the modifications', 'info');
         await this.app.vault.modify(file, updatedText);
       }
     } catch (e: unknown) {
+      // Ensure cleanup on error
+      if (this.filesToIgnoreFileEvents.has(file.path)) {
+        this.filesToIgnoreFileEvents.delete(file.path);
+      }
       log('Failed to process the file', 'warn', e);
     }
   }
 
-  async shouldFileBeIgnored(file: TFile): Promise<boolean> {
+  async shouldFileBeIgnored(file: TFile, force = false): Promise<boolean> {
     if (!file.path) {
       return true;
     }
@@ -393,6 +469,10 @@ export class DataviewSerializerPlugin extends Plugin {
 
     if (isExcalidrawFile(file)) {
       return true;
+    }
+
+    if (force) {
+      return false;
     }
 
     // Make sure the file was not modified too recently (avoid update loops)

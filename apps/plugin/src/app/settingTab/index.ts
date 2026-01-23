@@ -20,6 +20,7 @@ export class SettingsTab extends PluginSettingTab {
     containerEl.empty();
 
     this.renderAutomaticUpdatesToggle();
+    this.renderRefreshButtonToggle();
     this.renderFoldersToScan();
     this.renderFoldersToIgnore();
     this.renderFollowButton(containerEl);
@@ -52,6 +53,27 @@ export class SettingsTab extends PluginSettingTab {
               // User disabled "disable automatic updates" - register handlers
               this.plugin.setupEventHandlers();
             }
+          });
+      });
+  }
+
+  renderRefreshButtonToggle(): void {
+    new Setting(this.containerEl)
+      .setName('Show refresh button')
+      .setDesc(
+        'When enabled, a refresh button will be displayed next to each serialized Dataview query.'
+      )
+      .addToggle((toggle) => {
+        toggle
+          .setValue(this.plugin.settings.showRefreshButton)
+          .onChange(async (value) => {
+            this.plugin.settings = produce(
+              this.plugin.settings,
+              (draft: Draft<PluginSettings>) => {
+                draft.showRefreshButton = value;
+              }
+            );
+            await this.plugin.saveSettings();
           });
       });
   }
