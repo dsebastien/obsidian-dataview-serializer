@@ -1,0 +1,11 @@
+@import 'tailwindcss';
+
+/* Support section */
+.support-header-margin {
+    @apply mt-3;
+}
+
+/* Refresh button for inline Dataview queries */
+.dvs-refresh-button {
+    @apply inline-flex items-center justify-center align-middle gap-2;
+}

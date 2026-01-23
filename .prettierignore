@@ -1,5 +1,6 @@
-# Add files here to ignore them from prettier formatting
-/dist
-/coverage
-/.nx/cache
-/docs
+dist
+docs
+node_modules
+CHANGELOG.md
+.claude/
+bun.lockb
