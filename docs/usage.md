@@ -134,3 +134,29 @@ To serialize only the queries in the currently open file, use the command "Scan 
 #### Add a new Dataview Serializer query
 
 The plugin includes a command called "Insert Dataview serializer block" that can be used to quickly add a new Dataview Serializer query to the current note.
+
+### Error Handling
+
+When a query fails to serialize (due to invalid syntax or other Dataview errors), the plugin provides helpful feedback:
+
+- **Error notifications**: When enabled in settings, a notification popup appears showing:
+  - The file containing the error
+  - The problematic query (truncated if too long)
+  - The error message from Dataview
+
+- **Batch processing**: When scanning multiple files, the plugin shows up to 3 individual error notifications plus a summary if there are more errors.
+
+- **Refresh button errors**: When clicking the inline refresh button on a query with an error, you'll see a specific error message for that query.
+
+### Troubleshooting
+
+If you're experiencing issues with the plugin:
+
+1. **Enable debug logging**: Go to Settings → Dataview Serializer → enable "Debug logging". This will output detailed information to the browser console (open with Ctrl/Cmd+Shift+I → Console tab).
+
+2. **Check for query errors**: Enable "Show error notifications" to see when queries fail. Common issues include:
+   - Invalid Dataview syntax
+   - References to non-existent fields or folders
+   - Queries that depend on other plugins not being loaded
+
+3. **Console warnings**: Even with debug logging disabled, warnings and errors are always logged to the console. Check there for any issues the plugin encounters.

@@ -6,6 +6,7 @@ import type { DataviewApi } from 'obsidian-dataview/lib/api/plugin-api'
 import { log } from '../../utils/log'
 import { App, TFile } from 'obsidian'
 import path from 'path'
+import type { QuerySerializationResult } from '../types/query-result.intf'
 
 interface SerializeQueryParams {
     query: string
@@ -15,7 +16,9 @@ interface SerializeQueryParams {
     indentation?: string
 }
 
-export const serializeQuery = async (params: SerializeQueryParams): Promise<string> => {
+export const serializeQuery = async (
+    params: SerializeQueryParams
+): Promise<QuerySerializationResult> => {
     const allVaultFiles = params.app.vault.getFiles()
 
     // Check if the name is unique. If it is, we will be able to replace the long path with just the note name. Aids
@@ -87,14 +90,22 @@ export const serializeQuery = async (params: SerializeQueryParams): Promise<stri
                 // mathc[0]: Full matched string
                 // match{1]: Matched group 1 = filepath
                 // mathc[2]: alias
-                console.log(serializedQuery)
                 if (isNameUnique(path.basename(match[1]!))) {
                     serializedQuery = serializedQuery.replace(match[1] + '|', '')
                 }
             }
         }
     } catch (err: unknown) {
+        const errorMessage = err instanceof Error ? err.message : String(err)
         log('Failed to serialize query', 'warn', err)
+        return {
+            success: false,
+            serializedContent: '',
+            error: {
+                message: errorMessage,
+                query: params.query
+            }
+        }
     }
 
     // Apply indentation if provided
@@ -106,5 +117,8 @@ export const serializeQuery = async (params: SerializeQueryParams): Promise<stri
         serializedQuery = indentedLines.join('\n')
     }
 
-    return serializedQuery
+    return {
+        success: true,
+        serializedContent: serializedQuery
+    }
 }

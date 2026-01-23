@@ -8,6 +8,10 @@ In the settings of the plugin, you can configure:
 
 - **Show refresh button**: When enabled, a refresh button will be displayed next to each serialized Dataview query in the editor. Clicking this button will refresh only that specific query.
 
+- **Show error notifications**: When enabled, a notification popup will be displayed when a query fails to serialize. This helps you identify and fix invalid queries. Errors show the problematic query and the error message from Dataview.
+
+- **Debug logging**: When enabled, verbose debug messages will be logged to the browser console. This is useful for troubleshooting issues with the plugin. When disabled (default), only warnings and errors are logged, keeping the console clean.
+
 ## Folder Settings
 
 - **Folders to scan**: The folders that should be scanned when the "Scan and serialize all Dataview queries" command is executed.

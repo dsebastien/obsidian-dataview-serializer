@@ -3,6 +3,7 @@ import type { DecorationSet } from '@codemirror/view'
 import { RangeSetBuilder } from '@codemirror/state'
 import { App, MarkdownView, Notice, setIcon, TFile } from 'obsidian'
 import {
+    NOTICE_TIMEOUT,
     QUERY_FLAG_CLOSE,
     QUERY_FLAG_MANUAL_OPEN,
     QUERY_FLAG_ONCE_OPEN,
@@ -30,6 +31,14 @@ function detectQueryFlagInLine(text: string): { flagOpen: string; openIdx: numbe
 }
 import type { PluginSettings } from './types/plugin-settings.intf'
 
+interface FileProcessingResult {
+    filePath: string
+    errors: Array<{
+        message: string
+        query: string
+    }>
+}
+
 function createRefreshButton(onClick: () => void): HTMLButtonElement {
     const btn = document.createElement('button')
     btn.className = 'dvs-refresh-button'
@@ -53,7 +62,7 @@ export const refreshButtonExtension = (
         force?: boolean,
         targetQuery?: string,
         isManualTrigger?: boolean
-    ) => Promise<void>
+    ) => Promise<FileProcessingResult>
 ) =>
     ViewPlugin.fromClass(
         class {
@@ -94,8 +103,22 @@ export const refreshButtonExtension = (
                                 const file = leaf.view.file
                                 if (!file) return
 
-                                await processFile(file, true, this.query, true)
-                                new Notice('Dataview query serialized')
+                                const result = await processFile(file, true, this.query, true)
+
+                                // Check for errors
+                                const firstError = result.errors[0]
+                                if (firstError) {
+                                    const truncatedQuery =
+                                        firstError.query.length > 50
+                                            ? firstError.query.substring(0, 50) + '...'
+                                            : firstError.query
+                                    new Notice(
+                                        `Query failed:\n"${truncatedQuery}"\n${firstError.message}`,
+                                        NOTICE_TIMEOUT * 2
+                                    )
+                                } else {
+                                    new Notice('Dataview query serialized')
+                                }
                             } catch (err) {
                                 console.error('Failed to refresh dataview query', err)
                                 new Notice('Failed to refresh dataview query')

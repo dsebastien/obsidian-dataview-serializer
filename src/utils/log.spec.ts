@@ -1,5 +1,5 @@
 import { describe, expect, it, spyOn, beforeEach, afterEach } from 'bun:test'
-import { log, LOG_PREFIX, LOG_SEPARATOR } from './log'
+import { log, LOG_PREFIX, LOG_SEPARATOR, setDebugMode, isDebugModeEnabled } from './log'
 
 describe('log', () => {
     let consoleSpy: {
@@ -26,6 +26,8 @@ describe('log', () => {
         consoleSpy.info.mockRestore()
         consoleSpy.warn.mockRestore()
         consoleSpy.error.mockRestore()
+        // Reset debug mode after each test
+        setDebugMode(false)
     })
 
     describe('LOG_PREFIX', () => {
@@ -42,7 +44,24 @@ describe('log', () => {
         })
     })
 
-    describe('log function', () => {
+    describe('setDebugMode', () => {
+        it('should enable debug mode', () => {
+            setDebugMode(true)
+            expect(isDebugModeEnabled()).toBe(true)
+        })
+
+        it('should disable debug mode', () => {
+            setDebugMode(true)
+            setDebugMode(false)
+            expect(isDebugModeEnabled()).toBe(false)
+        })
+    })
+
+    describe('log function with debug mode enabled', () => {
+        beforeEach(() => {
+            setDebugMode(true)
+        })
+
         it('should call console.log by default when no level is specified', () => {
             log('test message')
             expect(consoleSpy.log).toHaveBeenCalledTimes(1)
@@ -91,6 +110,44 @@ describe('log', () => {
         it('should handle undefined level as default', () => {
             log('test', undefined)
             expect(consoleSpy.log).toHaveBeenCalledTimes(1)
+        })
+    })
+
+    describe('log function with debug mode disabled (default)', () => {
+        beforeEach(() => {
+            setDebugMode(false)
+        })
+
+        it('should NOT call console.log when no level is specified', () => {
+            log('test message')
+            expect(consoleSpy.log).toHaveBeenCalledTimes(0)
+        })
+
+        it('should NOT call console.debug for debug level', () => {
+            log('debug message', 'debug')
+            expect(consoleSpy.debug).toHaveBeenCalledTimes(0)
+        })
+
+        it('should NOT call console.info for info level', () => {
+            log('info message', 'info')
+            expect(consoleSpy.info).toHaveBeenCalledTimes(0)
+        })
+
+        it('should still call console.warn for warn level', () => {
+            log('warn message', 'warn')
+            expect(consoleSpy.warn).toHaveBeenCalledTimes(1)
+            expect(consoleSpy.warn).toHaveBeenCalledWith(`${LOG_PREFIX} warn message`, [])
+        })
+
+        it('should still call console.error for error level', () => {
+            log('error message', 'error')
+            expect(consoleSpy.error).toHaveBeenCalledTimes(1)
+            expect(consoleSpy.error).toHaveBeenCalledWith(`${LOG_PREFIX} error message`, [])
+        })
+
+        it('should NOT call console.log for undefined level', () => {
+            log('test', undefined)
+            expect(consoleSpy.log).toHaveBeenCalledTimes(0)
         })
     })
 })

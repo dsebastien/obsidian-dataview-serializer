@@ -6,6 +6,7 @@ import type { PluginSettings } from '../types/plugin-settings.intf'
 import { onlyUniqueArray } from '../utils/only-unique-array.fn'
 import { FolderSuggest } from '../utils/folder-suggest'
 import type { ArgsSearchAndRemove } from './args-search-and-remove.intf'
+import { setDebugMode } from '../../utils/log'
 
 export class SettingsTab extends PluginSettingTab {
     plugin: DataviewSerializerPlugin
@@ -22,6 +23,8 @@ export class SettingsTab extends PluginSettingTab {
 
         this.renderAutomaticUpdatesToggle()
         this.renderRefreshButtonToggle()
+        this.renderErrorNotificationsToggle()
+        this.renderDebugLoggingToggle()
         this.renderFoldersToScan()
         this.renderFoldersToIgnore()
         this.renderFoldersToForceUpdate()
@@ -72,6 +75,47 @@ export class SettingsTab extends PluginSettingTab {
                             draft.showRefreshButton = value
                         }
                     )
+                    await this.plugin.saveSettings()
+                })
+            })
+    }
+
+    renderErrorNotificationsToggle(): void {
+        new Setting(this.containerEl)
+            .setName('Show error notifications')
+            .setDesc(
+                'When enabled, a notification popup will be displayed when a query fails to serialize.'
+            )
+            .addToggle((toggle) => {
+                toggle
+                    .setValue(this.plugin.settings.showErrorNotifications)
+                    .onChange(async (value) => {
+                        this.plugin.settings = produce(
+                            this.plugin.settings,
+                            (draft: Draft<PluginSettings>) => {
+                                draft.showErrorNotifications = value
+                            }
+                        )
+                        await this.plugin.saveSettings()
+                    })
+            })
+    }
+
+    renderDebugLoggingToggle(): void {
+        new Setting(this.containerEl)
+            .setName('Debug logging')
+            .setDesc(
+                'When enabled, verbose debug messages will be logged to the console. Useful for troubleshooting.'
+            )
+            .addToggle((toggle) => {
+                toggle.setValue(this.plugin.settings.debugLogging).onChange(async (value) => {
+                    this.plugin.settings = produce(
+                        this.plugin.settings,
+                        (draft: Draft<PluginSettings>) => {
+                            draft.debugLogging = value
+                        }
+                    )
+                    setDebugMode(value)
                     await this.plugin.saveSettings()
                 })
             })

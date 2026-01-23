@@ -50,7 +50,7 @@ describe('serializeQuery', () => {
             expect(tryQueryMarkdownMock).toHaveBeenCalledWith('list from "folder"', 'my-note.md')
         })
 
-        it('should return the query result', async () => {
+        it('should return success true and the query result', async () => {
             const mockApp = createMockApp([])
             const mockApi = createMockDataviewApi('- Item 1\n- Item 2')
 
@@ -61,8 +61,10 @@ describe('serializeQuery', () => {
                 app: mockApp
             })
 
-            expect(result).toContain('- Item 1')
-            expect(result).toContain('- Item 2')
+            expect(result.success).toBe(true)
+            expect(result.serializedContent).toContain('- Item 1')
+            expect(result.serializedContent).toContain('- Item 2')
+            expect(result.error).toBeUndefined()
         })
     })
 
@@ -79,7 +81,8 @@ describe('serializeQuery', () => {
             })
 
             // Should remove the path for unique files
-            expect(result).toBe('- [[unique-note]]\n')
+            expect(result.success).toBe(true)
+            expect(result.serializedContent).toBe('- [[unique-note]]\n')
         })
 
         it('should keep full path for non-unique file names', async () => {
@@ -94,7 +97,8 @@ describe('serializeQuery', () => {
             })
 
             // Should keep the full path for non-unique files
-            expect(result).toBe('- [[folder/note.md|note]]\n')
+            expect(result.success).toBe(true)
+            expect(result.serializedContent).toBe('- [[folder/note.md|note]]\n')
         })
     })
 
@@ -110,8 +114,9 @@ describe('serializeQuery', () => {
                 app: mockApp
             })
 
-            expect(result).toContain('| File | Date |')
-            expect(result).toContain('| Note | 2024 |')
+            expect(result.success).toBe(true)
+            expect(result.serializedContent).toContain('| File | Date |')
+            expect(result.serializedContent).toContain('| Note | 2024 |')
         })
 
         it('should replace double backslashes with single backslashes', async () => {
@@ -127,7 +132,8 @@ describe('serializeQuery', () => {
             })
 
             // Should have single backslash after processing
-            expect(result).toBe('| File |\\| Value |')
+            expect(result.success).toBe(true)
+            expect(result.serializedContent).toBe('| File |\\| Value |')
         })
     })
 
@@ -144,7 +150,8 @@ describe('serializeQuery', () => {
                 indentation: '    '
             })
 
-            expect(result).toBe('    - item1\n    - item2\n    - item3')
+            expect(result.success).toBe(true)
+            expect(result.serializedContent).toBe('    - item1\n    - item2\n    - item3')
         })
 
         it('should apply tab indentation', async () => {
@@ -159,7 +166,8 @@ describe('serializeQuery', () => {
                 indentation: '\t'
             })
 
-            expect(result).toBe('\t- item1\n\t- item2')
+            expect(result.success).toBe(true)
+            expect(result.serializedContent).toBe('\t- item1\n\t- item2')
         })
 
         it('should apply mixed indentation', async () => {
@@ -174,7 +182,8 @@ describe('serializeQuery', () => {
                 indentation: '  \t'
             })
 
-            expect(result).toBe('  \tline1\n  \tline2')
+            expect(result.success).toBe(true)
+            expect(result.serializedContent).toBe('  \tline1\n  \tline2')
         })
 
         it('should not modify output when indentation is not provided', async () => {
@@ -188,7 +197,8 @@ describe('serializeQuery', () => {
                 app: mockApp
             })
 
-            expect(result).toBe('- item1\n- item2')
+            expect(result.success).toBe(true)
+            expect(result.serializedContent).toBe('- item1\n- item2')
         })
 
         it('should not modify output when indentation is empty string', async () => {
@@ -203,12 +213,13 @@ describe('serializeQuery', () => {
                 indentation: ''
             })
 
-            expect(result).toBe('- item1\n- item2')
+            expect(result.success).toBe(true)
+            expect(result.serializedContent).toBe('- item1\n- item2')
         })
     })
 
     describe('error handling', () => {
-        it('should return empty string on query error', async () => {
+        it('should return success false with error details on query error', async () => {
             const mockApp = createMockApp([])
             const mockApi = {
                 tryQueryMarkdown: mock(() => Promise.reject(new Error('Query failed')))
@@ -221,7 +232,30 @@ describe('serializeQuery', () => {
                 app: mockApp
             })
 
-            expect(result).toBe('')
+            expect(result.success).toBe(false)
+            expect(result.serializedContent).toBe('')
+            expect(result.error).toBeDefined()
+            expect(result.error?.message).toBe('Query failed')
+            expect(result.error?.query).toBe('invalid query')
+        })
+
+        it('should handle non-Error exceptions', async () => {
+            const mockApp = createMockApp([])
+            const mockApi = {
+                tryQueryMarkdown: mock(() => Promise.reject('String error'))
+            } as unknown as DataviewApi
+
+            const result = await serializeQuery({
+                query: 'invalid query',
+                originFile: 'origin.md',
+                dataviewApi: mockApi,
+                app: mockApp
+            })
+
+            expect(result.success).toBe(false)
+            expect(result.serializedContent).toBe('')
+            expect(result.error).toBeDefined()
+            expect(result.error?.message).toBe('String error')
         })
 
         it('should handle empty query result', async () => {
@@ -235,7 +269,9 @@ describe('serializeQuery', () => {
                 app: mockApp
             })
 
-            expect(result).toBe('')
+            expect(result.success).toBe(true)
+            expect(result.serializedContent).toBe('')
+            expect(result.error).toBeUndefined()
         })
     })
 })

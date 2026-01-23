@@ -2,7 +2,7 @@ import { App, debounce, Notice, Plugin, TAbstractFile, TFile } from 'obsidian'
 import type { EventRef } from 'obsidian'
 import { DEFAULT_SETTINGS, type PluginSettings } from './types/plugin-settings.intf'
 import { SettingsTab } from './settings/settings-tab'
-import { log } from '../utils/log'
+import { log, setDebugMode } from '../utils/log'
 import { produce } from 'immer'
 import type { Draft } from 'immer'
 import { isExcalidrawFile } from './utils/is-excalidraw-file.fn'
@@ -19,6 +19,7 @@ import {
     serializedQueriesRegex
 } from './constants'
 import type { DataviewApi } from 'obsidian-dataview/lib/api/plugin-api'
+import type { QuerySerializationResult } from './types/query-result.intf'
 
 /**
  * Get the Dataview API from the app object.
@@ -35,6 +36,22 @@ import { escapeRegExp } from './utils/escape-reg-exp.fn'
 import { isTableQuery } from './utils/is-table-query.fn'
 import { shouldSkipQuery } from './utils/should-skip-query.fn'
 import { refreshButtonExtension } from './refresh-button-extension'
+
+/**
+ * Maximum number of error notifications to show during batch operations
+ */
+const MAX_ERROR_NOTIFICATIONS = 3
+
+/**
+ * Result of processing a file
+ */
+interface FileProcessingResult {
+    filePath: string
+    errors: Array<{
+        message: string
+        query: string
+    }>
+}
 
 export class DataviewSerializerPlugin extends Plugin {
     /**
@@ -88,13 +105,47 @@ export class DataviewSerializerPlugin extends Plugin {
     )
 
     /**
+     * Create a Notice for a query error
+     */
+    private createQueryErrorNotice(
+        error: { message: string; query: string },
+        filePath: string
+    ): void {
+        const fileName = filePath.split('/').pop() || filePath
+        const truncatedQuery =
+            error.query.length > 50 ? error.query.substring(0, 50) + '...' : error.query
+        const message = `Dataview Serializer: Query error in ${fileName}:\n"${truncatedQuery}"\n${error.message}`
+        new Notice(message, NOTICE_TIMEOUT * 2)
+    }
+
+    /**
      * Process all the identified recently updated files
      */
     async processRecentlyUpdatedFiles(): Promise<void> {
-        this.recentlyUpdatedFiles.forEach((file) => {
-            this.processFile(file)
-        })
+        const allErrors: Array<{ filePath: string; error: { message: string; query: string } }> = []
+
+        for (const file of this.recentlyUpdatedFiles) {
+            const result = await this.processFile(file)
+            for (const error of result.errors) {
+                allErrors.push({ filePath: result.filePath, error })
+            }
+        }
         this.recentlyUpdatedFiles.clear()
+
+        // Show error notifications if enabled for automatic updates
+        if (this.settings.showErrorNotifications && allErrors.length > 0) {
+            const errorsToShow = allErrors.slice(0, MAX_ERROR_NOTIFICATIONS)
+            for (const { filePath, error } of errorsToShow) {
+                this.createQueryErrorNotice(error, filePath)
+            }
+
+            if (allErrors.length > MAX_ERROR_NOTIFICATIONS) {
+                new Notice(
+                    `${allErrors.length - MAX_ERROR_NOTIFICATIONS} more query error(s) occurred. Check console for details.`,
+                    NOTICE_TIMEOUT
+                )
+            }
+        }
     }
 
     /**
@@ -116,8 +167,28 @@ export class DataviewSerializerPlugin extends Plugin {
             return this.settings.foldersToForceUpdate.some((folder) => file.path.startsWith(folder))
         })
 
+        const allErrors: Array<{ filePath: string; error: { message: string; query: string } }> = []
+
         for (const file of filesToUpdate) {
-            await this.processFile(file)
+            const result = await this.processFile(file)
+            for (const error of result.errors) {
+                allErrors.push({ filePath: result.filePath, error })
+            }
+        }
+
+        // Show error notifications if enabled for automatic updates
+        if (this.settings.showErrorNotifications && allErrors.length > 0) {
+            const errorsToShow = allErrors.slice(0, MAX_ERROR_NOTIFICATIONS)
+            for (const { filePath, error } of errorsToShow) {
+                this.createQueryErrorNotice(error, filePath)
+            }
+
+            if (allErrors.length > MAX_ERROR_NOTIFICATIONS) {
+                new Notice(
+                    `${allErrors.length - MAX_ERROR_NOTIFICATIONS} more query error(s) occurred. Check console for details.`,
+                    NOTICE_TIMEOUT
+                )
+            }
         }
     }
 
@@ -167,9 +238,33 @@ export class DataviewSerializerPlugin extends Plugin {
             callback: async () => {
                 log('Scanning and serializing all Dataview queries', 'debug')
                 const allVaultFiles = this.app.vault.getMarkdownFiles()
+                const allErrors: Array<{
+                    filePath: string
+                    error: { message: string; query: string }
+                }> = []
 
                 for (const vaultFile of allVaultFiles) {
-                    await this.processFile(vaultFile, false, undefined, true)
+                    const result = await this.processFile(vaultFile, false, undefined, true)
+                    for (const error of result.errors) {
+                        allErrors.push({ filePath: result.filePath, error })
+                    }
+                }
+
+                // Show error notifications if enabled
+                if (this.settings.showErrorNotifications && allErrors.length > 0) {
+                    // Show up to MAX_ERROR_NOTIFICATIONS individual errors
+                    const errorsToShow = allErrors.slice(0, MAX_ERROR_NOTIFICATIONS)
+                    for (const { filePath, error } of errorsToShow) {
+                        this.createQueryErrorNotice(error, filePath)
+                    }
+
+                    // Show summary if there are more errors
+                    if (allErrors.length > MAX_ERROR_NOTIFICATIONS) {
+                        new Notice(
+                            `${allErrors.length - MAX_ERROR_NOTIFICATIONS} more query error(s) occurred. Check console for details.`,
+                            NOTICE_TIMEOUT
+                        )
+                    }
                 }
             }
         })
@@ -191,8 +286,16 @@ export class DataviewSerializerPlugin extends Plugin {
                 }
 
                 log(`Scanning and serializing Dataview queries in: ${activeFile.path}`, 'debug')
-                await this.processFile(activeFile, true, undefined, true)
-                new Notice(`Dataview queries serialized in: ${activeFile.name}`)
+                const result = await this.processFile(activeFile, true, undefined, true)
+
+                // Show error notifications if enabled
+                if (this.settings.showErrorNotifications && result.errors.length > 0) {
+                    for (const error of result.errors) {
+                        this.createQueryErrorNotice(error, result.filePath)
+                    }
+                } else {
+                    new Notice(`Dataview queries serialized in: ${activeFile.name}`)
+                }
             }
         })
 
@@ -305,7 +408,32 @@ export class DataviewSerializerPlugin extends Plugin {
                 log('The loaded settings miss the [foldersToForceUpdate] property', 'debug')
                 needToSaveSettings = true
             }
+
+            if (
+                loadedSettings.showErrorNotifications !== undefined &&
+                loadedSettings.showErrorNotifications !== null &&
+                typeof loadedSettings.showErrorNotifications === 'boolean'
+            ) {
+                draft.showErrorNotifications = loadedSettings.showErrorNotifications
+            } else {
+                log('The loaded settings miss the [showErrorNotifications] property', 'debug')
+                needToSaveSettings = true
+            }
+
+            if (
+                loadedSettings.debugLogging !== undefined &&
+                loadedSettings.debugLogging !== null &&
+                typeof loadedSettings.debugLogging === 'boolean'
+            ) {
+                draft.debugLogging = loadedSettings.debugLogging
+            } else {
+                log('The loaded settings miss the [debugLogging] property', 'debug')
+                needToSaveSettings = true
+            }
         })
+
+        // Initialize debug mode from settings
+        setDebugMode(this.settings.debugLogging)
 
         log(`Settings loaded`, 'debug', loadedSettings)
 
@@ -394,17 +522,20 @@ export class DataviewSerializerPlugin extends Plugin {
         force = false,
         targetQuery?: string,
         isManualTrigger = false
-    ): Promise<void> {
+    ): Promise<FileProcessingResult> {
+        const emptyResult: FileProcessingResult = { filePath: '', errors: [] }
+
         if (!(_file instanceof TFile)) {
-            return
+            return emptyResult
         }
 
         // Safe from here on
         const file = _file as TFile
+        const result: FileProcessingResult = { filePath: file.path, errors: [] }
 
         const shouldBeIgnored = await this.shouldFileBeIgnored(file, force)
         if (shouldBeIgnored) {
-            return
+            return result
         }
 
         try {
@@ -415,7 +546,7 @@ export class DataviewSerializerPlugin extends Plugin {
 
             if (foundQueries.length === 0) {
                 // No queries to serialize found in the file
-                return
+                return result
             }
 
             // Process the modified file
@@ -452,13 +583,21 @@ export class DataviewSerializerPlugin extends Plugin {
                 const indentation = queryWithContext.indentation
                 //log(`Processing query: [${foundQuery}] in file [${file.path}]`, 'debug');
                 // Reference: https://github.com/IdreesInc/Waypoint/blob/master/main.ts
-                const serializedQuery = await serializeQuery({
+                const serializationResult: QuerySerializationResult = await serializeQuery({
                     query: foundQuery,
                     originFile: file.path,
                     dataviewApi: this.dataviewApi!,
                     app: this.app,
                     indentation
                 })
+
+                // Check for errors
+                if (!serializationResult.success && serializationResult.error) {
+                    result.errors.push(serializationResult.error)
+                    continue
+                }
+
+                const serializedQuery = serializationResult.serializedContent
 
                 //log('Serialized query: ', 'debug', serializedQuery);
 
@@ -551,6 +690,8 @@ export class DataviewSerializerPlugin extends Plugin {
             }
             log('Failed to process the file', 'warn', e)
         }
+
+        return result
     }
 
     async shouldFileBeIgnored(file: TFile, force = false): Promise<boolean> {

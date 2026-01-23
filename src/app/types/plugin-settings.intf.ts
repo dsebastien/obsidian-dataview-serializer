@@ -8,6 +8,14 @@ export interface PluginSettings {
      * Useful for index files with queries that aggregate data from elsewhere in the vault.
      */
     foldersToForceUpdate: string[]
+    /**
+     * Show notification popups when queries fail to serialize.
+     */
+    showErrorNotifications: boolean
+    /**
+     * Enable verbose debug logging in the console.
+     */
+    debugLogging: boolean
 }
 
 export const DEFAULT_SETTINGS: PluginSettings = {
@@ -15,5 +23,7 @@ export const DEFAULT_SETTINGS: PluginSettings = {
     ignoredFolders: [],
     disableAutomaticUpdates: false,
     showRefreshButton: true,
-    foldersToForceUpdate: []
+    foldersToForceUpdate: [],
+    showErrorNotifications: true,
+    debugLogging: false
 }
