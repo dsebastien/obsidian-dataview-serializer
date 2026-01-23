@@ -15,7 +15,7 @@ describe('isExcalidrawFile', () => {
         beforeEach(() => {
             // Ensure ExcalidrawAutomate is undefined
             if ('ExcalidrawAutomate' in globalThis) {
-                delete (globalThis as Record<string, unknown>).ExcalidrawAutomate
+                delete (globalThis as Record<string, unknown>)['ExcalidrawAutomate']
             }
         })
 
@@ -33,11 +33,11 @@ describe('isExcalidrawFile', () => {
             mockExcalidrawAutomate = {
                 isExcalidrawFile: (file: TFile) => file.name.includes('.excalidraw.')
             }
-            ;(globalThis as Record<string, unknown>).ExcalidrawAutomate = mockExcalidrawAutomate
+            ;(globalThis as Record<string, unknown>)['ExcalidrawAutomate'] = mockExcalidrawAutomate
         })
 
         afterEach(() => {
-            delete (globalThis as Record<string, unknown>).ExcalidrawAutomate
+            delete (globalThis as Record<string, unknown>)['ExcalidrawAutomate']
         })
 
         it('should return true for excalidraw files', () => {
@@ -54,13 +54,13 @@ describe('isExcalidrawFile', () => {
 
     describe('when ExcalidrawAutomate.isExcalidrawFile returns custom logic', () => {
         beforeEach(() => {
-            ;(globalThis as Record<string, unknown>).ExcalidrawAutomate = {
+            ;(globalThis as Record<string, unknown>)['ExcalidrawAutomate'] = {
                 isExcalidrawFile: (file: TFile) => file.extension === 'excalidraw'
             }
         })
 
         afterEach(() => {
-            delete (globalThis as Record<string, unknown>).ExcalidrawAutomate
+            delete (globalThis as Record<string, unknown>)['ExcalidrawAutomate']
         })
 
         it('should delegate to ExcalidrawAutomate.isExcalidrawFile', () => {

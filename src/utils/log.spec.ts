@@ -1,5 +1,5 @@
 import { describe, expect, it, spyOn, beforeEach, afterEach } from 'bun:test'
-import { log, LOG_PREFIX, LOG_SEPARATOR, LogLevel } from './log'
+import { log, LOG_PREFIX, LOG_SEPARATOR } from './log'
 
 describe('log', () => {
     let consoleSpy: {

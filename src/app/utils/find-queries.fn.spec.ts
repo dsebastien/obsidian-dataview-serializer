@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'bun:test'
-import { findQueries, QueryWithContext } from './find-queries.fn'
+import { findQueries } from './find-queries.fn'
 import { QUERY_FLAG_OPEN, QUERY_FLAG_CLOSE } from '../constants'
 
 describe('findQueries', () => {
@@ -10,24 +10,24 @@ describe('findQueries', () => {
             const text = makeQuery('list from "folder"')
             const result = findQueries(text)
             expect(result).toHaveLength(1)
-            expect(result[0].query).toBe('list from "folder"')
-            expect(result[0].indentation).toBe('')
+            expect(result[0]!.query).toBe('list from "folder"')
+            expect(result[0]!.indentation).toBe('')
         })
 
         it('should find a single table query', () => {
             const text = makeQuery('table file.name, date')
             const result = findQueries(text)
             expect(result).toHaveLength(1)
-            expect(result[0].query).toBe('table file.name, date')
-            expect(result[0].indentation).toBe('')
+            expect(result[0]!.query).toBe('table file.name, date')
+            expect(result[0]!.indentation).toBe('')
         })
 
         it('should find multiple queries', () => {
             const text = `${makeQuery('list from "folder1"')}\n${makeQuery('table file.name')}`
             const result = findQueries(text)
             expect(result).toHaveLength(2)
-            expect(result[0].query).toBe('list from "folder1"')
-            expect(result[1].query).toBe('table file.name')
+            expect(result[0]!.query).toBe('list from "folder1"')
+            expect(result[1]!.query).toBe('table file.name')
         })
     })
 
@@ -36,29 +36,29 @@ describe('findQueries', () => {
             const text = `    ${makeQuery('list from "folder"')}`
             const result = findQueries(text)
             expect(result).toHaveLength(1)
-            expect(result[0].indentation).toBe('    ')
+            expect(result[0]!.indentation).toBe('    ')
         })
 
         it('should capture tab indentation', () => {
             const text = `\t\t${makeQuery('list from "folder"')}`
             const result = findQueries(text)
             expect(result).toHaveLength(1)
-            expect(result[0].indentation).toBe('\t\t')
+            expect(result[0]!.indentation).toBe('\t\t')
         })
 
         it('should capture mixed indentation', () => {
             const text = `  \t  ${makeQuery('table file.name')}`
             const result = findQueries(text)
             expect(result).toHaveLength(1)
-            expect(result[0].indentation).toBe('  \t  ')
+            expect(result[0]!.indentation).toBe('  \t  ')
         })
 
         it('should capture different indentations for multiple queries', () => {
             const text = `${makeQuery('list')}\n    ${makeQuery('table file.name')}`
             const result = findQueries(text)
             expect(result).toHaveLength(2)
-            expect(result[0].indentation).toBe('')
-            expect(result[1].indentation).toBe('    ')
+            expect(result[0]!.indentation).toBe('')
+            expect(result[1]!.indentation).toBe('    ')
         })
     })
 
@@ -67,7 +67,7 @@ describe('findQueries', () => {
             const text = `${makeQuery('list from "folder"')}\n${makeQuery('list from "folder"')}`
             const result = findQueries(text)
             expect(result).toHaveLength(1)
-            expect(result[0].query).toBe('list from "folder"')
+            expect(result[0]!.query).toBe('list from "folder"')
         })
 
         it('should keep queries that differ only by whitespace in content', () => {
@@ -118,14 +118,14 @@ describe('findQueries', () => {
             const text = makeQuery('  list from "folder"  ')
             const result = findQueries(text)
             expect(result).toHaveLength(1)
-            expect(result[0].query).toBe('list from "folder"')
+            expect(result[0]!.query).toBe('list from "folder"')
         })
 
         it('should handle queries with content before the flag', () => {
             const text = `Some text before ${makeQuery('list')}`
             const result = findQueries(text)
             expect(result).toHaveLength(1)
-            expect(result[0].indentation).toBe('Some text before ')
+            expect(result[0]!.indentation).toBe('Some text before ')
         })
     })
 })
