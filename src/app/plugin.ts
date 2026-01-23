@@ -126,6 +126,16 @@ export class DataviewSerializerPlugin extends Plugin {
     override async onload() {
         log('Initializing', 'debug')
 
+        // Wait for layout to be ready before checking for Dataview
+        // This ensures Dataview has had a chance to initialize first
+        this.app.workspace.onLayoutReady(() => this.initializePlugin())
+    }
+
+    /**
+     * Initialize the plugin after the workspace layout is ready.
+     * This ensures that dependent plugins like Dataview have finished loading.
+     */
+    private async initializePlugin() {
         // Retrieve the Dataview API
         this.dataviewApi = getDataviewApi(this.app)
 
