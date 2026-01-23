@@ -1,9 +1,17 @@
 import { describe, expect, it } from 'bun:test'
 import { findQueries } from './find-queries.fn'
-import { QUERY_FLAG_OPEN, QUERY_FLAG_CLOSE } from '../constants'
+import {
+    QUERY_FLAG_OPEN,
+    QUERY_FLAG_CLOSE,
+    QUERY_FLAG_MANUAL_OPEN,
+    QUERY_FLAG_ONCE_OPEN
+} from '../constants'
 
 describe('findQueries', () => {
     const makeQuery = (query: string) => `${QUERY_FLAG_OPEN}${query}${QUERY_FLAG_CLOSE}`
+    const makeManualQuery = (query: string) =>
+        `${QUERY_FLAG_MANUAL_OPEN}${query}${QUERY_FLAG_CLOSE}`
+    const makeOnceQuery = (query: string) => `${QUERY_FLAG_ONCE_OPEN}${query}${QUERY_FLAG_CLOSE}`
 
     describe('basic query detection', () => {
         it('should find a single list query', () => {
@@ -28,6 +36,44 @@ describe('findQueries', () => {
             expect(result).toHaveLength(2)
             expect(result[0]!.query).toBe('list from "folder1"')
             expect(result[1]!.query).toBe('table file.name')
+        })
+    })
+
+    describe('update mode detection', () => {
+        it('should detect auto update mode for standard queries', () => {
+            const text = makeQuery('list from "folder"')
+            const result = findQueries(text)
+            expect(result).toHaveLength(1)
+            expect(result[0]!.updateMode).toBe('auto')
+            expect(result[0]!.flagOpen).toBe(QUERY_FLAG_OPEN)
+        })
+
+        it('should detect manual update mode for manual queries', () => {
+            const text = makeManualQuery('list from "folder"')
+            const result = findQueries(text)
+            expect(result).toHaveLength(1)
+            expect(result[0]!.updateMode).toBe('manual')
+            expect(result[0]!.flagOpen).toBe(QUERY_FLAG_MANUAL_OPEN)
+        })
+
+        it('should detect once update mode for once queries', () => {
+            const text = makeOnceQuery('list from "folder"')
+            const result = findQueries(text)
+            expect(result).toHaveLength(1)
+            expect(result[0]!.updateMode).toBe('once')
+            expect(result[0]!.flagOpen).toBe(QUERY_FLAG_ONCE_OPEN)
+        })
+
+        it('should handle mixed query types in the same file', () => {
+            const text = `${makeQuery('list from "auto"')}\n${makeManualQuery('list from "manual"')}\n${makeOnceQuery('list from "once"')}`
+            const result = findQueries(text)
+            expect(result).toHaveLength(3)
+            expect(result[0]!.updateMode).toBe('auto')
+            expect(result[0]!.query).toBe('list from "auto"')
+            expect(result[1]!.updateMode).toBe('manual')
+            expect(result[1]!.query).toBe('list from "manual"')
+            expect(result[2]!.updateMode).toBe('once')
+            expect(result[2]!.query).toBe('list from "once"')
         })
     })
 
@@ -60,6 +106,34 @@ describe('findQueries', () => {
             expect(result[0]!.indentation).toBe('')
             expect(result[1]!.indentation).toBe('    ')
         })
+
+        it('should capture indentation for manual queries', () => {
+            const text = `    ${makeManualQuery('list from "folder"')}`
+            const result = findQueries(text)
+            expect(result).toHaveLength(1)
+            expect(result[0]!.indentation).toBe('    ')
+            expect(result[0]!.updateMode).toBe('manual')
+        })
+
+        it('should capture indentation for once queries', () => {
+            const text = `\t${makeOnceQuery('table file.name')}`
+            const result = findQueries(text)
+            expect(result).toHaveLength(1)
+            expect(result[0]!.indentation).toBe('\t')
+            expect(result[0]!.updateMode).toBe('once')
+        })
+
+        it('should capture different indentations for all query types', () => {
+            const text = `${makeQuery('list')}\n  ${makeManualQuery('table file.name')}\n    ${makeOnceQuery('list from "once"')}`
+            const result = findQueries(text)
+            expect(result).toHaveLength(3)
+            expect(result[0]!.indentation).toBe('')
+            expect(result[0]!.updateMode).toBe('auto')
+            expect(result[1]!.indentation).toBe('  ')
+            expect(result[1]!.updateMode).toBe('manual')
+            expect(result[2]!.indentation).toBe('    ')
+            expect(result[2]!.updateMode).toBe('once')
+        })
     })
 
     describe('duplicate handling', () => {
@@ -74,6 +148,14 @@ describe('findQueries', () => {
             const text = `${makeQuery('list from "a"')}\n${makeQuery('list from "b"')}`
             const result = findQueries(text)
             expect(result).toHaveLength(2)
+        })
+
+        it('should ignore duplicates even with different update modes', () => {
+            const text = `${makeQuery('list from "folder"')}\n${makeManualQuery('list from "folder"')}`
+            const result = findQueries(text)
+            expect(result).toHaveLength(1)
+            // First one wins
+            expect(result[0]!.updateMode).toBe('auto')
         })
     })
 
@@ -95,6 +177,18 @@ describe('findQueries', () => {
             const result = findQueries(text)
             expect(result).toHaveLength(2)
             expect(result.map((r) => r.query)).toEqual(['list', 'table file.name'])
+        })
+
+        it('should ignore unsupported query types for manual queries', () => {
+            const text = makeManualQuery('task from "folder"')
+            const result = findQueries(text)
+            expect(result).toHaveLength(0)
+        })
+
+        it('should ignore unsupported query types for once queries', () => {
+            const text = makeOnceQuery('calendar from "folder"')
+            const result = findQueries(text)
+            expect(result).toHaveLength(0)
         })
     })
 
@@ -126,6 +220,16 @@ describe('findQueries', () => {
             const result = findQueries(text)
             expect(result).toHaveLength(1)
             expect(result[0]!.indentation).toBe('Some text before ')
+        })
+
+        it('should return empty array for incomplete manual query flags', () => {
+            const result = findQueries(`${QUERY_FLAG_MANUAL_OPEN}list from "folder"`)
+            expect(result).toEqual([])
+        })
+
+        it('should return empty array for incomplete once query flags', () => {
+            const result = findQueries(`${QUERY_FLAG_ONCE_OPEN}list from "folder"`)
+            expect(result).toEqual([])
         })
     })
 })

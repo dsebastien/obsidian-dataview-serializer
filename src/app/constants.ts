@@ -7,6 +7,8 @@ export const DEFAULT_CANVAS_FILE_NAME = 'Canvas.md'
 export const MARKDOWN_FILE_EXTENSION = 'md'
 
 export const QUERY_FLAG_OPEN = `<!-- QueryToSerialize: `
+export const QUERY_FLAG_MANUAL_OPEN = `<!-- QueryToSerializeManual: `
+export const QUERY_FLAG_ONCE_OPEN = `<!-- QueryToSerializeOnce: `
 export const QUERY_FLAG_CLOSE = ` -->`
 
 // Query and serialized query structure: <!-- SerializedQuery: QUERY -->\n<markdown>\n<!-- SerializedQuery END -->

@@ -33,6 +33,7 @@ import { serializeQuery } from './utils/serialize-query.fn'
 import { findQueries, type QueryWithContext } from './utils/find-queries.fn'
 import { escapeRegExp } from './utils/escape-reg-exp.fn'
 import { isTableQuery } from './utils/is-table-query.fn'
+import { shouldSkipQuery } from './utils/should-skip-query.fn'
 import { refreshButtonExtension } from './refresh-button-extension'
 
 export class DataviewSerializerPlugin extends Plugin {
@@ -168,7 +169,7 @@ export class DataviewSerializerPlugin extends Plugin {
                 const allVaultFiles = this.app.vault.getMarkdownFiles()
 
                 for (const vaultFile of allVaultFiles) {
-                    await this.processFile(vaultFile)
+                    await this.processFile(vaultFile, false, undefined, true)
                 }
             }
         })
@@ -190,7 +191,7 @@ export class DataviewSerializerPlugin extends Plugin {
                 }
 
                 log(`Scanning and serializing Dataview queries in: ${activeFile.path}`, 'debug')
-                await this.processFile(activeFile, true)
+                await this.processFile(activeFile, true, undefined, true)
                 new Notice(`Dataview queries serialized in: ${activeFile.name}`)
             }
         })
@@ -388,7 +389,12 @@ export class DataviewSerializerPlugin extends Plugin {
         log('Event handlers unregistered for automatic updates', 'debug')
     }
 
-    async processFile(_file: TAbstractFile, force = false, targetQuery?: string): Promise<void> {
+    async processFile(
+        _file: TAbstractFile,
+        force = false,
+        targetQuery?: string,
+        isManualTrigger = false
+    ): Promise<void> {
         if (!(_file instanceof TFile)) {
             return
         }
@@ -423,9 +429,23 @@ export class DataviewSerializerPlugin extends Plugin {
             // Serialize the supported queries in memory
             for (const queryWithContext of foundQueries) {
                 const foundQuery = queryWithContext.query
+                const updateMode = queryWithContext.updateMode
+                const flagOpen = queryWithContext.flagOpen
 
                 // If we are targeting a specific query, skip others
                 if (targetQuery && foundQuery !== targetQuery) {
+                    continue
+                }
+
+                // Check if query is already serialized (needed for 'once' mode check)
+                const alreadySerializedRegex = new RegExp(
+                    `${escapeRegExp(SERIALIZED_QUERY_START)}${escapeRegExp(foundQuery)}${escapeRegExp(QUERY_FLAG_CLOSE)}`,
+                    'm'
+                )
+                const isAlreadySerialized = !!text.match(alreadySerializedRegex)
+
+                // Skip queries based on update mode during automatic updates
+                if (shouldSkipQuery({ updateMode, isManualTrigger, isAlreadySerialized })) {
                     continue
                 }
 
@@ -465,6 +485,7 @@ export class DataviewSerializerPlugin extends Plugin {
                 if ('' !== serializedQuery) {
                     const escapedQuery = escapeRegExp(foundQuery)
                     const escapedIndentation = escapeRegExp(indentation)
+                    const escapedFlagOpen = escapeRegExp(flagOpen)
 
                     // Match the Query Definition Line, optionally followed by an existing Serialized Block
                     const escapedSerializedStart = escapeRegExp(SERIALIZED_QUERY_START)
@@ -475,18 +496,18 @@ export class DataviewSerializerPlugin extends Plugin {
                     // Group 1: The Query Definition line (preserved)
                     // Non-capturing Group: The optional existing serialized block (replaced)
                     const queryToSerializeRegex = new RegExp(
-                        `^(${escapedIndentation}${QUERY_FLAG_OPEN}${escapedQuery}.*${escapedQueryClose}\\n)(?:${escapedSerializedStart}${escapedQuery}${escapedQueryClose}\\n[\\s\\S]*?${escapedSerializedEnd}\\n)?`,
+                        `^(${escapedIndentation}${escapedFlagOpen}${escapedQuery}.*${escapedQueryClose}\\n)(?:${escapedSerializedStart}${escapedQuery}${escapedQueryClose}\\n[\\s\\S]*?${escapedSerializedEnd}\\n)?`,
                         'gm'
                     )
 
                     let queryAndSerializedQuery = ''
 
                     if (isTableQuery(foundQuery)) {
-                        queryAndSerializedQuery = `${indentation}${QUERY_FLAG_OPEN}${foundQuery}${QUERY_FLAG_CLOSE}\n${SERIALIZED_QUERY_START}${foundQuery}${QUERY_FLAG_CLOSE}\n\n${serializedQuery}\n${
+                        queryAndSerializedQuery = `${indentation}${flagOpen}${foundQuery}${QUERY_FLAG_CLOSE}\n${SERIALIZED_QUERY_START}${foundQuery}${QUERY_FLAG_CLOSE}\n\n${serializedQuery}\n${
                             indentation.length > 0 ? '\n' : ''
                         }${SERIALIZED_QUERY_END}\n`
                     } else {
-                        queryAndSerializedQuery = `${indentation}${QUERY_FLAG_OPEN}${foundQuery}${QUERY_FLAG_CLOSE}\n${SERIALIZED_QUERY_START}${foundQuery}${QUERY_FLAG_CLOSE}\n${serializedQuery}\n${
+                        queryAndSerializedQuery = `${indentation}${flagOpen}${foundQuery}${QUERY_FLAG_CLOSE}\n${SERIALIZED_QUERY_START}${foundQuery}${QUERY_FLAG_CLOSE}\n${serializedQuery}\n${
                             indentation.length > 0 ? '\n' : ''
                         }${SERIALIZED_QUERY_END}\n`
                     }

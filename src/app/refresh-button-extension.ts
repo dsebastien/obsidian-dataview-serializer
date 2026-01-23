@@ -2,7 +2,32 @@ import { Decoration, EditorView, ViewPlugin, ViewUpdate, WidgetType } from '@cod
 import type { DecorationSet } from '@codemirror/view'
 import { RangeSetBuilder } from '@codemirror/state'
 import { App, MarkdownView, Notice, setIcon, TFile } from 'obsidian'
-import { QUERY_FLAG_CLOSE, QUERY_FLAG_OPEN } from './constants'
+import {
+    QUERY_FLAG_CLOSE,
+    QUERY_FLAG_MANUAL_OPEN,
+    QUERY_FLAG_ONCE_OPEN,
+    QUERY_FLAG_OPEN
+} from './constants'
+
+/**
+ * Detect which query flag is present in a line and return the flag info
+ */
+function detectQueryFlagInLine(text: string): { flagOpen: string; openIdx: number } | null {
+    // Check in order of specificity (longer prefixes first)
+    const manualIdx = text.indexOf(QUERY_FLAG_MANUAL_OPEN)
+    if (manualIdx !== -1) {
+        return { flagOpen: QUERY_FLAG_MANUAL_OPEN, openIdx: manualIdx }
+    }
+    const onceIdx = text.indexOf(QUERY_FLAG_ONCE_OPEN)
+    if (onceIdx !== -1) {
+        return { flagOpen: QUERY_FLAG_ONCE_OPEN, openIdx: onceIdx }
+    }
+    const autoIdx = text.indexOf(QUERY_FLAG_OPEN)
+    if (autoIdx !== -1) {
+        return { flagOpen: QUERY_FLAG_OPEN, openIdx: autoIdx }
+    }
+    return null
+}
 import type { PluginSettings } from './types/plugin-settings.intf'
 
 function createRefreshButton(onClick: () => void): HTMLButtonElement {
@@ -23,7 +48,12 @@ function createRefreshButton(onClick: () => void): HTMLButtonElement {
 export const refreshButtonExtension = (
     app: App,
     getSettings: () => PluginSettings,
-    processFile: (file: TFile, force?: boolean, targetQuery?: string) => Promise<void>
+    processFile: (
+        file: TFile,
+        force?: boolean,
+        targetQuery?: string,
+        isManualTrigger?: boolean
+    ) => Promise<void>
 ) =>
     ViewPlugin.fromClass(
         class {
@@ -64,7 +94,7 @@ export const refreshButtonExtension = (
                                 const file = leaf.view.file
                                 if (!file) return
 
-                                await processFile(file, true, this.query)
+                                await processFile(file, true, this.query, true)
                                 new Notice('Dataview query serialized')
                             } catch (err) {
                                 console.error('Failed to refresh dataview query', err)
@@ -86,13 +116,14 @@ export const refreshButtonExtension = (
                     for (let i = startLine.number; i <= endLine.number; i++) {
                         const line = view.state.doc.line(i)
                         const text = line.text
-                        const openIdx = text.indexOf(QUERY_FLAG_OPEN)
+                        const flagInfo = detectQueryFlagInLine(text)
 
-                        if (openIdx !== -1) {
+                        if (flagInfo) {
+                            const { flagOpen, openIdx } = flagInfo
                             const closeIdx = text.indexOf(QUERY_FLAG_CLOSE, openIdx)
                             if (closeIdx !== -1) {
                                 const query = text
-                                    .substring(openIdx + QUERY_FLAG_OPEN.length, closeIdx)
+                                    .substring(openIdx + flagOpen.length, closeIdx)
                                     .trim()
 
                                 const endPos = line.from + closeIdx + QUERY_FLAG_CLOSE.length

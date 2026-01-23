@@ -9,7 +9,13 @@ The following files are automatically ignored by the plugin:
 - Canvas.md files
 - Files in folders configured as "Folders to ignore"
 
-The queries need to be wrapped in a very specific structure for the plugin to recognize those `<!-- QueryToSerialize: <query> -->`.
+The queries need to be wrapped in a very specific structure for the plugin to recognize them. There are three query types available, each with different update behavior:
+
+| Syntax | Behavior |
+|--------|----------|
+| `<!-- QueryToSerialize: <query> -->` | Automatic updates (default) |
+| `<!-- QueryToSerializeManual: <query> -->` | Manual-only updates |
+| `<!-- QueryToSerializeOnce: <query> -->` | Write-once (never auto-updates after first serialization) |
 
 Those tags are HTML comments, which are supported by Markdown, and Obsidian. Those are only visible in the source view, meaning that they disappear in the Reading mode. Moreover, the "code" that is within HTML comments is not interpreted by Obsidian. This means that even if you use a tag within a query, it won't be seen by Obsidian as an actual tag.
 
@@ -41,15 +47,70 @@ Note that a single note can include multiple queries. As soon as a file is modif
 
 There is a minimal delay between the executions of this plugin, to avoid issues with file synchronization systems.
 
+### Per-Query Update Control
+
+You can control when individual queries are updated by using different query syntaxes. This allows you to mix automatic and manual queries in the same file.
+
+#### Automatic Updates (Default)
+
+```
+<!-- QueryToSerialize: LIST FROM #project -->
+```
+
+This is the standard behavior. The query is automatically re-serialized whenever the file is modified.
+
+#### Manual-Only Updates
+
+```
+<!-- QueryToSerializeManual: LIST FROM #archive -->
+```
+
+Manual queries are **skipped during automatic updates**. They will only be updated when you:
+- Use the "Scan and serialize all Dataview queries" command
+- Use the "Scan and serialize Dataview queries in current file" command
+- Click the inline refresh button next to the query
+
+This is useful for queries that are expensive to run or that you only want to update occasionally.
+
+#### Write-Once Updates
+
+```
+<!-- QueryToSerializeOnce: TABLE file.ctime FROM "Templates" -->
+```
+
+Write-once queries are serialized **only once**. After the first serialization, they will never be automatically updated again. Like manual queries, you can still force an update using commands or the refresh button.
+
+This is useful for:
+- Capturing a snapshot of data at a specific point in time
+- Queries where you want the initial result preserved
+- Reducing processing overhead for static content
+
+#### Example: Mixed Query Types
+
+You can use different query types in the same file:
+
+```markdown
+# My Dashboard
+
+## Active Projects (auto-updates)
+<!-- QueryToSerialize: LIST FROM #project AND !#archived -->
+
+## Archived Projects (manual refresh only)
+<!-- QueryToSerializeManual: LIST FROM #project AND #archived -->
+
+## Initial Setup Date (never changes)
+<!-- QueryToSerializeOnce: LIST FROM "Setup" LIMIT 1 -->
+```
+
 ### Inline Refresh Button
 
-When enabled in settings, a refresh button (🔄) appears next to each serialized Dataview query in the editor. Clicking this button will:
+When enabled in settings, a refresh button (🔄) appears next to each serialized Dataview query in the editor (for all query types). Clicking this button will:
 
 - Re-execute only that specific query
 - Update the serialized output immediately
 - Not affect other queries in the file
 
-This is useful when you want to quickly update a single query without waiting for automatic updates or running a command.
+This is useful when you want to quickly update a single query without waiting for automatic updates or running a command. It also provides a way to manually refresh `QueryToSerializeManual` and `QueryToSerializeOnce` queries.
 
 ### Idempotency Protection
 
