@@ -381,7 +381,28 @@ export class DataviewSerializerPlugin extends Plugin {
                     app: this.app,
                     indentation
                 })
+
                 //log('Serialized query: ', 'debug', serializedQuery);
+
+                // Idempotency check: compare new result with existing serialized content
+                // If they're identical, skip this query to prevent unnecessary file modifications
+                // This prevents infinite update loops for queries that always produce the same output
+                const existingSerializedRegex = new RegExp(
+                    `${escapeRegExp(SERIALIZED_QUERY_START)}${escapeRegExp(foundQuery)}${escapeRegExp(QUERY_FLAG_CLOSE)}\\n([\\s\\S]*?)${escapeRegExp(SERIALIZED_QUERY_END)}`,
+                    'm'
+                )
+                const existingMatch = text.match(existingSerializedRegex)
+                if (existingMatch) {
+                    // Extract the content between the markers (group 1)
+                    // For tables, there's an extra newline at the start
+                    const existingContent = existingMatch[1]?.trim() ?? ''
+                    const newContent = serializedQuery.trim()
+
+                    if (existingContent === newContent) {
+                        //log(`Skipping query in [${file.path}] - content unchanged: "${foundQuery}"`, 'debug');
+                        continue
+                    }
+                }
 
                 if ('' !== serializedQuery) {
                     const escapedQuery = escapeRegExp(foundQuery)
