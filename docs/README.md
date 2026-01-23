@@ -8,7 +8,12 @@ Turning Dataview queries into Markdown also ensures that the generated content a
 
 ### Features
 
-Automatically serialize Dataview queries to Markdown.
+- **Automatic serialization**: Dataview queries are automatically serialized to Markdown when files are saved
+- **Inline refresh button**: Refresh individual queries directly from the editor
+- **Force update folders**: Configure specific folders (like index files) to update when any file in your vault changes
+- **Idempotency protection**: Prevents unnecessary file modifications and infinite update loops
+- **Manual mode**: Option to disable automatic updates and only serialize queries on demand
+- **Command palette integration**: Commands to serialize all queries, current file queries, or insert new query blocks
 
 Currently, this plugin is only compatible with `LIST` and `TABLE` queries. `CALENDAR` and `TASK` queries are not supported.
 

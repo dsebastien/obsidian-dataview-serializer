@@ -77,6 +77,16 @@ export class DataviewSerializerPlugin extends Plugin {
     )
 
     /**
+     * Debounce forced updates for configured folders.
+     * Uses a longer delay to avoid overwhelming the system with updates.
+     */
+    scheduleForcedUpdate = debounce(
+        this.processForceUpdateFiles.bind(this),
+        MINIMUM_MS_BETWEEN_EVENTS * 20,
+        true
+    )
+
+    /**
      * Process all the identified recently updated files
      */
     async processRecentlyUpdatedFiles(): Promise<void> {
@@ -84,6 +94,30 @@ export class DataviewSerializerPlugin extends Plugin {
             this.processFile(file)
         })
         this.recentlyUpdatedFiles.clear()
+    }
+
+    /**
+     * Process updates for folders which are marked as forced updates.
+     * These files are updated on any modification, useful for scenarios
+     * where there's an index file that holds queries that could be impacted
+     * by file updates elsewhere.
+     */
+    async processForceUpdateFiles(): Promise<void> {
+        // Skip if no folders are configured for forced updates
+        if (
+            !this.settings.foldersToForceUpdate ||
+            this.settings.foldersToForceUpdate.length === 0
+        ) {
+            return
+        }
+
+        const filesToUpdate = this.app.vault.getMarkdownFiles().filter((file) => {
+            return this.settings.foldersToForceUpdate.some((folder) => file.path.startsWith(folder))
+        })
+
+        for (const file of filesToUpdate) {
+            await this.processFile(file)
+        }
     }
 
     /**
@@ -249,6 +283,17 @@ export class DataviewSerializerPlugin extends Plugin {
                 log('The loaded settings miss the [showRefreshButton] property', 'debug')
                 needToSaveSettings = true
             }
+
+            if (
+                loadedSettings.foldersToForceUpdate !== undefined &&
+                loadedSettings.foldersToForceUpdate !== null &&
+                Array.isArray(loadedSettings.foldersToForceUpdate)
+            ) {
+                draft.foldersToForceUpdate = loadedSettings.foldersToForceUpdate
+            } else {
+                log('The loaded settings miss the [foldersToForceUpdate] property', 'debug')
+                needToSaveSettings = true
+            }
         })
 
         log(`Settings loaded`, 'debug', loadedSettings)
@@ -282,12 +327,14 @@ export class DataviewSerializerPlugin extends Plugin {
             this.createEventRef = this.app.vault.on('create', (file) => {
                 this.recentlyUpdatedFiles.add(file)
                 this.scheduleUpdate()
+                this.scheduleForcedUpdate()
             })
             this.registerEvent(this.createEventRef)
 
             this.renameEventRef = this.app.vault.on('rename', (file) => {
                 this.recentlyUpdatedFiles.add(file)
                 this.scheduleUpdate()
+                this.scheduleForcedUpdate()
             })
             this.registerEvent(this.renameEventRef)
 
@@ -303,6 +350,7 @@ export class DataviewSerializerPlugin extends Plugin {
 
                 this.recentlyUpdatedFiles.add(file)
                 this.scheduleUpdate()
+                this.scheduleForcedUpdate()
             })
             this.registerEvent(this.modifyEventRef)
 

@@ -24,6 +24,7 @@ export class SettingsTab extends PluginSettingTab {
         this.renderRefreshButtonToggle()
         this.renderFoldersToScan()
         this.renderFoldersToIgnore()
+        this.renderFoldersToForceUpdate()
         this.renderFollowButton(containerEl)
         this.renderSupportHeader(containerEl)
     }
@@ -133,6 +134,23 @@ export class SettingsTab extends PluginSettingTab {
             },
             name: 'Folders to ignore',
             description: 'Folders to ignore when processing added/modified files.'
+        })
+    }
+
+    renderFoldersToForceUpdate(): void {
+        this.doSearchAndRemoveList({
+            currentList: this.plugin.settings.foldersToForceUpdate,
+            setValue: async (newValue) => {
+                this.plugin.settings = produce(
+                    this.plugin.settings,
+                    (draft: Draft<PluginSettings>) => {
+                        draft.foldersToForceUpdate = newValue
+                    }
+                )
+            },
+            name: 'Folders to force update',
+            description:
+                'Folders containing files that should be updated when ANY file in the vault changes. Useful for index files with queries that aggregate data from elsewhere.'
         })
     }
 

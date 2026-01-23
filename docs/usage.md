@@ -1,6 +1,13 @@
 # Usage
 
-This plugin automatically serializes configured Dataview queries present in your notes. The queries will be serialized when you save the note (it happens at most once every 3 seconds).
+This plugin automatically serializes configured Dataview queries present in your notes. The queries will be serialized when you save the note (with a minimum of 5 seconds between updates to the same file to avoid update loops).
+
+The following files are automatically ignored by the plugin:
+- Non-markdown files
+- Empty files
+- Excalidraw files
+- Canvas.md files
+- Files in folders configured as "Folders to ignore"
 
 The queries need to be wrapped in a very specific structure for the plugin to recognize those `<!-- QueryToSerialize: <query> -->`.
 
@@ -34,11 +41,34 @@ Note that a single note can include multiple queries. As soon as a file is modif
 
 There is a minimal delay between the executions of this plugin, to avoid issues with file synchronization systems.
 
+### Inline Refresh Button
+
+When enabled in settings, a refresh button (🔄) appears next to each serialized Dataview query in the editor. Clicking this button will:
+
+- Re-execute only that specific query
+- Update the serialized output immediately
+- Not affect other queries in the file
+
+This is useful when you want to quickly update a single query without waiting for automatic updates or running a command.
+
+### Idempotency Protection
+
+The plugin includes built-in protection against unnecessary file modifications. Before updating a serialized query, the plugin compares the new result with the existing serialized content. If they are identical, the file is not modified.
+
+This provides several benefits:
+- **Prevents infinite update loops**: If a query produces the same output, the file won't be re-saved, preventing cascading updates
+- **Reduces disk writes**: Files are only written when the query results actually change
+- **Better sync compatibility**: Fewer unnecessary file modifications means fewer sync conflicts
+
 ### Commands
 
 #### Manual scan of all queries
 
-The plugin also includes a command you can use to scan and update all the Dataview queries to serialize in the folders to scan: Hit CTRL/CMD + P then type "Scan and serialize all Dataview queries" to invoke it.
+The plugin includes a command you can use to scan and update all the Dataview queries to serialize in the entire vault: Hit CTRL/CMD + P then type "Scan and serialize all Dataview queries" to invoke it.
+
+#### Scan current file
+
+To serialize only the queries in the currently open file, use the command "Scan and serialize Dataview queries in current file". This is useful when you want to refresh a specific file without processing the entire vault.
 
 #### Add a new Dataview Serializer query
 
