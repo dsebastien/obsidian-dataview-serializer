@@ -25,8 +25,7 @@ export class SettingsTab extends PluginSettingTab {
         this.renderFoldersToScan()
         this.renderFoldersToIgnore()
         this.renderFoldersToForceUpdate()
-        this.renderFollowButton(containerEl)
-        this.renderSupportHeader(containerEl)
+        this.renderSupportSection(containerEl)
     }
 
     renderAutomaticUpdatesToggle(): void {
@@ -78,20 +77,18 @@ export class SettingsTab extends PluginSettingTab {
             })
     }
 
-    renderFollowButton(containerEl: HTMLElement) {
+    renderSupportSection(containerEl: HTMLElement): void {
+        new Setting(containerEl).setName('Support').setHeading()
+
         new Setting(containerEl)
             .setName('Follow me on X')
-            .setDesc('@dSebastien')
+            .setDesc('Sébastien Dubois (@dSebastien)')
             .addButton((button) => {
                 button.setCta()
                 button.setButtonText('Follow me on X').onClick(() => {
                     window.open('https://x.com/dSebastien')
                 })
             })
-    }
-
-    renderSupportHeader(containerEl: HTMLElement) {
-        new Setting(containerEl).setName('Support').setHeading()
 
         const supportDesc = new DocumentFragment()
         supportDesc.createDiv({
@@ -101,8 +98,6 @@ export class SettingsTab extends PluginSettingTab {
         new Setting(containerEl).setDesc(supportDesc)
 
         this.renderBuyMeACoffeeBadge(containerEl)
-        const spacing = containerEl.createDiv()
-        spacing.classList.add('support-header-margin')
     }
 
     renderFoldersToScan(): void {
@@ -191,13 +186,13 @@ export class SettingsTab extends PluginSettingTab {
         )
     }
 
-    renderBuyMeACoffeeBadge(contentEl: HTMLElement | DocumentFragment, width = 175) {
+    renderBuyMeACoffeeBadge(contentEl: HTMLElement | DocumentFragment, width = 175): void {
         const linkEl = contentEl.createEl('a', {
             href: 'https://www.buymeacoffee.com/dsebastien'
         })
         const imgEl = linkEl.createEl('img')
         imgEl.src =
-            'https://github.com/dsebastien/obsidian-dataview-serializer/raw/main/src/assets/buy-me-a-coffee.png'
+            'https://github.com/dsebastien/obsidian-plugin-template/blob/main/src/assets/buy-me-a-coffee.png?raw=true'
         imgEl.alt = 'Buy me a coffee'
         imgEl.width = width
     }
