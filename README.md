@@ -13,4 +13,4 @@ You can find the documentation [here](https://developassion.gitbook.io/obsidian-
 
 ## News & support
 
-To stay up to date about this plugin, Obsidian in general, Personal Knowledge Management and note-taking, subscribe to [my newsletter](https://dsebastien.net/newsletter). Note that the best way to support my work is to become a paid subscriber.
+To stay up to date about this plugin, Obsidian in general, Personal Knowledge Management and note-taking, subscribe to [my newsletter](https://dsebastien.net/newsletter). If you want to support my work, then you can [check out my products](https://store.dsebastien.net), or [become a GitHub Sponsor](https://github.com/sponsors/dsebastien).
