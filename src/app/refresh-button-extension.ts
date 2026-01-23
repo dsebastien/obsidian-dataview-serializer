@@ -1,7 +1,7 @@
 import { Decoration, EditorView, ViewPlugin, ViewUpdate, WidgetType } from '@codemirror/view'
 import type { DecorationSet } from '@codemirror/view'
 import { RangeSetBuilder } from '@codemirror/state'
-import { App, MarkdownView, setIcon, TFile } from 'obsidian'
+import { App, MarkdownView, Notice, setIcon, TFile } from 'obsidian'
 import { QUERY_FLAG_CLOSE, QUERY_FLAG_OPEN } from './constants'
 import type { PluginSettings } from './types/plugin-settings.intf'
 
@@ -65,8 +65,10 @@ export const refreshButtonExtension = (
                                 if (!file) return
 
                                 await processFile(file, true, this.query)
+                                new Notice('Dataview query serialized')
                             } catch (err) {
                                 console.error('Failed to refresh dataview query', err)
+                                new Notice('Failed to refresh dataview query')
                             }
                         })
 

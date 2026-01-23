@@ -7,5 +7,5 @@
 
 /* Refresh button for inline Dataview queries */
 .dvs-refresh-button {
-    @apply inline-flex items-center justify-center align-middle gap-2;
+    @apply inline-flex items-center justify-center align-middle gap-2 cursor-pointer;
 }
