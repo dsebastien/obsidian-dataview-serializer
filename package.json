@@ -1,6 +1,6 @@
 {
     "name": "obsidian-dataview-serializer",
-    "version": "2.1.0",
+    "version": "2.2.0",
     "description": "Obsidian plugin that gives you the power of Dataview, but generates Markdown, making it compatible with Obsidian Publish, and making the links appear on the Graph",
     "author": {
         "name": "Sebastien Dubois",

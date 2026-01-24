@@ -1,4 +1,4 @@
-## [2.1.0](https://github.com/dsebastien/obsidian-dataview-serializer/compare/2.0.0...2.1.0) (2026-01-24)
+## [2.2.0](https://github.com/dsebastien/obsidian-dataview-serializer/compare/2.0.0...2.2.0) (2026-01-24)
 
 ### Features
 
