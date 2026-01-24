@@ -204,6 +204,25 @@ export const refreshButtonExtension = (
                     }
                 }
 
+                // State for tracking multi-line query parsing in decorations
+                interface MultiLineDecorationState {
+                    isCapturing: boolean
+                    startLineNumber: number
+                    flagOpen: string
+                    queryType: QueryType
+                    queryLines: string[]
+                    lineNumbers: number[]
+                }
+
+                let multiLineState: MultiLineDecorationState = {
+                    isCapturing: false,
+                    startLineNumber: -1,
+                    flagOpen: '',
+                    queryType: 'auto',
+                    queryLines: [],
+                    lineNumbers: []
+                }
+
                 for (const { from, to } of view.visibleRanges) {
                     const startLine = view.state.doc.lineAt(from)
                     const endLine = view.state.doc.lineAt(to)
@@ -212,38 +231,145 @@ export const refreshButtonExtension = (
                         const line = view.state.doc.line(i)
                         const text = line.text
 
-                        // Check for query definition line
-                        const flagInfo = detectQueryFlagInLine(text)
-                        if (flagInfo) {
-                            const { flagOpen, openIdx, queryType } = flagInfo
-                            const closeIdx = text.indexOf(QUERY_FLAG_CLOSE, openIdx)
-                            if (closeIdx !== -1) {
-                                // Add line decoration
-                                decorations.push({
-                                    from: line.from,
-                                    to: line.from,
-                                    decoration: queryLineDecoration
-                                })
+                        if (multiLineState.isCapturing) {
+                            // We're in the middle of a multi-line query
+                            multiLineState.queryLines.push(text)
+                            multiLineState.lineNumbers.push(i)
 
-                                // Add widget with badge and refresh button
-                                const query = text
-                                    .substring(openIdx + flagOpen.length, closeIdx)
-                                    .trim()
-                                const endPos = line.from + closeIdx + QUERY_FLAG_CLOSE.length
+                            // Add line decoration for this line
+                            decorations.push({
+                                from: line.from,
+                                to: line.from,
+                                decoration: queryLineDecoration
+                            })
 
-                                decorations.push({
-                                    from: endPos,
-                                    to: endPos,
-                                    decoration: Decoration.widget({
-                                        widget: new QueryWidgetGroup(query, queryType),
-                                        side: 1
+                            // Check if this line contains the closing flag
+                            const closeIdx = text.indexOf(QUERY_FLAG_CLOSE)
+                            const closeIdxTrimmed = text.indexOf(QUERY_FLAG_CLOSE.trim())
+                            const actualCloseIdx = closeIdx !== -1 ? closeIdx : closeIdxTrimmed
+                            const actualCloseFlag =
+                                closeIdx !== -1 ? QUERY_FLAG_CLOSE : QUERY_FLAG_CLOSE.trim()
+
+                            if (actualCloseIdx !== -1) {
+                                // Multi-line query complete - extract the normalized query
+                                const fullText = multiLineState.queryLines.join('\n')
+                                const { flagOpen } = multiLineState
+
+                                // Find opening flag position
+                                let openFlagIdx = fullText.indexOf(flagOpen)
+                                let flagLength = flagOpen.length
+                                if (openFlagIdx === -1) {
+                                    openFlagIdx = fullText.indexOf(flagOpen.trim())
+                                    flagLength = flagOpen.trim().length
+                                }
+
+                                // Find closing flag position in full text
+                                let closeFlagIdx = fullText.indexOf(QUERY_FLAG_CLOSE)
+                                if (closeFlagIdx === -1) {
+                                    closeFlagIdx = fullText.indexOf(QUERY_FLAG_CLOSE.trim())
+                                }
+
+                                if (openFlagIdx !== -1 && closeFlagIdx !== -1) {
+                                    // Extract and normalize the query
+                                    const queryContent = fullText.substring(
+                                        openFlagIdx + flagLength,
+                                        closeFlagIdx
+                                    )
+                                    const normalizedQuery = queryContent
+                                        .split('\n')
+                                        .map((l) => l.trim())
+                                        .join(' ')
+                                        .replace(/\s+/g, ' ')
+                                        .trim()
+
+                                    // Add widget at the end of the closing line
+                                    const endPos =
+                                        line.from + actualCloseIdx + actualCloseFlag.length
+
+                                    decorations.push({
+                                        from: endPos,
+                                        to: endPos,
+                                        decoration: Decoration.widget({
+                                            widget: new QueryWidgetGroup(
+                                                normalizedQuery,
+                                                multiLineState.queryType
+                                            ),
+                                            side: 1
+                                        })
                                     })
-                                })
+                                }
+
+                                // Reset state
+                                multiLineState = {
+                                    isCapturing: false,
+                                    startLineNumber: -1,
+                                    flagOpen: '',
+                                    queryType: 'auto',
+                                    queryLines: [],
+                                    lineNumbers: []
+                                }
+                            }
+                        } else {
+                            // Check for query definition line
+                            const flagInfo = detectQueryFlagInLine(text)
+                            if (flagInfo) {
+                                const { flagOpen, openIdx, queryType } = flagInfo
+                                const closeIdx = text.indexOf(QUERY_FLAG_CLOSE, openIdx)
+                                const closeIdxTrimmed = text.indexOf(
+                                    QUERY_FLAG_CLOSE.trim(),
+                                    openIdx
+                                )
+                                const actualCloseIdx = closeIdx !== -1 ? closeIdx : closeIdxTrimmed
+                                const actualCloseFlag =
+                                    closeIdx !== -1 ? QUERY_FLAG_CLOSE : QUERY_FLAG_CLOSE.trim()
+
+                                if (actualCloseIdx !== -1) {
+                                    // Single-line query
+                                    // Add line decoration
+                                    decorations.push({
+                                        from: line.from,
+                                        to: line.from,
+                                        decoration: queryLineDecoration
+                                    })
+
+                                    // Add widget with badge and refresh button
+                                    const query = text
+                                        .substring(openIdx + flagOpen.length, actualCloseIdx)
+                                        .trim()
+                                    const endPos =
+                                        line.from + actualCloseIdx + actualCloseFlag.length
+
+                                    decorations.push({
+                                        from: endPos,
+                                        to: endPos,
+                                        decoration: Decoration.widget({
+                                            widget: new QueryWidgetGroup(query, queryType),
+                                            side: 1
+                                        })
+                                    })
+                                } else {
+                                    // Opening flag found but no closing flag - start multi-line capture
+                                    multiLineState = {
+                                        isCapturing: true,
+                                        startLineNumber: i,
+                                        flagOpen,
+                                        queryType,
+                                        queryLines: [text],
+                                        lineNumbers: [i]
+                                    }
+
+                                    // Add line decoration for the opening line
+                                    decorations.push({
+                                        from: line.from,
+                                        to: line.from,
+                                        decoration: queryLineDecoration
+                                    })
+                                }
                             }
                         }
 
-                        // Check for serialized query start line
-                        if (text.includes(SERIALIZED_QUERY_START)) {
+                        // Check for serialized query start line (only if not capturing multi-line)
+                        if (!multiLineState.isCapturing && text.includes(SERIALIZED_QUERY_START)) {
                             decorations.push({
                                 from: line.from,
                                 to: line.from,

@@ -142,4 +142,145 @@ ${SERIALIZED_QUERY_END}
             expect(regex.test(fileContent)).toBe(true)
         })
     })
+
+    describe('multi-line query matching', () => {
+        /**
+         * Build the regex for multi-line query matching.
+         * This matches the logic from plugin.ts when originalQueryDefinition is present.
+         */
+        function buildMultiLineQueryRegex(
+            originalQueryDefinition: string,
+            normalizedQuery: string
+        ): RegExp {
+            const escapedOriginalDefinition = escapeRegExp(originalQueryDefinition)
+            const escapedQuery = escapeRegExp(normalizedQuery)
+            const escapedSerializedStart = escapeRegExp(SERIALIZED_QUERY_START)
+            const escapedSerializedEnd = escapeRegExp(SERIALIZED_QUERY_END)
+            const escapedQueryClose = escapeRegExp(QUERY_FLAG_CLOSE)
+
+            return new RegExp(
+                `(${escapedOriginalDefinition}\\n)(?:${escapedSerializedStart}${escapedQuery}${escapedQueryClose}\\n[\\s\\S]*?${escapedSerializedEnd}\\n)?`,
+                'gm'
+            )
+        }
+
+        it('should match a multi-line query definition', () => {
+            const originalDef = `${QUERY_FLAG_OPEN}
+TABLE file.name
+FROM "folder"
+${QUERY_FLAG_CLOSE}`
+            const normalizedQuery = 'TABLE file.name FROM "folder"'
+
+            const regex = buildMultiLineQueryRegex(originalDef, normalizedQuery)
+            const fileContent = `${originalDef}\n`
+
+            expect(regex.test(fileContent)).toBe(true)
+        })
+
+        it('should match a multi-line query with existing serialized block', () => {
+            const originalDef = `${QUERY_FLAG_OPEN}
+TABLE file.name
+FROM "folder"
+${QUERY_FLAG_CLOSE}`
+            const normalizedQuery = 'TABLE file.name FROM "folder"'
+
+            const regex = buildMultiLineQueryRegex(originalDef, normalizedQuery)
+            const fileContent = `${originalDef}
+${SERIALIZED_QUERY_START}${normalizedQuery}${QUERY_FLAG_CLOSE}
+| File | Name |
+| --- | --- |
+| note1 | Note 1 |
+${SERIALIZED_QUERY_END}
+`
+
+            const matches = fileContent.match(regex)
+            expect(matches).toHaveLength(1)
+        })
+
+        it('should correctly replace a multi-line query definition while preserving format', () => {
+            const originalDef = `${QUERY_FLAG_OPEN}
+TABLE file.name
+FROM "folder"
+${QUERY_FLAG_CLOSE}`
+            const normalizedQuery = 'TABLE file.name FROM "folder"'
+
+            const regex = buildMultiLineQueryRegex(originalDef, normalizedQuery)
+            const fileContent = `Some content before
+
+${originalDef}
+
+Some content after`
+
+            // Build the replacement (preserving original multi-line format)
+            const replacement = `${originalDef}
+${SERIALIZED_QUERY_START}${normalizedQuery}${QUERY_FLAG_CLOSE}
+
+| File | Name |
+| --- | --- |
+| note1 | Note 1 |
+
+${SERIALIZED_QUERY_END}
+`
+
+            const result = fileContent.replace(regex, replacement)
+
+            // Should preserve the original multi-line format
+            expect(result).toContain('TABLE file.name\n')
+            expect(result).toContain('FROM "folder"')
+            expect(result).toContain(SERIALIZED_QUERY_START)
+            expect(result).toContain('note1')
+        })
+
+        it('should not interfere with similar but different multi-line queries', () => {
+            const originalDef1 = `${QUERY_FLAG_OPEN}
+TABLE file.name
+FROM "folder1"
+${QUERY_FLAG_CLOSE}`
+            const originalDef2 = `${QUERY_FLAG_OPEN}
+TABLE file.name
+FROM "folder2"
+${QUERY_FLAG_CLOSE}`
+            const normalizedQuery1 = 'TABLE file.name FROM "folder1"'
+            const normalizedQuery2 = 'TABLE file.name FROM "folder2"'
+
+            const fileContent = `${originalDef1}
+${originalDef2}
+`
+
+            const regex1 = buildMultiLineQueryRegex(originalDef1, normalizedQuery1)
+            const regex2 = buildMultiLineQueryRegex(originalDef2, normalizedQuery2)
+
+            // Each regex should match exactly one query
+            expect(fileContent.match(regex1)).toHaveLength(1)
+            expect(fileContent.match(regex2)).toHaveLength(1)
+
+            // Verify they match the correct ones
+            const match1 = fileContent.match(regex1)?.[0]
+            const match2 = fileContent.match(regex2)?.[0]
+
+            expect(match1).toContain('folder1')
+            expect(match1).not.toContain('folder2')
+            expect(match2).toContain('folder2')
+            expect(match2).not.toContain('folder1')
+        })
+
+        it('should handle complex multi-line TABLE queries', () => {
+            const originalDef = `${QUERY_FLAG_OPEN}
+TABLE
+  dateformat(release-date, "yyyy-MM-dd") AS "Release Date",
+  rating,
+  status
+FROM "Games"
+WHERE rating > 7
+SORT finished-date DESC
+${QUERY_FLAG_CLOSE}`
+            const normalizedQuery =
+                'TABLE dateformat(release-date, "yyyy-MM-dd") AS "Release Date", rating, status FROM "Games" WHERE rating > 7 SORT finished-date DESC'
+
+            const regex = buildMultiLineQueryRegex(originalDef, normalizedQuery)
+            const fileContent = `${originalDef}\n`
+
+            expect(regex.test(fileContent)).toBe(true)
+        })
+    })
 })

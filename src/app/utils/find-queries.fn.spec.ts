@@ -276,4 +276,261 @@ describe('findQueries', () => {
             expect(result).toEqual([])
         })
     })
+
+    describe('multi-line query support', () => {
+        it('should find a basic multi-line query', () => {
+            const text = `${QUERY_FLAG_OPEN}
+TABLE
+  file.name AS "Name",
+  file.mtime AS "Modified"
+FROM "folder"
+SORT file.mtime DESC
+${QUERY_FLAG_CLOSE}`
+            const result = findQueries(text)
+            expect(result).toHaveLength(1)
+            expect(result[0]!.query).toBe(
+                'TABLE file.name AS "Name", file.mtime AS "Modified" FROM "folder" SORT file.mtime DESC'
+            )
+            expect(result[0]!.updateMode).toBe('auto')
+            expect(result[0]!.flagOpen).toBe(QUERY_FLAG_OPEN)
+        })
+
+        it('should preserve originalQueryDefinition for multi-line queries', () => {
+            const text = `${QUERY_FLAG_OPEN}
+TABLE file.name
+FROM "folder"
+${QUERY_FLAG_CLOSE}`
+            const result = findQueries(text)
+            expect(result).toHaveLength(1)
+            expect(result[0]!.originalQueryDefinition).toBeDefined()
+            expect(result[0]!.originalQueryDefinition).toContain('TABLE file.name')
+            expect(result[0]!.originalQueryDefinition).toContain('FROM "folder"')
+        })
+
+        it('should not set originalQueryDefinition for single-line queries', () => {
+            const text = makeQuery('LIST FROM "folder"')
+            const result = findQueries(text)
+            expect(result).toHaveLength(1)
+            expect(result[0]!.originalQueryDefinition).toBeUndefined()
+        })
+
+        it('should handle multi-line manual query', () => {
+            const text = `${QUERY_FLAG_MANUAL_OPEN}
+TABLE file.name
+FROM "folder"
+${QUERY_FLAG_CLOSE}`
+            const result = findQueries(text)
+            expect(result).toHaveLength(1)
+            expect(result[0]!.query).toBe('TABLE file.name FROM "folder"')
+            expect(result[0]!.updateMode).toBe('manual')
+            expect(result[0]!.flagOpen).toBe(QUERY_FLAG_MANUAL_OPEN)
+        })
+
+        it('should handle multi-line once query', () => {
+            const text = `${QUERY_FLAG_ONCE_OPEN}
+LIST FROM "folder"
+WHERE status = "done"
+${QUERY_FLAG_CLOSE}`
+            const result = findQueries(text)
+            expect(result).toHaveLength(1)
+            expect(result[0]!.query).toBe('LIST FROM "folder" WHERE status = "done"')
+            expect(result[0]!.updateMode).toBe('once')
+            expect(result[0]!.flagOpen).toBe(QUERY_FLAG_ONCE_OPEN)
+        })
+
+        it('should handle multi-line once-and-eject query', () => {
+            const text = `${QUERY_FLAG_ONCE_AND_EJECT_OPEN}
+TABLE file.name
+FROM "folder"
+${QUERY_FLAG_CLOSE}`
+            const result = findQueries(text)
+            expect(result).toHaveLength(1)
+            expect(result[0]!.query).toBe('TABLE file.name FROM "folder"')
+            expect(result[0]!.updateMode).toBe('once-and-eject')
+            expect(result[0]!.flagOpen).toBe(QUERY_FLAG_ONCE_AND_EJECT_OPEN)
+        })
+
+        it('should capture indentation for multi-line queries', () => {
+            const text = `    ${QUERY_FLAG_OPEN}
+    TABLE file.name
+    FROM "folder"
+    ${QUERY_FLAG_CLOSE}`
+            const result = findQueries(text)
+            expect(result).toHaveLength(1)
+            expect(result[0]!.indentation).toBe('    ')
+        })
+
+        it('should handle mixed single-line and multi-line queries', () => {
+            const singleLine = makeQuery('LIST FROM "single"')
+            const multiLine = `${QUERY_FLAG_OPEN}
+TABLE file.name
+FROM "multi"
+${QUERY_FLAG_CLOSE}`
+            const text = `${singleLine}\n${multiLine}`
+            const result = findQueries(text)
+            expect(result).toHaveLength(2)
+            expect(result[0]!.query).toBe('LIST FROM "single"')
+            expect(result[0]!.originalQueryDefinition).toBeUndefined()
+            expect(result[1]!.query).toBe('TABLE file.name FROM "multi"')
+            expect(result[1]!.originalQueryDefinition).toBeDefined()
+        })
+
+        it('should normalize whitespace in multi-line queries', () => {
+            const text = `${QUERY_FLAG_OPEN}
+  TABLE
+    file.name     AS    "Name"
+  FROM     "folder"
+${QUERY_FLAG_CLOSE}`
+            const result = findQueries(text)
+            expect(result).toHaveLength(1)
+            // Multiple spaces should be normalized to single spaces
+            expect(result[0]!.query).toBe('TABLE file.name AS "Name" FROM "folder"')
+        })
+
+        it('should handle empty lines within multi-line queries', () => {
+            const text = `${QUERY_FLAG_OPEN}
+TABLE file.name
+
+FROM "folder"
+${QUERY_FLAG_CLOSE}`
+            const result = findQueries(text)
+            expect(result).toHaveLength(1)
+            expect(result[0]!.query).toBe('TABLE file.name FROM "folder"')
+        })
+
+        it('should handle complex TABLE query with multiple columns', () => {
+            const text = `${QUERY_FLAG_OPEN}
+TABLE
+  dateformat(release-date, "yyyy-MM-dd") AS "Release Date",
+  rating,
+  status
+FROM "Games"
+WHERE rating > 7
+SORT finished-date DESC
+${QUERY_FLAG_CLOSE}`
+            const result = findQueries(text)
+            expect(result).toHaveLength(1)
+            expect(result[0]!.query).toBe(
+                'TABLE dateformat(release-date, "yyyy-MM-dd") AS "Release Date", rating, status FROM "Games" WHERE rating > 7 SORT finished-date DESC'
+            )
+        })
+
+        it('should ignore incomplete multi-line queries (no closing flag)', () => {
+            const text = `${QUERY_FLAG_OPEN}
+TABLE file.name
+FROM "folder"`
+            const result = findQueries(text)
+            expect(result).toHaveLength(0)
+        })
+
+        it('should handle closing flag on same line as content', () => {
+            const text = `${QUERY_FLAG_OPEN}
+TABLE file.name
+FROM "folder" ${QUERY_FLAG_CLOSE}`
+            const result = findQueries(text)
+            expect(result).toHaveLength(1)
+            expect(result[0]!.query).toBe('TABLE file.name FROM "folder"')
+        })
+
+        it('should deduplicate multi-line queries with same content', () => {
+            const multiLine1 = `${QUERY_FLAG_OPEN}
+TABLE file.name
+FROM "folder"
+${QUERY_FLAG_CLOSE}`
+            const multiLine2 = `${QUERY_FLAG_OPEN}
+TABLE file.name FROM "folder"
+${QUERY_FLAG_CLOSE}`
+            const text = `${multiLine1}\n${multiLine2}`
+            const result = findQueries(text)
+            // Both normalize to the same query, so only first one is kept
+            expect(result).toHaveLength(1)
+        })
+
+        it('should deduplicate multi-line and single-line with same content', () => {
+            const singleLine = makeQuery('TABLE file.name FROM "folder"')
+            const multiLine = `${QUERY_FLAG_OPEN}
+TABLE file.name
+FROM "folder"
+${QUERY_FLAG_CLOSE}`
+            const text = `${singleLine}\n${multiLine}`
+            const result = findQueries(text)
+            // Single-line comes first, so it wins
+            expect(result).toHaveLength(1)
+            expect(result[0]!.originalQueryDefinition).toBeUndefined()
+        })
+
+        it('should ignore unsupported query types in multi-line format', () => {
+            const text = `${QUERY_FLAG_OPEN}
+TASK
+FROM "folder"
+${QUERY_FLAG_CLOSE}`
+            const result = findQueries(text)
+            expect(result).toHaveLength(0)
+        })
+
+        it('should handle query starting on opening flag line', () => {
+            const text = `${QUERY_FLAG_OPEN}TABLE
+  file.name AS "Name"
+FROM "folder"
+${QUERY_FLAG_CLOSE}`
+            const result = findQueries(text)
+            expect(result).toHaveLength(1)
+            expect(result[0]!.query).toBe('TABLE file.name AS "Name" FROM "folder"')
+        })
+    })
+
+    describe('trimmed flag handling', () => {
+        it('should detect single-line query with trimmed opening flag (no trailing space)', () => {
+            // Flag without trailing space: "<!-- QueryToSerialize:" instead of "<!-- QueryToSerialize: "
+            const text = `${QUERY_FLAG_OPEN.trim()}LIST FROM "folder"${QUERY_FLAG_CLOSE}`
+            const result = findQueries(text)
+            expect(result).toHaveLength(1)
+            expect(result[0]!.query).toBe('LIST FROM "folder"')
+            // The flagOpen should match what's actually in the text for correct regex replacement
+            expect(result[0]!.flagOpen).toBe(QUERY_FLAG_OPEN.trim())
+            expect(result[0]!.flagClose).toBe(QUERY_FLAG_CLOSE)
+        })
+
+        it('should detect single-line query with trimmed closing flag (no leading space)', () => {
+            // Flag without leading space: "-->" instead of " -->"
+            const text = `${QUERY_FLAG_OPEN}LIST FROM "folder"${QUERY_FLAG_CLOSE.trim()}`
+            const result = findQueries(text)
+            expect(result).toHaveLength(1)
+            expect(result[0]!.query).toBe('LIST FROM "folder"')
+            expect(result[0]!.flagOpen).toBe(QUERY_FLAG_OPEN)
+            expect(result[0]!.flagClose).toBe(QUERY_FLAG_CLOSE.trim())
+        })
+
+        it('should detect query with both flags trimmed', () => {
+            const text = `${QUERY_FLAG_OPEN.trim()}LIST FROM "folder"${QUERY_FLAG_CLOSE.trim()}`
+            const result = findQueries(text)
+            expect(result).toHaveLength(1)
+            expect(result[0]!.query).toBe('LIST FROM "folder"')
+            expect(result[0]!.flagOpen).toBe(QUERY_FLAG_OPEN.trim())
+            expect(result[0]!.flagClose).toBe(QUERY_FLAG_CLOSE.trim())
+        })
+
+        it('should detect multi-line query with trimmed opening flag', () => {
+            const text = `${QUERY_FLAG_OPEN.trim()}
+TABLE file.name
+FROM "folder"
+${QUERY_FLAG_CLOSE}`
+            const result = findQueries(text)
+            expect(result).toHaveLength(1)
+            expect(result[0]!.query).toBe('TABLE file.name FROM "folder"')
+            expect(result[0]!.flagOpen).toBe(QUERY_FLAG_OPEN.trim())
+            expect(result[0]!.flagClose).toBe(QUERY_FLAG_CLOSE)
+        })
+
+        it('should detect multi-line query with trimmed closing flag', () => {
+            const text = `${QUERY_FLAG_OPEN}
+TABLE file.name
+FROM "folder"${QUERY_FLAG_CLOSE.trim()}`
+            const result = findQueries(text)
+            expect(result).toHaveLength(1)
+            expect(result[0]!.query).toBe('TABLE file.name FROM "folder"')
+            expect(result[0]!.flagOpen).toBe(QUERY_FLAG_OPEN)
+            expect(result[0]!.flagClose).toBe(QUERY_FLAG_CLOSE.trim())
+        })
+    })
 })
