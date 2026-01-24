@@ -187,7 +187,7 @@ export const serializeQuery = async (
         }
     } catch (err: unknown) {
         const errorMessage = err instanceof Error ? err.message : String(err)
-        log('Failed to serialize query', 'warn', err)
+        log(`Failed to serialize query in file: ${params.originFile}`, 'warn', err)
         return {
             success: false,
             serializedContent: '',

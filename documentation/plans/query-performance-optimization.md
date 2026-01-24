@@ -6,13 +6,13 @@ Optimize the Obsidian Dataview Serializer plugin's query processing performance 
 
 ## Identified Bottlenecks (by Impact)
 
-| Bottleneck                                 | Impact | Location                            |
-| ------------------------------------------ | ------ | ----------------------------------- |
-| Sequential file processing                 | HIGH   | `plugin.ts:136-282`                 |
-| No caching for vault files/link uniqueness | HIGH   | `serialize-query.fn.ts:59,92`       |
-| Regex recompilation per call               | MEDIUM | `find-inline-queries.fn.ts:154-157` |
-| Regex per query in processFile             | MEDIUM | `plugin.ts:752-866`                 |
-| Inefficient string indentation             | LOW    | `serialize-query.fn.ts:203-207`     |
+| Bottleneck                                 | Impact | Location                            | Status  |
+| ------------------------------------------ | ------ | ----------------------------------- | ------- |
+| Sequential file processing                 | HIGH   | `plugin.ts:136-282`                 | ✅ DONE |
+| No caching for vault files/link uniqueness | HIGH   | `serialize-query.fn.ts:59,92`       | Pending |
+| Regex recompilation per call               | MEDIUM | `find-inline-queries.fn.ts:154-157` | Pending |
+| Regex per query in processFile             | MEDIUM | `plugin.ts:752-866`                 | Pending |
+| Inefficient string indentation             | LOW    | `serialize-query.fn.ts:203-207`     | Pending |
 
 ## Implementation Plan
 
@@ -117,52 +117,7 @@ export class VaultFileCache {
 
 ---
 
-### Phase 3: Parallel Batch Processing
-
-**New file:** `src/app/utils/batch-processor.ts`
-
-```typescript
-export async function processInBatches<T, R>(
-    items: T[],
-    processor: (item: T) => Promise<R>,
-    batchSize = 5
-): Promise<R[]> {
-    const results: R[] = []
-    for (let i = 0; i < items.length; i += batchSize) {
-        const batch = items.slice(i, i + batchSize)
-        const batchResults = await Promise.all(batch.map(processor))
-        results.push(...batchResults)
-    }
-    return results
-}
-```
-
-**Modify:** `src/app/plugin.ts`
-
-Replace sequential loops in:
-
-- `processRecentlyUpdatedFiles()` (line 136)
-- `processForceUpdateFiles()` (line 184)
-- `serialize-all-dataview-queries` command (line 258)
-
-```typescript
-// Before
-for (const file of filesToUpdate) {
-    const result = await this.processFile(file)
-    // ...
-}
-
-// After
-const results = await processInBatches(
-    filesToUpdate,
-    (file) => this.processFile(file),
-    5 // Process 5 files concurrently
-)
-```
-
----
-
-### Phase 4: Optimize String Indentation
+### Phase 3: Optimize String Indentation
 
 **File:** `src/app/utils/serialize-query.fn.ts` lines 202-208
 
@@ -182,7 +137,7 @@ if (params.indentation && serializedQuery) {
 
 ---
 
-### Phase 5: Cache Query-Specific Regex Patterns
+### Phase 4: Cache Query-Specific Regex Patterns
 
 **File:** `src/app/plugin.ts`
 
@@ -211,15 +166,27 @@ Use for the 3 regexes created per query in `processFile()`:
 
 ---
 
+## Completed
+
+### Parallel Batch Processing (formerly Phase 3)
+
+**Implemented:** `src/app/utils/batch-processor.ts`
+
+- Created `processInBatches<T, R>()` utility function
+- Processes items in parallel batches of 5
+- Updated `processRecentlyUpdatedFiles()`, `processForceUpdateFiles()`, and `serialize-all-dataview-queries` command
+
+---
+
 ## Files to Modify
 
-| File                                      | Changes                                      |
-| ----------------------------------------- | -------------------------------------------- |
-| `src/app/utils/find-inline-queries.fn.ts` | Pre-compile regex patterns                   |
-| `src/app/utils/serialize-query.fn.ts`     | Use vault cache, optimize indentation        |
-| `src/app/plugin.ts`                       | Add caches, parallel processing, regex cache |
-| `src/app/cache/vault-file-cache.ts`       | **NEW** - Vault file caching                 |
-| `src/app/utils/batch-processor.ts`        | **NEW** - Parallel batch utility             |
+| File                                      | Changes                               | Status  |
+| ----------------------------------------- | ------------------------------------- | ------- |
+| `src/app/utils/batch-processor.ts`        | Parallel batch utility                | ✅ DONE |
+| `src/app/utils/find-inline-queries.fn.ts` | Pre-compile regex patterns            | Pending |
+| `src/app/utils/serialize-query.fn.ts`     | Use vault cache, optimize indentation | Pending |
+| `src/app/plugin.ts`                       | Add caches, regex cache               | Pending |
+| `src/app/cache/vault-file-cache.ts`       | **NEW** - Vault file caching          | Pending |
 
 ## Verification
 
