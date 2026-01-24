@@ -5,7 +5,107 @@
     @apply mt-3;
 }
 
-/* Refresh button for inline Dataview queries */
+/* ============================================
+   Query Marker Visual Decorations
+   ============================================ */
+
+/* Line decorations for query definitions */
+.dvs-query-line {
+    background-color: var(--background-primary-alt);
+    border-left: 3px solid var(--text-accent);
+    @apply rounded-r;
+}
+
+/* Line decorations for serialized results boundaries */
+.dvs-results-start-line {
+    background-color: color-mix(in srgb, var(--color-green) 10%, transparent);
+    border-left: 3px solid var(--color-green);
+    @apply rounded-r;
+}
+
+.dvs-results-end-line {
+    background-color: color-mix(in srgb, var(--color-green) 10%, transparent);
+    border-left: 3px solid var(--color-green);
+    @apply rounded-r;
+}
+
+/* ============================================
+   Query Type Badges
+   ============================================ */
+
+.dvs-query-badge {
+    @apply inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-xs font-medium;
+    @apply ml-1 align-middle;
+    font-family: var(--font-interface);
+    line-height: 1;
+}
+
+.dvs-query-badge-auto {
+    background-color: color-mix(in srgb, var(--color-blue) 20%, transparent);
+    color: var(--color-blue);
+    border: 1px solid color-mix(in srgb, var(--color-blue) 40%, transparent);
+}
+
+.dvs-query-badge-manual {
+    background-color: color-mix(in srgb, var(--color-orange) 20%, transparent);
+    color: var(--color-orange);
+    border: 1px solid color-mix(in srgb, var(--color-orange) 40%, transparent);
+}
+
+.dvs-query-badge-once {
+    background-color: color-mix(in srgb, var(--color-purple) 20%, transparent);
+    color: var(--color-purple);
+    border: 1px solid color-mix(in srgb, var(--color-purple) 40%, transparent);
+}
+
+.dvs-query-badge-eject {
+    background-color: color-mix(in srgb, var(--color-red) 20%, transparent);
+    color: var(--color-red);
+    border: 1px solid color-mix(in srgb, var(--color-red) 40%, transparent);
+}
+
+/* Badge icon sizing */
+.dvs-badge-icon {
+    @apply flex items-center;
+}
+
+.dvs-badge-icon svg {
+    @apply w-3 h-3;
+}
+
+/* ============================================
+   Refresh Button (Enhanced)
+   ============================================ */
+
 .dvs-refresh-button {
-    @apply inline-flex items-center justify-center align-middle gap-2 cursor-pointer;
+    @apply inline-flex items-center justify-center align-middle cursor-pointer;
+    @apply ml-2 p-1 rounded;
+    @apply transition-all duration-150;
+    background-color: transparent;
+    color: var(--text-muted);
+    border: 1px solid transparent;
+}
+
+.dvs-refresh-button:hover {
+    background-color: var(--background-modifier-hover);
+    color: var(--text-accent);
+    border-color: var(--background-modifier-border);
+}
+
+.dvs-refresh-button:active {
+    @apply scale-95;
+    background-color: var(--interactive-accent);
+    color: var(--text-on-accent);
+}
+
+.dvs-refresh-button svg {
+    @apply w-4 h-4;
+}
+
+/* ============================================
+   Widget Container
+   ============================================ */
+
+.dvs-query-widgets {
+    @apply inline-flex items-center gap-1;
 }
