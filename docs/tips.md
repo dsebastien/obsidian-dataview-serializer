@@ -31,3 +31,20 @@ Then enable the snippet in **Settings → Appearance → CSS snippets**.
 This provides a cleaner editing experience while still allowing you to see and edit the full comment content when needed.
 
 *Thanks to [@vergenzt](https://github.com/vergenzt) for sharing this snippet in [issue #37](https://github.com/dsebastien/obsidian-dataview-serializer/issues/37).*
+
+## Performance Optimization
+
+### Ignore Past and Archived Folders
+
+If you have a large vault with years of content, you can improve performance by adding folders containing older or archived notes to the **Folders to ignore** setting. This prevents the plugin from scanning files that rarely need updates.
+
+Common folders to consider ignoring:
+
+- **Past journal entries**: `Journal/2022`, `Journal/2023`, `Daily Notes/2024`
+- **Old meeting notes**: `Meetings/Archive`, `Meetings/2023`
+- **Archived projects**: `Projects/Archived`, `Projects/Completed`
+- **Reference material**: `Reference`, `Templates`
+
+To configure this, go to **Settings → Dataview Serializer → Folders to ignore** and add the paths to folders you want to exclude.
+
+**Note:** Files in ignored folders will still work normally in Obsidian—they simply won't have their serialized queries automatically updated. If you later need to update a query in an ignored folder, you can temporarily remove it from the ignore list or move the file to an active folder.
