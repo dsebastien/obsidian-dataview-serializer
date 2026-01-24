@@ -5,7 +5,11 @@ import {
     QUERY_FLAG_CLOSE,
     QUERY_FLAG_MANUAL_OPEN,
     QUERY_FLAG_ONCE_OPEN,
-    QUERY_FLAG_ONCE_AND_EJECT_OPEN
+    QUERY_FLAG_ONCE_AND_EJECT_OPEN,
+    QUERY_FLAG_OPEN_ALT,
+    QUERY_FLAG_MANUAL_OPEN_ALT,
+    QUERY_FLAG_ONCE_OPEN_ALT,
+    QUERY_FLAG_ONCE_AND_EJECT_OPEN_ALT
 } from '../constants'
 
 describe('findQueries', () => {
@@ -576,6 +580,124 @@ FROM "folder"${QUERY_FLAG_CLOSE.trim()}`
             expect(result[0]!.query).toBe('TABLE file.name FROM "folder"')
             expect(result[0]!.flagOpen).toBe(QUERY_FLAG_OPEN)
             expect(result[0]!.flagClose).toBe(QUERY_FLAG_CLOSE.trim())
+        })
+    })
+
+    describe('alternative syntax support', () => {
+        // Helper functions for alternative syntax
+        const makeAltQuery = (query: string) => `${QUERY_FLAG_OPEN_ALT}${query}${QUERY_FLAG_CLOSE}`
+        const makeAltManualQuery = (query: string) =>
+            `${QUERY_FLAG_MANUAL_OPEN_ALT}${query}${QUERY_FLAG_CLOSE}`
+        const makeAltOnceQuery = (query: string) =>
+            `${QUERY_FLAG_ONCE_OPEN_ALT}${query}${QUERY_FLAG_CLOSE}`
+        const makeAltOnceAndEjectQuery = (query: string) =>
+            `${QUERY_FLAG_ONCE_AND_EJECT_OPEN_ALT}${query}${QUERY_FLAG_CLOSE}`
+
+        it('should detect single-line query with alternative auto syntax', () => {
+            const text = makeAltQuery('list from "folder"')
+            const result = findQueries(text)
+            expect(result).toHaveLength(1)
+            expect(result[0]!.query).toBe('list from "folder"')
+            expect(result[0]!.updateMode).toBe('auto')
+            expect(result[0]!.syntaxVariant).toBe('alternative')
+            expect(result[0]!.flagOpen).toBe(QUERY_FLAG_OPEN_ALT)
+        })
+
+        it('should detect single-line query with alternative manual syntax', () => {
+            const text = makeAltManualQuery('list from "folder"')
+            const result = findQueries(text)
+            expect(result).toHaveLength(1)
+            expect(result[0]!.query).toBe('list from "folder"')
+            expect(result[0]!.updateMode).toBe('manual')
+            expect(result[0]!.syntaxVariant).toBe('alternative')
+            expect(result[0]!.flagOpen).toBe(QUERY_FLAG_MANUAL_OPEN_ALT)
+        })
+
+        it('should detect single-line query with alternative once syntax', () => {
+            const text = makeAltOnceQuery('list from "folder"')
+            const result = findQueries(text)
+            expect(result).toHaveLength(1)
+            expect(result[0]!.query).toBe('list from "folder"')
+            expect(result[0]!.updateMode).toBe('once')
+            expect(result[0]!.syntaxVariant).toBe('alternative')
+            expect(result[0]!.flagOpen).toBe(QUERY_FLAG_ONCE_OPEN_ALT)
+        })
+
+        it('should detect single-line query with alternative once-and-eject syntax', () => {
+            const text = makeAltOnceAndEjectQuery('list from "folder"')
+            const result = findQueries(text)
+            expect(result).toHaveLength(1)
+            expect(result[0]!.query).toBe('list from "folder"')
+            expect(result[0]!.updateMode).toBe('once-and-eject')
+            expect(result[0]!.syntaxVariant).toBe('alternative')
+            expect(result[0]!.flagOpen).toBe(QUERY_FLAG_ONCE_AND_EJECT_OPEN_ALT)
+        })
+
+        it('should detect multi-line query with alternative syntax', () => {
+            const text = `${QUERY_FLAG_OPEN_ALT}
+TABLE file.name
+FROM "folder"
+${QUERY_FLAG_CLOSE}`
+            const result = findQueries(text)
+            expect(result).toHaveLength(1)
+            expect(result[0]!.query).toBe('TABLE file.name FROM "folder"')
+            expect(result[0]!.updateMode).toBe('auto')
+            expect(result[0]!.syntaxVariant).toBe('alternative')
+            expect(result[0]!.originalQueryDefinition).toBeDefined()
+        })
+
+        it('should handle mixed legacy and alternative syntax in same file', () => {
+            const legacyQuery = `${QUERY_FLAG_OPEN}list from "legacy"${QUERY_FLAG_CLOSE}`
+            const altQuery = makeAltQuery('list from "alternative"')
+            const text = `${legacyQuery}\n${altQuery}`
+            const result = findQueries(text)
+            expect(result).toHaveLength(2)
+            expect(result[0]!.query).toBe('list from "legacy"')
+            expect(result[0]!.syntaxVariant).toBe('legacy')
+            expect(result[1]!.query).toBe('list from "alternative"')
+            expect(result[1]!.syntaxVariant).toBe('alternative')
+        })
+
+        it('should deduplicate same query across legacy and alternative syntax', () => {
+            const legacyQuery = `${QUERY_FLAG_OPEN}list from "folder"${QUERY_FLAG_CLOSE}`
+            const altQuery = makeAltQuery('list from "folder"')
+            const text = `${legacyQuery}\n${altQuery}`
+            const result = findQueries(text)
+            // First one wins (legacy)
+            expect(result).toHaveLength(1)
+            expect(result[0]!.syntaxVariant).toBe('legacy')
+        })
+
+        it('should set legacy syntax variant for standard queries', () => {
+            const text = `${QUERY_FLAG_OPEN}list from "folder"${QUERY_FLAG_CLOSE}`
+            const result = findQueries(text)
+            expect(result).toHaveLength(1)
+            expect(result[0]!.syntaxVariant).toBe('legacy')
+        })
+
+        it('should handle all four alternative modes in same file', () => {
+            const text = `${makeAltQuery('list from "auto"')}
+${makeAltManualQuery('list from "manual"')}
+${makeAltOnceQuery('list from "once"')}
+${makeAltOnceAndEjectQuery('list from "eject"')}`
+            const result = findQueries(text)
+            expect(result).toHaveLength(4)
+            expect(result[0]!.updateMode).toBe('auto')
+            expect(result[0]!.syntaxVariant).toBe('alternative')
+            expect(result[1]!.updateMode).toBe('manual')
+            expect(result[1]!.syntaxVariant).toBe('alternative')
+            expect(result[2]!.updateMode).toBe('once')
+            expect(result[2]!.syntaxVariant).toBe('alternative')
+            expect(result[3]!.updateMode).toBe('once-and-eject')
+            expect(result[3]!.syntaxVariant).toBe('alternative')
+        })
+
+        it('should capture indentation for alternative syntax queries', () => {
+            const text = `    ${makeAltQuery('list from "folder"')}`
+            const result = findQueries(text)
+            expect(result).toHaveLength(1)
+            expect(result[0]!.indentation).toBe('    ')
+            expect(result[0]!.syntaxVariant).toBe('alternative')
         })
     })
 })

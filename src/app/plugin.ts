@@ -15,7 +15,9 @@ import {
     QUERY_FLAG_CLOSE,
     QUERY_FLAG_OPEN,
     SERIALIZED_QUERY_END,
-    SERIALIZED_QUERY_START
+    SERIALIZED_QUERY_START,
+    SERIALIZED_QUERY_START_ALT,
+    SERIALIZED_QUERY_END_ALT
 } from './constants'
 import type { DataviewApi } from 'obsidian-dataview/lib/api/plugin-api'
 import type { QuerySerializationResult } from './types/query-result.intf'
@@ -723,9 +725,20 @@ export class DataviewSerializerPlugin extends Plugin {
                 const updateMode = queryWithContext.updateMode
                 const flagOpen = queryWithContext.flagOpen
                 const flagClose = queryWithContext.flagClose
+                const syntaxVariant = queryWithContext.syntaxVariant
+
+                // Use appropriate result markers based on syntax variant
+                const serializedStart =
+                    syntaxVariant === 'alternative'
+                        ? SERIALIZED_QUERY_START_ALT
+                        : SERIALIZED_QUERY_START
+                const serializedEnd =
+                    syntaxVariant === 'alternative'
+                        ? SERIALIZED_QUERY_END_ALT
+                        : SERIALIZED_QUERY_END
 
                 log(
-                    `[DEBUG] Query: "${foundQuery}", mode: ${updateMode}, flagOpen: "${flagOpen}", flagClose: "${flagClose}"`,
+                    `[DEBUG] Query: "${foundQuery}", mode: ${updateMode}, flagOpen: "${flagOpen}", flagClose: "${flagClose}", syntaxVariant: ${syntaxVariant}`,
                     'debug'
                 )
 
@@ -735,8 +748,9 @@ export class DataviewSerializerPlugin extends Plugin {
                 }
 
                 // Check if query is already serialized (needed for 'once' mode check)
+                // Check for both legacy and alternative syntax result markers
                 const alreadySerializedRegex = new RegExp(
-                    `${escapeRegExp(SERIALIZED_QUERY_START)}${escapeRegExp(foundQuery)}${escapeRegExp(QUERY_FLAG_CLOSE)}`,
+                    `(?:${escapeRegExp(SERIALIZED_QUERY_START)}|${escapeRegExp(SERIALIZED_QUERY_START_ALT)})${escapeRegExp(foundQuery)}${escapeRegExp(QUERY_FLAG_CLOSE)}`,
                     'm'
                 )
                 const isAlreadySerialized = !!text.match(alreadySerializedRegex)
@@ -780,8 +794,9 @@ export class DataviewSerializerPlugin extends Plugin {
                 // Idempotency check: compare new result with existing serialized content
                 // If they're identical, skip this query to prevent unnecessary file modifications
                 // This prevents infinite update loops for queries that always produce the same output
+                // Check for both legacy and alternative syntax result markers
                 const existingSerializedRegex = new RegExp(
-                    `${escapeRegExp(SERIALIZED_QUERY_START)}${escapeRegExp(foundQuery)}${escapeRegExp(QUERY_FLAG_CLOSE)}\\n([\\s\\S]*?)${escapeRegExp(SERIALIZED_QUERY_END)}`,
+                    `(?:${escapeRegExp(SERIALIZED_QUERY_START)}|${escapeRegExp(SERIALIZED_QUERY_START_ALT)})${escapeRegExp(foundQuery)}${escapeRegExp(QUERY_FLAG_CLOSE)}\\n([\\s\\S]*?)(?:${escapeRegExp(SERIALIZED_QUERY_END)}|${escapeRegExp(SERIALIZED_QUERY_END_ALT)})`,
                     'm'
                 )
                 const existingMatch = text.match(existingSerializedRegex)
@@ -812,8 +827,9 @@ export class DataviewSerializerPlugin extends Plugin {
                     const escapedFlagOpen = escapeRegExp(flagOpen)
 
                     // Match the Query Definition Line, optionally followed by an existing Serialized Block
-                    const escapedSerializedStart = escapeRegExp(SERIALIZED_QUERY_START)
-                    const escapedSerializedEnd = escapeRegExp(SERIALIZED_QUERY_END)
+                    // Use syntax-specific markers for replacement, but match both legacy and alternative for existing content
+                    const escapedSerializedStart = `(?:${escapeRegExp(SERIALIZED_QUERY_START)}|${escapeRegExp(SERIALIZED_QUERY_START_ALT)})`
+                    const escapedSerializedEnd = `(?:${escapeRegExp(SERIALIZED_QUERY_END)}|${escapeRegExp(SERIALIZED_QUERY_END_ALT)})`
                     // Use flagClose for the query definition (preserves user's format)
                     const escapedQueryDefClose = escapeRegExp(flagClose)
                     // Always use QUERY_FLAG_CLOSE for SerializedQuery markers (plugin-generated, standard format)
@@ -879,29 +895,30 @@ export class DataviewSerializerPlugin extends Plugin {
                     } else if (originalQueryDefinition) {
                         // Multi-line query: preserve the original multi-line format
                         // The SerializedQuery marker uses the normalized query for matching
+                        // Use syntax-appropriate result markers
                         if (isTableQuery(foundQuery)) {
-                            queryAndSerializedQuery = `${originalQueryDefinition}\n${SERIALIZED_QUERY_START}${foundQuery}${QUERY_FLAG_CLOSE}\n\n${serializedQuery}\n${
+                            queryAndSerializedQuery = `${originalQueryDefinition}\n${serializedStart}${foundQuery}${QUERY_FLAG_CLOSE}\n\n${serializedQuery}\n${
                                 needsTrailingNewline ? '\n' : ''
-                            }${SERIALIZED_QUERY_END}\n`
+                            }${serializedEnd}\n`
                         } else {
-                            queryAndSerializedQuery = `${originalQueryDefinition}\n${SERIALIZED_QUERY_START}${foundQuery}${QUERY_FLAG_CLOSE}\n${serializedQuery}\n${
+                            queryAndSerializedQuery = `${originalQueryDefinition}\n${serializedStart}${foundQuery}${QUERY_FLAG_CLOSE}\n${serializedQuery}\n${
                                 needsTrailingNewline ? '\n' : ''
-                            }${SERIALIZED_QUERY_END}\n`
+                            }${serializedEnd}\n`
                         }
                     } else if (isTableQuery(foundQuery)) {
                         // Single-line table query
                         // Use flagClose for the query definition (preserves user's format)
-                        // Use QUERY_FLAG_CLOSE for SerializedQuery markers (plugin-generated)
-                        queryAndSerializedQuery = `${indentation}${flagOpen}${foundQuery}${flagClose}\n${SERIALIZED_QUERY_START}${foundQuery}${QUERY_FLAG_CLOSE}\n\n${serializedQuery}\n${
+                        // Use syntax-appropriate result markers
+                        queryAndSerializedQuery = `${indentation}${flagOpen}${foundQuery}${flagClose}\n${serializedStart}${foundQuery}${QUERY_FLAG_CLOSE}\n\n${serializedQuery}\n${
                             needsTrailingNewline ? '\n' : ''
-                        }${SERIALIZED_QUERY_END}\n`
+                        }${serializedEnd}\n`
                     } else {
                         // Single-line list query
                         // Use flagClose for the query definition (preserves user's format)
-                        // Use QUERY_FLAG_CLOSE for SerializedQuery markers (plugin-generated)
-                        queryAndSerializedQuery = `${indentation}${flagOpen}${foundQuery}${flagClose}\n${SERIALIZED_QUERY_START}${foundQuery}${QUERY_FLAG_CLOSE}\n${serializedQuery}\n${
+                        // Use syntax-appropriate result markers
+                        queryAndSerializedQuery = `${indentation}${flagOpen}${foundQuery}${flagClose}\n${serializedStart}${foundQuery}${QUERY_FLAG_CLOSE}\n${serializedQuery}\n${
                             needsTrailingNewline ? '\n' : ''
-                        }${SERIALIZED_QUERY_END}\n`
+                        }${serializedEnd}\n`
                     }
                     log(
                         `[DEBUG] Replacement string length: ${queryAndSerializedQuery.length}, first 200 chars: "${queryAndSerializedQuery.substring(0, 200)}"`,
@@ -997,7 +1014,8 @@ export class DataviewSerializerPlugin extends Plugin {
         const sortedQueries = [...foundInlineQueries].sort((a, b) => b.startOffset - a.startOffset)
 
         for (const inlineQuery of sortedQueries) {
-            const { expression, updateMode, currentResult, fullMatch, startOffset } = inlineQuery
+            const { expression, updateMode, currentResult, fullMatch, startOffset, syntaxVariant } =
+                inlineQuery
 
             // If we are targeting a specific query, skip others
             if (targetQuery && expression !== targetQuery) {
@@ -1054,8 +1072,13 @@ export class DataviewSerializerPlugin extends Plugin {
                 // For 'once-and-eject', remove all tags and leave only the serialized content
                 replacement = serializedContent
             } else {
-                // Build the serialized inline query with markers
-                replacement = buildSerializedInlineQuery(expression, serializedContent, updateMode)
+                // Build the serialized inline query with markers (using matching syntax variant)
+                replacement = buildSerializedInlineQuery(
+                    expression,
+                    serializedContent,
+                    updateMode,
+                    syntaxVariant
+                )
             }
 
             // Replace the full match with the new content

@@ -9,14 +9,25 @@ import {
     QUERY_FLAG_ONCE_AND_EJECT_OPEN,
     QUERY_FLAG_ONCE_OPEN,
     QUERY_FLAG_OPEN,
+    QUERY_FLAG_OPEN_ALT,
+    QUERY_FLAG_MANUAL_OPEN_ALT,
+    QUERY_FLAG_ONCE_OPEN_ALT,
+    QUERY_FLAG_ONCE_AND_EJECT_OPEN_ALT,
     SERIALIZED_QUERY_END,
     SERIALIZED_QUERY_START,
+    SERIALIZED_QUERY_START_ALT,
+    SERIALIZED_QUERY_END_ALT,
     INLINE_QUERY_FLAG_OPEN,
     INLINE_QUERY_FLAG_MANUAL_OPEN,
     INLINE_QUERY_FLAG_ONCE_OPEN,
     INLINE_QUERY_FLAG_ONCE_AND_EJECT_OPEN,
+    INLINE_QUERY_FLAG_OPEN_ALT,
+    INLINE_QUERY_FLAG_MANUAL_OPEN_ALT,
+    INLINE_QUERY_FLAG_ONCE_OPEN_ALT,
+    INLINE_QUERY_FLAG_ONCE_AND_EJECT_OPEN_ALT,
     INLINE_QUERY_FLAG_CLOSE,
-    INLINE_QUERY_END
+    INLINE_QUERY_END,
+    INLINE_QUERY_END_ALT
 } from './constants'
 import type { PluginSettings } from './types/plugin-settings.intf'
 
@@ -33,6 +44,29 @@ interface QueryFlagInfo {
  */
 function detectQueryFlagInLine(text: string): QueryFlagInfo | null {
     // Check in order of specificity (longer prefixes first)
+    // Alternative syntax first (longer prefixes)
+    const ejectAltIdx = text.indexOf(QUERY_FLAG_ONCE_AND_EJECT_OPEN_ALT)
+    if (ejectAltIdx !== -1) {
+        return {
+            flagOpen: QUERY_FLAG_ONCE_AND_EJECT_OPEN_ALT,
+            openIdx: ejectAltIdx,
+            queryType: 'eject'
+        }
+    }
+    const manualAltIdx = text.indexOf(QUERY_FLAG_MANUAL_OPEN_ALT)
+    if (manualAltIdx !== -1) {
+        return { flagOpen: QUERY_FLAG_MANUAL_OPEN_ALT, openIdx: manualAltIdx, queryType: 'manual' }
+    }
+    const onceAltIdx = text.indexOf(QUERY_FLAG_ONCE_OPEN_ALT)
+    if (onceAltIdx !== -1) {
+        return { flagOpen: QUERY_FLAG_ONCE_OPEN_ALT, openIdx: onceAltIdx, queryType: 'once' }
+    }
+    const autoAltIdx = text.indexOf(QUERY_FLAG_OPEN_ALT)
+    if (autoAltIdx !== -1) {
+        return { flagOpen: QUERY_FLAG_OPEN_ALT, openIdx: autoAltIdx, queryType: 'auto' }
+    }
+
+    // Legacy syntax
     const ejectIdx = text.indexOf(QUERY_FLAG_ONCE_AND_EJECT_OPEN)
     if (ejectIdx !== -1) {
         return { flagOpen: QUERY_FLAG_ONCE_AND_EJECT_OPEN, openIdx: ejectIdx, queryType: 'eject' }
@@ -71,15 +105,36 @@ function detectInlineQueriesInLine(text: string): InlineQueryFlagInfo[] {
     const results: InlineQueryFlagInfo[] = []
 
     // All inline query flags in order of specificity (longer prefixes first)
-    const flags: Array<{ flag: string; queryType: QueryType }> = [
-        { flag: INLINE_QUERY_FLAG_ONCE_AND_EJECT_OPEN, queryType: 'eject' },
-        { flag: INLINE_QUERY_FLAG_MANUAL_OPEN, queryType: 'manual' },
-        { flag: INLINE_QUERY_FLAG_ONCE_OPEN, queryType: 'once' },
-        { flag: INLINE_QUERY_FLAG_OPEN, queryType: 'auto' }
+    // Alternative syntax first (longer prefixes)
+    const flags: Array<{ flag: string; queryType: QueryType; endMarker: string }> = [
+        {
+            flag: INLINE_QUERY_FLAG_ONCE_AND_EJECT_OPEN_ALT,
+            queryType: 'eject',
+            endMarker: INLINE_QUERY_END_ALT
+        },
+        {
+            flag: INLINE_QUERY_FLAG_MANUAL_OPEN_ALT,
+            queryType: 'manual',
+            endMarker: INLINE_QUERY_END_ALT
+        },
+        {
+            flag: INLINE_QUERY_FLAG_ONCE_OPEN_ALT,
+            queryType: 'once',
+            endMarker: INLINE_QUERY_END_ALT
+        },
+        { flag: INLINE_QUERY_FLAG_OPEN_ALT, queryType: 'auto', endMarker: INLINE_QUERY_END_ALT },
+        {
+            flag: INLINE_QUERY_FLAG_ONCE_AND_EJECT_OPEN,
+            queryType: 'eject',
+            endMarker: INLINE_QUERY_END
+        },
+        { flag: INLINE_QUERY_FLAG_MANUAL_OPEN, queryType: 'manual', endMarker: INLINE_QUERY_END },
+        { flag: INLINE_QUERY_FLAG_ONCE_OPEN, queryType: 'once', endMarker: INLINE_QUERY_END },
+        { flag: INLINE_QUERY_FLAG_OPEN, queryType: 'auto', endMarker: INLINE_QUERY_END }
     ]
 
     // Search for each flag type
-    for (const { flag, queryType } of flags) {
+    for (const { flag, queryType, endMarker } of flags) {
         let searchStart = 0
         while (true) {
             const openIdx = text.indexOf(flag, searchStart)
@@ -92,8 +147,8 @@ function detectInlineQueriesInLine(text: string): InlineQueryFlagInfo[] {
                 continue
             }
 
-            // Find the end marker
-            const endIdx = text.indexOf(INLINE_QUERY_END, closeIdx)
+            // Find the end marker (use the appropriate end marker for the syntax)
+            const endIdx = text.indexOf(endMarker, closeIdx)
             if (endIdx === -1) {
                 searchStart = openIdx + 1
                 continue
@@ -111,11 +166,11 @@ function detectInlineQueriesInLine(text: string): InlineQueryFlagInfo[] {
                     openIdx,
                     queryType,
                     expression,
-                    endIdx: endIdx + INLINE_QUERY_END.length
+                    endIdx: endIdx + endMarker.length
                 })
             }
 
-            searchStart = endIdx + INLINE_QUERY_END.length
+            searchStart = endIdx + endMarker.length
         }
     }
 
@@ -538,7 +593,12 @@ export const refreshButtonExtension = (
                         }
 
                         // Check for serialized query start line (only if not capturing multi-line)
-                        if (!multiLineState.isCapturing && text.includes(SERIALIZED_QUERY_START)) {
+                        // Check for both legacy and alternative syntax
+                        if (
+                            !multiLineState.isCapturing &&
+                            (text.includes(SERIALIZED_QUERY_START) ||
+                                text.includes(SERIALIZED_QUERY_START_ALT))
+                        ) {
                             decorations.push({
                                 from: line.from,
                                 to: line.from,
@@ -547,7 +607,11 @@ export const refreshButtonExtension = (
                         }
 
                         // Check for serialized query end line
-                        if (text.includes(SERIALIZED_QUERY_END)) {
+                        // Check for both legacy and alternative syntax
+                        if (
+                            text.includes(SERIALIZED_QUERY_END) ||
+                            text.includes(SERIALIZED_QUERY_END_ALT)
+                        ) {
                             decorations.push({
                                 from: line.from,
                                 to: line.from,

@@ -142,6 +142,48 @@ You can use different query types in the same file:
 <!-- QueryToSerializeOnceAndEject: TABLE file.name, file.ctime FROM "Templates" LIMIT 3 -->
 ```
 
+## Alternative Syntax
+
+In addition to the original syntax documented above, the plugin supports an alternative, more descriptive syntax using the `dataview-serializer-` prefix. This alternative syntax is designed to be more discoverable for newcomers who might encounter these queries in shared vaults.
+
+### Block Query Alternative Syntax
+
+| Original | Alternative |
+|----------|-------------|
+| `<!-- QueryToSerialize: <query> -->` | `<!-- dataview-serializer-query: <query> -->` |
+| `<!-- QueryToSerializeManual: <query> -->` | `<!-- dataview-serializer-query-manual: <query> -->` |
+| `<!-- QueryToSerializeOnce: <query> -->` | `<!-- dataview-serializer-query-once: <query> -->` |
+| `<!-- QueryToSerializeOnceAndEject: <query> -->` | `<!-- dataview-serializer-query-once-and-eject: <query> -->` |
+| `<!-- SerializedQuery: <query> -->` | `<!-- dataview-serializer-result: <query> -->` |
+| `<!-- SerializedQuery END -->` | `<!-- dataview-serializer-result-end -->` |
+
+### Inline Query Alternative Syntax
+
+| Original | Alternative |
+|----------|-------------|
+| `<!-- IQ: =<expr> -->result<!-- /IQ -->` | `<!-- dataview-serializer-iq: =<expr> -->result<!-- /dataview-serializer-iq -->` |
+| `<!-- IQManual: =<expr> -->result<!-- /IQ -->` | `<!-- dataview-serializer-iq-manual: =<expr> -->result<!-- /dataview-serializer-iq -->` |
+| `<!-- IQOnce: =<expr> -->result<!-- /IQ -->` | `<!-- dataview-serializer-iq-once: =<expr> -->result<!-- /dataview-serializer-iq -->` |
+| `<!-- IQOnceAndEject: =<expr> -->result<!-- /IQ -->` | `<!-- dataview-serializer-iq-once-and-eject: =<expr> -->result<!-- /dataview-serializer-iq -->` |
+
+### Key Points
+
+- **Both syntaxes work simultaneously**: You don't need to choose one or the other. The plugin recognizes both.
+- **No deprecation**: The original syntax is not deprecated and will continue to work indefinitely.
+- **Syntax consistency**: When a query uses the alternative syntax, its result markers will also use the alternative format. Each query maintains consistent markers.
+- **Mixed usage**: You can use both syntaxes in the same file. Each query will use its own consistent markers.
+- **Conversion commands**: The conversion commands (e.g., "Convert Dataview query at cursor") currently generate the original syntax for maximum compatibility.
+
+### Example with Alternative Syntax
+
+```markdown
+<!-- dataview-serializer-query: LIST FROM #project -->
+<!-- dataview-serializer-result: LIST FROM #project -->
+- [[Project A]]
+- [[Project B]]
+<!-- dataview-serializer-result-end -->
+```
+
 ## Inline Expressions
 
 In addition to block queries (LIST, TABLE, TASK), this plugin also supports **inline Dataview expressions**. These are expressions like `=this.name`, `=this.file.ctime`, or `=embed(this.portrait)` that evaluate to a single value.

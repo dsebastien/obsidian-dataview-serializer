@@ -3,7 +3,11 @@ import {
     QUERY_FLAG_MANUAL_OPEN,
     QUERY_FLAG_ONCE_AND_EJECT_OPEN,
     QUERY_FLAG_ONCE_OPEN,
-    QUERY_FLAG_OPEN
+    QUERY_FLAG_OPEN,
+    QUERY_FLAG_OPEN_ALT,
+    QUERY_FLAG_MANUAL_OPEN_ALT,
+    QUERY_FLAG_ONCE_OPEN_ALT,
+    QUERY_FLAG_ONCE_AND_EJECT_OPEN_ALT
 } from '../constants'
 import { isSupportedQueryType } from './is-supported-query-type.fn'
 
@@ -15,6 +19,13 @@ import { isSupportedQueryType } from './is-supported-query-type.fn'
  * - 'once-and-eject': Serializes once and removes surrounding tags, leaving only the output
  */
 export type QueryUpdateMode = 'auto' | 'manual' | 'once' | 'once-and-eject'
+
+/**
+ * Syntax variant for query markers
+ * - 'legacy': Original QueryToSerialize/IQ syntax
+ * - 'alternative': New dataview-serializer- prefix syntax
+ */
+export type SyntaxVariant = 'legacy' | 'alternative'
 
 /**
  * Interface to represent a query with its indentation context
@@ -35,6 +46,11 @@ export interface QueryWithContext {
      * For single-line queries, this is undefined.
      */
     originalQueryDefinition?: string
+    /**
+     * Which syntax variant this query uses.
+     * Used to generate matching result markers (legacy query -> legacy markers).
+     */
+    syntaxVariant: SyntaxVariant
 }
 
 /**
@@ -52,7 +68,7 @@ export interface QueryWithContext {
 function detectQueryFlag(
     trimmedLine: string,
     originalLine: string
-): { flagOpen: string; updateMode: QueryUpdateMode } | null {
+): { flagOpen: string; updateMode: QueryUpdateMode; syntaxVariant: SyntaxVariant } | null {
     // Helper to determine which flag variant (full or trimmed) is in the original line
     const getActualFlag = (fullFlag: string): string => {
         // If the original line contains the full flag (with trailing space), use it
@@ -61,30 +77,89 @@ function detectQueryFlag(
     }
 
     // Check in order of specificity (longer prefixes first)
+    // IMPORTANT: Check alternative syntax first since it has longer prefixes
+    // that might otherwise be partially matched by legacy syntax
     // Use trimmedLine for detection, but originalLine to determine the actual flag variant
+
+    // Alternative syntax checks (longer prefixes)
+    if (
+        trimmedLine.includes(QUERY_FLAG_ONCE_AND_EJECT_OPEN_ALT.trim()) ||
+        trimmedLine.includes(QUERY_FLAG_ONCE_AND_EJECT_OPEN_ALT)
+    ) {
+        return {
+            flagOpen: getActualFlag(QUERY_FLAG_ONCE_AND_EJECT_OPEN_ALT),
+            updateMode: 'once-and-eject',
+            syntaxVariant: 'alternative'
+        }
+    }
+    if (
+        trimmedLine.includes(QUERY_FLAG_MANUAL_OPEN_ALT.trim()) ||
+        trimmedLine.includes(QUERY_FLAG_MANUAL_OPEN_ALT)
+    ) {
+        return {
+            flagOpen: getActualFlag(QUERY_FLAG_MANUAL_OPEN_ALT),
+            updateMode: 'manual',
+            syntaxVariant: 'alternative'
+        }
+    }
+    if (
+        trimmedLine.includes(QUERY_FLAG_ONCE_OPEN_ALT.trim()) ||
+        trimmedLine.includes(QUERY_FLAG_ONCE_OPEN_ALT)
+    ) {
+        return {
+            flagOpen: getActualFlag(QUERY_FLAG_ONCE_OPEN_ALT),
+            updateMode: 'once',
+            syntaxVariant: 'alternative'
+        }
+    }
+    if (
+        trimmedLine.includes(QUERY_FLAG_OPEN_ALT.trim()) ||
+        trimmedLine.includes(QUERY_FLAG_OPEN_ALT)
+    ) {
+        return {
+            flagOpen: getActualFlag(QUERY_FLAG_OPEN_ALT),
+            updateMode: 'auto',
+            syntaxVariant: 'alternative'
+        }
+    }
+
+    // Legacy syntax checks
     if (
         trimmedLine.includes(QUERY_FLAG_ONCE_AND_EJECT_OPEN.trim()) ||
         trimmedLine.includes(QUERY_FLAG_ONCE_AND_EJECT_OPEN)
     ) {
         return {
             flagOpen: getActualFlag(QUERY_FLAG_ONCE_AND_EJECT_OPEN),
-            updateMode: 'once-and-eject'
+            updateMode: 'once-and-eject',
+            syntaxVariant: 'legacy'
         }
     }
     if (
         trimmedLine.includes(QUERY_FLAG_MANUAL_OPEN.trim()) ||
         trimmedLine.includes(QUERY_FLAG_MANUAL_OPEN)
     ) {
-        return { flagOpen: getActualFlag(QUERY_FLAG_MANUAL_OPEN), updateMode: 'manual' }
+        return {
+            flagOpen: getActualFlag(QUERY_FLAG_MANUAL_OPEN),
+            updateMode: 'manual',
+            syntaxVariant: 'legacy'
+        }
     }
     if (
         trimmedLine.includes(QUERY_FLAG_ONCE_OPEN.trim()) ||
         trimmedLine.includes(QUERY_FLAG_ONCE_OPEN)
     ) {
-        return { flagOpen: getActualFlag(QUERY_FLAG_ONCE_OPEN), updateMode: 'once' }
+        return {
+            flagOpen: getActualFlag(QUERY_FLAG_ONCE_OPEN),
+            updateMode: 'once',
+            syntaxVariant: 'legacy'
+        }
     }
     if (trimmedLine.includes(QUERY_FLAG_OPEN.trim()) || trimmedLine.includes(QUERY_FLAG_OPEN)) {
-        return { flagOpen: getActualFlag(QUERY_FLAG_OPEN), updateMode: 'auto' }
+        return {
+            flagOpen: getActualFlag(QUERY_FLAG_OPEN),
+            updateMode: 'auto',
+            syntaxVariant: 'legacy'
+        }
     }
     return null
 }
@@ -97,6 +172,7 @@ interface MultiLineState {
     startLineIndex: number
     flagOpen: string
     updateMode: QueryUpdateMode
+    syntaxVariant: SyntaxVariant
     indentation: string
     accumulatedLines: string[]
 }
@@ -110,6 +186,7 @@ function createInitialMultiLineState(): MultiLineState {
         startLineIndex: -1,
         flagOpen: '',
         updateMode: 'auto',
+        syntaxVariant: 'legacy',
         indentation: '',
         accumulatedLines: []
     }
@@ -205,7 +282,8 @@ export const findQueries = (text: string): QueryWithContext[] => {
                         updateMode: multiLineState.updateMode,
                         flagOpen: multiLineState.flagOpen,
                         flagClose,
-                        originalQueryDefinition: multiLineState.accumulatedLines.join('\n')
+                        originalQueryDefinition: multiLineState.accumulatedLines.join('\n'),
+                        syntaxVariant: multiLineState.syntaxVariant
                     })
                 }
 
@@ -217,7 +295,7 @@ export const findQueries = (text: string): QueryWithContext[] => {
             const flagInfo = detectQueryFlag(trimmedLine, line)
 
             if (flagInfo) {
-                const { flagOpen, updateMode } = flagInfo
+                const { flagOpen, updateMode, syntaxVariant } = flagInfo
 
                 // Check for closing flag (with or without leading space)
                 const hasClosingFlag =
@@ -261,7 +339,8 @@ export const findQueries = (text: string): QueryWithContext[] => {
                             indentation,
                             updateMode,
                             flagOpen,
-                            flagClose
+                            flagClose,
+                            syntaxVariant
                         })
                     }
                 } else {
@@ -272,6 +351,7 @@ export const findQueries = (text: string): QueryWithContext[] => {
                         startLineIndex: i,
                         flagOpen,
                         updateMode,
+                        syntaxVariant,
                         indentation: line.substring(0, line.indexOf(flagOpen.trim())),
                         accumulatedLines: [line]
                     }

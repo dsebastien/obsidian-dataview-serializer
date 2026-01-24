@@ -267,3 +267,110 @@ describe('convertRawToSerializedFormat', () => {
         expect(result).toBe('<!-- IQ: =this.name --><!-- /IQ -->')
     })
 })
+
+describe('alternative syntax support', () => {
+    describe('findInlineQueries with alternative syntax', () => {
+        test('finds alternative auto mode inline query', () => {
+            const text =
+                '<!-- dataview-serializer-iq: =this.field -->value<!-- /dataview-serializer-iq -->'
+            const results = findInlineQueries(text)
+
+            expect(results).toHaveLength(1)
+            expect(results[0]?.expression).toBe('=this.field')
+            expect(results[0]?.updateMode).toBe('auto')
+            expect(results[0]?.syntaxVariant).toBe('alternative')
+            expect(results[0]?.currentResult).toBe('value')
+        })
+
+        test('finds alternative manual mode inline query', () => {
+            const text =
+                '<!-- dataview-serializer-iq-manual: =this.ancestry -->John Smith<!-- /dataview-serializer-iq -->'
+            const results = findInlineQueries(text)
+
+            expect(results).toHaveLength(1)
+            expect(results[0]?.expression).toBe('=this.ancestry')
+            expect(results[0]?.updateMode).toBe('manual')
+            expect(results[0]?.syntaxVariant).toBe('alternative')
+        })
+
+        test('finds alternative once mode inline query', () => {
+            const text =
+                '<!-- dataview-serializer-iq-once: =this.created -->2024-01-15<!-- /dataview-serializer-iq -->'
+            const results = findInlineQueries(text)
+
+            expect(results).toHaveLength(1)
+            expect(results[0]?.expression).toBe('=this.created')
+            expect(results[0]?.updateMode).toBe('once')
+            expect(results[0]?.syntaxVariant).toBe('alternative')
+        })
+
+        test('finds alternative once-and-eject mode inline query', () => {
+            const text =
+                '<!-- dataview-serializer-iq-once-and-eject: =this.title -->My Title<!-- /dataview-serializer-iq -->'
+            const results = findInlineQueries(text)
+
+            expect(results).toHaveLength(1)
+            expect(results[0]?.expression).toBe('=this.title')
+            expect(results[0]?.updateMode).toBe('once-and-eject')
+            expect(results[0]?.syntaxVariant).toBe('alternative')
+        })
+
+        test('finds mixed legacy and alternative inline queries', () => {
+            const text = `Name: <!-- IQ: =this.name -->John<!-- /IQ -->
+Age: <!-- dataview-serializer-iq: =this.age -->30<!-- /dataview-serializer-iq -->`
+            const results = findInlineQueries(text)
+
+            expect(results).toHaveLength(2)
+            expect(results[0]?.syntaxVariant).toBe('legacy')
+            expect(results[1]?.syntaxVariant).toBe('alternative')
+        })
+
+        test('sets legacy syntax variant for standard queries', () => {
+            const text = '<!-- IQ: =this.field -->value<!-- /IQ -->'
+            const results = findInlineQueries(text)
+
+            expect(results).toHaveLength(1)
+            expect(results[0]?.syntaxVariant).toBe('legacy')
+        })
+    })
+
+    describe('buildSerializedInlineQuery with alternative syntax', () => {
+        test('builds alternative auto mode query', () => {
+            const result = buildSerializedInlineQuery('=this.name', 'John', 'auto', 'alternative')
+            expect(result).toBe(
+                '<!-- dataview-serializer-iq: =this.name -->John<!-- /dataview-serializer-iq -->'
+            )
+        })
+
+        test('builds alternative manual mode query', () => {
+            const result = buildSerializedInlineQuery('=this.name', 'John', 'manual', 'alternative')
+            expect(result).toBe(
+                '<!-- dataview-serializer-iq-manual: =this.name -->John<!-- /dataview-serializer-iq -->'
+            )
+        })
+
+        test('builds alternative once mode query', () => {
+            const result = buildSerializedInlineQuery('=this.name', 'John', 'once', 'alternative')
+            expect(result).toBe(
+                '<!-- dataview-serializer-iq-once: =this.name -->John<!-- /dataview-serializer-iq -->'
+            )
+        })
+
+        test('builds alternative once-and-eject mode query', () => {
+            const result = buildSerializedInlineQuery(
+                '=this.name',
+                'John',
+                'once-and-eject',
+                'alternative'
+            )
+            expect(result).toBe(
+                '<!-- dataview-serializer-iq-once-and-eject: =this.name -->John<!-- /dataview-serializer-iq -->'
+            )
+        })
+
+        test('defaults to legacy syntax when not specified', () => {
+            const result = buildSerializedInlineQuery('=this.name', 'John', 'auto')
+            expect(result).toBe('<!-- IQ: =this.name -->John<!-- /IQ -->')
+        })
+    })
+})

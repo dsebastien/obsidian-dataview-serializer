@@ -482,6 +482,66 @@ this.registerInterval(
 )
 ```
 
+## Query Syntax Reference
+
+The plugin supports two equivalent syntax variants. Both work simultaneously.
+
+### Block Queries (Legacy Syntax)
+
+| Marker                                           | Purpose                         |
+| ------------------------------------------------ | ------------------------------- |
+| `<!-- QueryToSerialize: <query> -->`             | Auto-update query               |
+| `<!-- QueryToSerializeManual: <query> -->`       | Manual-only update              |
+| `<!-- QueryToSerializeOnce: <query> -->`         | Write-once (never auto-updates) |
+| `<!-- QueryToSerializeOnceAndEject: <query> -->` | Write-once, then remove tags    |
+| `<!-- SerializedQuery: <query> -->`              | Result start marker             |
+| `<!-- SerializedQuery END -->`                   | Result end marker               |
+
+### Block Queries (Alternative Syntax)
+
+| Marker                                                       | Purpose              |
+| ------------------------------------------------------------ | -------------------- |
+| `<!-- dataview-serializer-query: <query> -->`                | Auto-update query    |
+| `<!-- dataview-serializer-query-manual: <query> -->`         | Manual-only update   |
+| `<!-- dataview-serializer-query-once: <query> -->`           | Write-once           |
+| `<!-- dataview-serializer-query-once-and-eject: <query> -->` | Write-once and eject |
+| `<!-- dataview-serializer-result: <query> -->`               | Result start marker  |
+| `<!-- dataview-serializer-result-end -->`                    | Result end marker    |
+
+### Inline Queries (Legacy Syntax)
+
+| Marker                                               | Purpose                     |
+| ---------------------------------------------------- | --------------------------- |
+| `<!-- IQ: =<expr> -->result<!-- /IQ -->`             | Auto-update inline          |
+| `<!-- IQManual: =<expr> -->result<!-- /IQ -->`       | Manual-only inline          |
+| `<!-- IQOnce: =<expr> -->result<!-- /IQ -->`         | Write-once inline           |
+| `<!-- IQOnceAndEject: =<expr> -->result<!-- /IQ -->` | Write-once and eject inline |
+
+### Inline Queries (Alternative Syntax)
+
+| Marker                                                                                          | Purpose                     |
+| ----------------------------------------------------------------------------------------------- | --------------------------- |
+| `<!-- dataview-serializer-iq: =<expr> -->result<!-- /dataview-serializer-iq -->`                | Auto-update inline          |
+| `<!-- dataview-serializer-iq-manual: =<expr> -->result<!-- /dataview-serializer-iq -->`         | Manual-only inline          |
+| `<!-- dataview-serializer-iq-once: =<expr> -->result<!-- /dataview-serializer-iq -->`           | Write-once inline           |
+| `<!-- dataview-serializer-iq-once-and-eject: =<expr> -->result<!-- /dataview-serializer-iq -->` | Write-once and eject inline |
+
+### Supported Query Types
+
+- `LIST` - List queries
+- `TABLE` - Table queries
+- `TASK` - Task queries (checkboxes stripped to prevent feedback loops)
+- `CALENDAR` - NOT supported
+
+### Syntax Variant Consistency
+
+When a query is written with a specific syntax variant, the plugin generates matching result markers:
+
+- Legacy query syntax → Legacy result markers
+- Alternative query syntax → Alternative result markers
+
+Both syntaxes can coexist in the same file, with each query using its own consistent markers.
+
 ## Troubleshooting
 
 - Plugin doesn't load after build: ensure `main.js` and `manifest.json` are at the top level of the plugin folder under `<Vault>/.obsidian/plugins/<plugin-id>/`.

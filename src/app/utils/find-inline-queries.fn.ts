@@ -4,9 +4,14 @@ import {
     INLINE_QUERY_FLAG_ONCE_AND_EJECT_OPEN,
     INLINE_QUERY_FLAG_ONCE_OPEN,
     INLINE_QUERY_FLAG_OPEN,
-    INLINE_QUERY_END
+    INLINE_QUERY_END,
+    INLINE_QUERY_FLAG_OPEN_ALT,
+    INLINE_QUERY_FLAG_MANUAL_OPEN_ALT,
+    INLINE_QUERY_FLAG_ONCE_OPEN_ALT,
+    INLINE_QUERY_FLAG_ONCE_AND_EJECT_OPEN_ALT,
+    INLINE_QUERY_END_ALT
 } from '../constants'
-import type { QueryUpdateMode } from './find-queries.fn'
+import type { QueryUpdateMode, SyntaxVariant } from './find-queries.fn'
 
 /**
  * Interface to represent a serialized inline query with its context
@@ -26,6 +31,11 @@ export interface InlineQueryWithContext {
     currentResult?: string
     /** The full matched text (for replacement) */
     fullMatch: string
+    /**
+     * Which syntax variant this query uses.
+     * Used to generate matching end markers (legacy query -> legacy end marker).
+     */
+    syntaxVariant: SyntaxVariant
 }
 
 /**
@@ -45,12 +55,63 @@ export interface RawInlineQuery {
 /**
  * All inline query opening flags and their update modes
  */
-const INLINE_QUERY_FLAGS: Array<{ flag: string; updateMode: QueryUpdateMode }> = [
+const INLINE_QUERY_FLAGS: Array<{
+    flag: string
+    updateMode: QueryUpdateMode
+    syntaxVariant: SyntaxVariant
+    endMarker: string
+}> = [
     // Order matters: check longer prefixes first
-    { flag: INLINE_QUERY_FLAG_ONCE_AND_EJECT_OPEN, updateMode: 'once-and-eject' },
-    { flag: INLINE_QUERY_FLAG_MANUAL_OPEN, updateMode: 'manual' },
-    { flag: INLINE_QUERY_FLAG_ONCE_OPEN, updateMode: 'once' },
-    { flag: INLINE_QUERY_FLAG_OPEN, updateMode: 'auto' }
+    // Alternative syntax first (longer prefixes)
+    {
+        flag: INLINE_QUERY_FLAG_ONCE_AND_EJECT_OPEN_ALT,
+        updateMode: 'once-and-eject',
+        syntaxVariant: 'alternative',
+        endMarker: INLINE_QUERY_END_ALT
+    },
+    {
+        flag: INLINE_QUERY_FLAG_MANUAL_OPEN_ALT,
+        updateMode: 'manual',
+        syntaxVariant: 'alternative',
+        endMarker: INLINE_QUERY_END_ALT
+    },
+    {
+        flag: INLINE_QUERY_FLAG_ONCE_OPEN_ALT,
+        updateMode: 'once',
+        syntaxVariant: 'alternative',
+        endMarker: INLINE_QUERY_END_ALT
+    },
+    {
+        flag: INLINE_QUERY_FLAG_OPEN_ALT,
+        updateMode: 'auto',
+        syntaxVariant: 'alternative',
+        endMarker: INLINE_QUERY_END_ALT
+    },
+    // Legacy syntax
+    {
+        flag: INLINE_QUERY_FLAG_ONCE_AND_EJECT_OPEN,
+        updateMode: 'once-and-eject',
+        syntaxVariant: 'legacy',
+        endMarker: INLINE_QUERY_END
+    },
+    {
+        flag: INLINE_QUERY_FLAG_MANUAL_OPEN,
+        updateMode: 'manual',
+        syntaxVariant: 'legacy',
+        endMarker: INLINE_QUERY_END
+    },
+    {
+        flag: INLINE_QUERY_FLAG_ONCE_OPEN,
+        updateMode: 'once',
+        syntaxVariant: 'legacy',
+        endMarker: INLINE_QUERY_END
+    },
+    {
+        flag: INLINE_QUERY_FLAG_OPEN,
+        updateMode: 'auto',
+        syntaxVariant: 'legacy',
+        endMarker: INLINE_QUERY_END
+    }
 ]
 
 /**
@@ -64,10 +125,14 @@ function escapeRegExp(str: string): string {
  * Find all serialized inline queries in the given text.
  *
  * Detects patterns like:
- * - `<!-- IQ: =this.field -->result<!-- /IQ -->`
- * - `<!-- IQManual: =this.field -->result<!-- /IQ -->`
- * - `<!-- IQOnce: =this.field -->result<!-- /IQ -->`
- * - `<!-- IQOnceAndEject: =this.field -->result<!-- /IQ -->`
+ * - `<!-- IQ: =this.field -->result<!-- /IQ -->` (legacy)
+ * - `<!-- IQManual: =this.field -->result<!-- /IQ -->` (legacy)
+ * - `<!-- IQOnce: =this.field -->result<!-- /IQ -->` (legacy)
+ * - `<!-- IQOnceAndEject: =this.field -->result<!-- /IQ -->` (legacy)
+ * - `<!-- dataview-serializer-iq: =this.field -->result<!-- /dataview-serializer-iq -->` (alternative)
+ * - `<!-- dataview-serializer-iq-manual: =this.field -->result<!-- /dataview-serializer-iq -->` (alternative)
+ * - `<!-- dataview-serializer-iq-once: =this.field -->result<!-- /dataview-serializer-iq -->` (alternative)
+ * - `<!-- dataview-serializer-iq-once-and-eject: =this.field -->result<!-- /dataview-serializer-iq -->` (alternative)
  *
  * @param text The document text to search for inline queries
  * @returns Array of inline queries with their context information
@@ -75,13 +140,13 @@ function escapeRegExp(str: string): string {
 export function findInlineQueries(text: string): InlineQueryWithContext[] {
     const results: InlineQueryWithContext[] = []
 
-    for (const { flag, updateMode } of INLINE_QUERY_FLAGS) {
+    for (const { flag, updateMode, syntaxVariant, endMarker } of INLINE_QUERY_FLAGS) {
         // Build regex for this flag type
-        // Pattern: <!-- IQ: =expr -->result<!-- /IQ -->
+        // Pattern: <!-- IQ: =expr -->result<!-- /IQ --> (or alternative syntax)
         // The expression starts with = and continues until the close flag
         const escapedFlagOpen = escapeRegExp(flag)
         const escapedFlagClose = escapeRegExp(INLINE_QUERY_FLAG_CLOSE)
-        const escapedEnd = escapeRegExp(INLINE_QUERY_END)
+        const escapedEnd = escapeRegExp(endMarker)
 
         // Match: flag_open + expression + flag_close + result + end
         // Expression: starts with = and can contain anything except -->
@@ -118,7 +183,8 @@ export function findInlineQueries(text: string): InlineQueryWithContext[] {
                 updateMode,
                 flagOpen: flag,
                 currentResult,
-                fullMatch: match[0]
+                fullMatch: match[0],
+                syntaxVariant
             })
         }
     }
@@ -194,29 +260,51 @@ export function isInlineQueryAlreadySerialized(text: string, expression: string)
  * @param expression The expression (e.g., "=this.field")
  * @param result The serialized result
  * @param updateMode The update mode for the query
+ * @param syntaxVariant Which syntax variant to use (defaults to 'legacy' for backward compatibility)
  * @returns The formatted serialized inline query string
  */
 export function buildSerializedInlineQuery(
     expression: string,
     result: string,
-    updateMode: QueryUpdateMode = 'auto'
+    updateMode: QueryUpdateMode = 'auto',
+    syntaxVariant: SyntaxVariant = 'legacy'
 ): string {
     let flagOpen: string
-    switch (updateMode) {
-        case 'manual':
-            flagOpen = INLINE_QUERY_FLAG_MANUAL_OPEN
-            break
-        case 'once':
-            flagOpen = INLINE_QUERY_FLAG_ONCE_OPEN
-            break
-        case 'once-and-eject':
-            flagOpen = INLINE_QUERY_FLAG_ONCE_AND_EJECT_OPEN
-            break
-        default:
-            flagOpen = INLINE_QUERY_FLAG_OPEN
+    let endMarker: string
+
+    if (syntaxVariant === 'alternative') {
+        switch (updateMode) {
+            case 'manual':
+                flagOpen = INLINE_QUERY_FLAG_MANUAL_OPEN_ALT
+                break
+            case 'once':
+                flagOpen = INLINE_QUERY_FLAG_ONCE_OPEN_ALT
+                break
+            case 'once-and-eject':
+                flagOpen = INLINE_QUERY_FLAG_ONCE_AND_EJECT_OPEN_ALT
+                break
+            default:
+                flagOpen = INLINE_QUERY_FLAG_OPEN_ALT
+        }
+        endMarker = INLINE_QUERY_END_ALT
+    } else {
+        switch (updateMode) {
+            case 'manual':
+                flagOpen = INLINE_QUERY_FLAG_MANUAL_OPEN
+                break
+            case 'once':
+                flagOpen = INLINE_QUERY_FLAG_ONCE_OPEN
+                break
+            case 'once-and-eject':
+                flagOpen = INLINE_QUERY_FLAG_ONCE_AND_EJECT_OPEN
+                break
+            default:
+                flagOpen = INLINE_QUERY_FLAG_OPEN
+        }
+        endMarker = INLINE_QUERY_END
     }
 
-    return `${flagOpen}${expression}${INLINE_QUERY_FLAG_CLOSE}${result}${INLINE_QUERY_END}`
+    return `${flagOpen}${expression}${INLINE_QUERY_FLAG_CLOSE}${result}${endMarker}`
 }
 
 /**
