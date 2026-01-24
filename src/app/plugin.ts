@@ -40,6 +40,12 @@ import {
     convertAllQueries,
     convertSelectedQuery
 } from './utils/convert-dataview-query.fn'
+import {
+    findInlineQueries,
+    buildSerializedInlineQuery,
+    type InlineQueryWithContext
+} from './utils/find-inline-queries.fn'
+import { serializeInlineQuery, isInsideTable } from './utils/serialize-inline-query.fn'
 
 /**
  * Maximum number of error notifications to show during batch operations
@@ -693,8 +699,9 @@ export class DataviewSerializerPlugin extends Plugin {
 
             const text = await this.app.vault.cachedRead(file)
             const foundQueries: QueryWithContext[] = findQueries(text)
+            const foundInlineQueries: InlineQueryWithContext[] = findInlineQueries(text)
 
-            if (foundQueries.length === 0) {
+            if (foundQueries.length === 0 && foundInlineQueries.length === 0) {
                 // No queries to serialize found in the file
                 return result
             }
@@ -913,6 +920,16 @@ export class DataviewSerializerPlugin extends Plugin {
                 }
             }
 
+            // Process inline queries
+            updatedText = await this.processInlineQueries(
+                updatedText,
+                text,
+                file.path,
+                result,
+                targetQuery,
+                isManualTrigger
+            )
+
             // Keep track of the last time this file was updated to avoid modification loops
             const nextPossibleUpdateTimeForFile = add(new Date(), {
                 seconds: MINIMUM_SECONDS_BETWEEN_UPDATES
@@ -948,6 +965,107 @@ export class DataviewSerializerPlugin extends Plugin {
         }
 
         return result
+    }
+
+    /**
+     * Process inline queries in the given text.
+     * This handles expressions like `<!-- IQ: =this.field -->value<!-- /IQ -->`.
+     *
+     * @param updatedText The current text content (may have been modified by block query processing)
+     * @param originalText The original file text (for idempotency checks)
+     * @param filePath The file path for evaluation context
+     * @param result The file processing result to add errors to
+     * @param targetQuery Optional specific query to process
+     * @param isManualTrigger Whether this is a manual trigger (vs automatic)
+     * @returns The updated text with serialized inline queries
+     */
+    private async processInlineQueries(
+        updatedText: string,
+        _originalText: string,
+        filePath: string,
+        result: FileProcessingResult,
+        targetQuery?: string,
+        isManualTrigger = false
+    ): Promise<string> {
+        const foundInlineQueries: InlineQueryWithContext[] = findInlineQueries(updatedText)
+
+        if (foundInlineQueries.length === 0) {
+            return updatedText
+        }
+
+        // Process inline queries in reverse order to preserve offsets
+        const sortedQueries = [...foundInlineQueries].sort((a, b) => b.startOffset - a.startOffset)
+
+        for (const inlineQuery of sortedQueries) {
+            const { expression, updateMode, currentResult, fullMatch, startOffset } = inlineQuery
+
+            // If we are targeting a specific query, skip others
+            if (targetQuery && expression !== targetQuery) {
+                continue
+            }
+
+            // Check if query is already serialized (for 'once' mode check)
+            const isAlreadySerialized = currentResult !== undefined && currentResult !== ''
+
+            // Skip queries based on update mode during automatic updates
+            if (shouldSkipQuery({ updateMode, isManualTrigger, isAlreadySerialized })) {
+                continue
+            }
+
+            // Determine if this is inside a table
+            const inTable = isInsideTable(updatedText, startOffset)
+
+            // Serialize the inline query
+            const serializationResult = await serializeInlineQuery({
+                expression,
+                originFile: filePath,
+                dataviewApi: this.dataviewApi!,
+                isTableCell: inTable
+            })
+
+            // Check for errors
+            if (!serializationResult.success && serializationResult.error) {
+                result.errors.push({
+                    message: serializationResult.error.message,
+                    query: expression
+                })
+                continue
+            }
+
+            const serializedContent = serializationResult.serializedContent
+
+            // Idempotency check: compare new result with existing serialized content
+            if (currentResult !== undefined) {
+                const existingContent = currentResult.trim()
+                const newContent = serializedContent.trim()
+
+                if (existingContent === newContent) {
+                    log(
+                        `Skipping inline query in [${filePath}] - content unchanged: "${expression}"`,
+                        'debug'
+                    )
+                    continue
+                }
+            }
+
+            // Build the replacement
+            let replacement: string
+            if (updateMode === 'once-and-eject') {
+                // For 'once-and-eject', remove all tags and leave only the serialized content
+                replacement = serializedContent
+            } else {
+                // Build the serialized inline query with markers
+                replacement = buildSerializedInlineQuery(expression, serializedContent, updateMode)
+            }
+
+            // Replace the full match with the new content
+            updatedText =
+                updatedText.substring(0, startOffset) +
+                replacement +
+                updatedText.substring(startOffset + fullMatch.length)
+        }
+
+        return updatedText
     }
 
     async shouldFileBeIgnored(file: TFile, force = false): Promise<boolean> {

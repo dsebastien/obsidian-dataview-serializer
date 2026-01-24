@@ -9,7 +9,12 @@ import {
     convertAllQueries,
     convertSelectedQuery
 } from './convert-dataview-query.fn'
-import { QUERY_FLAG_CLOSE, QUERY_FLAG_OPEN } from '../constants'
+import {
+    QUERY_FLAG_CLOSE,
+    QUERY_FLAG_OPEN,
+    INLINE_QUERY_FLAG_OPEN,
+    INLINE_QUERY_END
+} from '../constants'
 
 describe('findDataviewCodeblocks', () => {
     test('should find a simple dataview codeblock', () => {
@@ -354,5 +359,77 @@ LIST FROM #project
 
         expect(result.converted).toBe(false)
         expect(result.newText).toBe(selectedText)
+    })
+})
+
+describe('inline query conversion to inline format', () => {
+    test('should convert inline query to inline serialized format', () => {
+        const text = 'Name: `=this.name`'
+
+        const result = convertAllQueries(text)
+
+        expect(result.converted).toBe(true)
+        expect(result.count).toBe(1)
+        // Should use inline format, not block format
+        expect(result.newText).toContain(INLINE_QUERY_FLAG_OPEN)
+        expect(result.newText).toContain(INLINE_QUERY_END)
+        expect(result.newText).not.toContain(QUERY_FLAG_OPEN)
+        expect(result.newText).toBe('Name: <!-- IQ: =this.name --><!-- /IQ -->')
+    })
+
+    test('should convert inline query at cursor to inline format', () => {
+        const text = 'Count: `=length(this.tasks)`'
+        const cursorOffset = 10 // Inside the inline query
+
+        const result = convertQueryAtCursor(text, cursorOffset)
+
+        expect(result.converted).toBe(true)
+        expect(result.newText).toContain(INLINE_QUERY_FLAG_OPEN)
+        expect(result.newText).toContain(INLINE_QUERY_END)
+        expect(result.newText).not.toContain(QUERY_FLAG_OPEN)
+    })
+
+    test('should convert both codeblock and inline queries appropriately', () => {
+        const text = `# My Note
+
+Count: \`=this.count\`
+
+\`\`\`dataview
+LIST FROM #project
+\`\`\`
+`
+
+        const result = convertAllQueries(text)
+
+        expect(result.converted).toBe(true)
+        expect(result.count).toBe(2)
+        // Inline query should use inline format
+        expect(result.newText).toContain(INLINE_QUERY_FLAG_OPEN)
+        expect(result.newText).toContain(INLINE_QUERY_END)
+        // Codeblock query should use block format
+        expect(result.newText).toContain(QUERY_FLAG_OPEN)
+        expect(result.newText).toContain('LIST FROM #project')
+    })
+
+    test('should convert selected inline query to inline format', () => {
+        const selectedText = '`=this.file.name`'
+
+        const result = convertSelectedQuery(selectedText)
+
+        expect(result.converted).toBe(true)
+        expect(result.newText).toContain(INLINE_QUERY_FLAG_OPEN)
+        expect(result.newText).toContain(INLINE_QUERY_END)
+    })
+
+    test('inline queries should always be converted (not type-checked)', () => {
+        // Inline queries are expressions, not queries with types like LIST/TABLE
+        // They should always be converted regardless of content
+        const text = '`=embed(this.portrait)`'
+
+        const result = convertAllQueries(text)
+
+        expect(result.converted).toBe(true)
+        expect(result.count).toBe(1)
+        expect(result.skipped).toHaveLength(0)
     })
 })

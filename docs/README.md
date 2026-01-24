@@ -9,6 +9,8 @@ Turning Dataview queries into Markdown also ensures that the generated content a
 ### Features
 
 - **Automatic serialization**: Dataview queries are automatically serialized to Markdown when files are saved
+- **Block queries**: Support for LIST, TABLE, and TASK queries
+- **Inline expressions**: Support for inline Dataview expressions like `=this.name`, `=this.file.ctime`, `=embed(this.portrait)`
 - **Per-query update control**: Control when individual queries update using different query types (auto, manual-only, or write-once)
 - **Inline refresh button**: Refresh individual queries directly from the editor
 - **Force update folders**: Configure specific folders (like index files) to update when any file in your vault changes
@@ -16,7 +18,9 @@ Turning Dataview queries into Markdown also ensures that the generated content a
 - **Manual mode**: Option to disable automatic updates and only serialize queries on demand
 - **Command palette integration**: Commands to serialize all queries, current file queries, or insert new query blocks
 
-Currently, this plugin is compatible with `LIST`, `TABLE`, and `TASK` queries. `CALENDAR` queries are not supported.
+Currently, this plugin supports:
+- **Block queries**: `LIST`, `TABLE`, and `TASK` queries. `CALENDAR` queries are not supported.
+- **Inline expressions**: Any valid Dataview inline expression (e.g., `=this.field`, `=embed(this.link)`).
 
 **Note:** TASK queries have their checkbox markers stripped in the serialized output to prevent feedback loops. The result will be a regular list instead of a task list. See the [Usage documentation](usage.md#task-query-behavior) for details.
 

@@ -111,3 +111,79 @@
 .dvs-query-widgets {
     @apply inline-flex items-center gap-1;
 }
+
+/* ============================================
+   Inline Query Decorations
+   ============================================ */
+
+/* Mark decoration for inline queries */
+.dvs-inline-query {
+    @apply rounded px-0.5;
+    background-color: color-mix(in srgb, var(--text-accent) 10%, transparent);
+}
+
+/* Inline query widget container */
+.dvs-inline-query-widgets {
+    @apply inline-flex items-center gap-0.5 ml-0.5;
+}
+
+/* Inline query badge (smaller than block query badge) */
+.dvs-inline-badge {
+    @apply inline-flex items-center p-0.5 rounded;
+    font-family: var(--font-interface);
+    line-height: 1;
+}
+
+.dvs-inline-badge-auto {
+    background-color: color-mix(in srgb, var(--color-blue) 15%, transparent);
+    color: var(--color-blue);
+}
+
+.dvs-inline-badge-manual {
+    background-color: color-mix(in srgb, var(--color-orange) 15%, transparent);
+    color: var(--color-orange);
+}
+
+.dvs-inline-badge-once {
+    background-color: color-mix(in srgb, var(--color-purple) 15%, transparent);
+    color: var(--color-purple);
+}
+
+.dvs-inline-badge-eject {
+    background-color: color-mix(in srgb, var(--color-red) 15%, transparent);
+    color: var(--color-red);
+}
+
+/* Inline badge icon sizing (smaller) */
+.dvs-inline-badge-icon {
+    @apply flex items-center;
+}
+
+.dvs-inline-badge-icon svg {
+    @apply w-2.5 h-2.5;
+}
+
+/* Inline refresh button (smaller) */
+.dvs-inline-refresh-button {
+    @apply inline-flex items-center justify-center cursor-pointer;
+    @apply p-0.5 rounded;
+    @apply transition-all duration-150;
+    background-color: transparent;
+    color: var(--text-muted);
+    border: none;
+}
+
+.dvs-inline-refresh-button:hover {
+    background-color: var(--background-modifier-hover);
+    color: var(--text-accent);
+}
+
+.dvs-inline-refresh-button:active {
+    @apply scale-95;
+    background-color: var(--interactive-accent);
+    color: var(--text-on-accent);
+}
+
+.dvs-inline-refresh-button svg {
+    @apply w-3 h-3;
+}

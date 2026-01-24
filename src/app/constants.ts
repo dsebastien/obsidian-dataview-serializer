@@ -25,6 +25,14 @@ export const MINIMUM_SECONDS_BETWEEN_UPDATES = 5
 
 export const MINIMUM_MS_BETWEEN_EVENTS = 500
 
+// Inline query markers (for expressions like =this.field)
+export const INLINE_QUERY_FLAG_OPEN = `<!-- IQ: `
+export const INLINE_QUERY_FLAG_MANUAL_OPEN = `<!-- IQManual: `
+export const INLINE_QUERY_FLAG_ONCE_OPEN = `<!-- IQOnce: `
+export const INLINE_QUERY_FLAG_ONCE_AND_EJECT_OPEN = `<!-- IQOnceAndEject: `
+export const INLINE_QUERY_FLAG_CLOSE = ` -->`
+export const INLINE_QUERY_END = `<!-- /IQ -->`
+
 export const QUERY_TYPE_LIST = 'list'
 export const QUERY_TYPE_TABLE = 'table'
 export const QUERY_TYPE_TASK = 'task'

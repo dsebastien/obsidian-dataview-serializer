@@ -1,5 +1,6 @@
 import { QUERY_FLAG_CLOSE, QUERY_FLAG_OPEN } from '../constants'
 import { isSupportedQueryType } from './is-supported-query-type.fn'
+import { convertRawToSerializedFormat } from './find-inline-queries.fn'
 
 /**
  * Represents a detected Dataview query in the document
@@ -172,8 +173,9 @@ export function convertQueryAtCursor(text: string, cursorOffset: number): Conver
         }
     }
 
-    // Check if the query type is supported
-    if (!isSupportedQueryType(query.query)) {
+    // For inline queries, we don't check supported types since they can be expressions
+    // For codeblock queries, check if the query type is supported
+    if (query.type === 'codeblock' && !isSupportedQueryType(query.query)) {
         return {
             converted: false,
             newText: text,
@@ -182,7 +184,11 @@ export function convertQueryAtCursor(text: string, cursorOffset: number): Conver
         }
     }
 
-    const serializedFormat = convertToSerializedFormat(query.query, query.indentation)
+    // Use appropriate format based on query type
+    const serializedFormat =
+        query.type === 'inline'
+            ? convertRawToSerializedFormat('=' + query.query)
+            : convertToSerializedFormat(query.query, query.indentation)
 
     const newText =
         text.substring(0, query.startOffset) + serializedFormat + text.substring(query.endOffset)
@@ -220,13 +226,18 @@ export function convertAllQueries(text: string): ConversionResult {
     for (let i = allQueries.length - 1; i >= 0; i--) {
         const query = allQueries[i]!
 
-        // Check if the query type is supported
-        if (!isSupportedQueryType(query.query)) {
+        // For codeblock queries, check if the query type is supported
+        // Inline queries can be expressions, so we always convert them
+        if (query.type === 'codeblock' && !isSupportedQueryType(query.query)) {
             skipped.push(query.query)
             continue
         }
 
-        const serializedFormat = convertToSerializedFormat(query.query, query.indentation)
+        // Use appropriate format based on query type
+        const serializedFormat =
+            query.type === 'inline'
+                ? convertRawToSerializedFormat('=' + query.query)
+                : convertToSerializedFormat(query.query, query.indentation)
 
         newText =
             newText.substring(0, query.startOffset) +
@@ -272,13 +283,18 @@ export function convertSelectedQuery(selectedText: string): ConversionResult {
     for (let i = queries.length - 1; i >= 0; i--) {
         const query = queries[i]!
 
-        if (!isSupportedQueryType(query.query)) {
+        // For codeblock queries, check if the query type is supported
+        // Inline queries can be expressions, so we always convert them
+        if (query.type === 'codeblock' && !isSupportedQueryType(query.query)) {
             skipped.push(query.query)
             continue
         }
 
-        // Use the query's own indentation, adjusted for the selection context
-        const serializedFormat = convertToSerializedFormat(query.query, query.indentation)
+        // Use appropriate format based on query type
+        const serializedFormat =
+            query.type === 'inline'
+                ? convertRawToSerializedFormat('=' + query.query)
+                : convertToSerializedFormat(query.query, query.indentation)
 
         newText =
             newText.substring(0, query.startOffset) +

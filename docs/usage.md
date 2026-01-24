@@ -142,9 +142,71 @@ You can use different query types in the same file:
 <!-- QueryToSerializeOnceAndEject: TABLE file.name, file.ctime FROM "Templates" LIMIT 3 -->
 ```
 
+## Inline Expressions
+
+In addition to block queries (LIST, TABLE, TASK), this plugin also supports **inline Dataview expressions**. These are expressions like `=this.name`, `=this.file.ctime`, or `=embed(this.portrait)` that evaluate to a single value.
+
+### Inline Query Syntax
+
+Inline queries use a compact syntax that works within regular text without disrupting readability:
+
+| Syntax | Behavior |
+|--------|----------|
+| `<!-- IQ: =expression -->result<!-- /IQ -->` | Automatic updates |
+| `<!-- IQManual: =expression -->result<!-- /IQ -->` | Manual-only updates |
+| `<!-- IQOnce: =expression -->result<!-- /IQ -->` | Write-once (never auto-updates after first serialization) |
+| `<!-- IQOnceAndEject: =expression -->result<!-- /IQ -->` | Write-once and eject (serializes once, then removes markers) |
+
+### Examples
+
+**Simple field access:**
+```markdown
+Character name: <!-- IQ: =this.name -->John Smith<!-- /IQ -->
+```
+
+**File metadata:**
+```markdown
+Created: <!-- IQ: =this.file.ctime -->2024-01-15<!-- /IQ -->
+```
+
+**Embedded images:**
+```markdown
+Portrait: <!-- IQ: =embed(this.portrait) -->![[portrait.png]]<!-- /IQ -->
+```
+
+**In tables:**
+```markdown
+| Property | Value |
+|----------|-------|
+| Name | <!-- IQ: =this.name -->John<!-- /IQ --> |
+| Age | <!-- IQ: =this.age -->30<!-- /IQ --> |
+```
+
+### Converting Raw Inline Queries
+
+If you have existing raw Dataview inline queries (using the `` `=expression` `` format), you can convert them to the serialized format using the "Convert Dataview query at cursor" or "Convert all Dataview queries in current file" commands. These commands will automatically detect inline expressions and convert them to the appropriate inline serialized format.
+
+Before conversion:
+```markdown
+Name: `=this.name`
+```
+
+After conversion:
+```markdown
+Name: <!-- IQ: =this.name --><!-- /IQ -->
+```
+
+### Inline Query Features
+
+- **Compact syntax**: Uses `IQ` prefix for minimal visual impact
+- **Table support**: Pipe characters in results are automatically escaped
+- **All update modes**: Same update control as block queries (auto, manual, once, once-and-eject)
+- **Refresh button**: Small inline refresh button appears next to each query when enabled
+- **Supports all Literal types**: Handles strings, numbers, dates, durations, links, arrays, and objects
+
 ### Inline Refresh Button
 
-When enabled in settings, a refresh button (🔄) appears next to each serialized Dataview query in the editor (for all query types). Clicking this button will:
+When enabled in settings, a refresh button (🔄) appears next to each serialized Dataview query in the editor (for all query types, including inline queries). Clicking this button will:
 
 - Re-execute only that specific query
 - Update the serialized output immediately
