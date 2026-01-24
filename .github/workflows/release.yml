@@ -1,92 +1,133 @@
-name: Release Obsidian plugin
+name: Release
 
 on:
+    workflow_dispatch:
+        inputs:
+            version:
+                description: 'Version to release (e.g., 1.2.3)'
+                required: true
+                type: string
     push:
         tags:
-            - '*'
+            - '*.*.*'
 
 permissions:
-    actions: read
     contents: write
 
-env:
-    PLUGIN_NAME: obsidian-dataview-serializer
-
 jobs:
-    build:
-        runs-on: ubuntu-latest
+    release:
+        runs-on: ubuntu-slim
 
         steps:
-            - uses: actions/checkout@v4
+            - name: Checkout
+              uses: actions/checkout@v4
+              with:
+                  fetch-depth: 0
+                  token: ${{ secrets.GITHUB_TOKEN }}
 
             - name: Setup Bun
               uses: oven-sh/setup-bun@v2
               with:
                   bun-version: latest
 
+            - name: Setup Git
+              run: |
+                  git config user.name "github-actions[bot]"
+                  git config user.email "github-actions[bot]@users.noreply.github.com"
+
+            - name: Determine version and branch
+              id: version
+              run: |
+                  if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+                    VERSION="${{ github.event.inputs.version }}"
+                    BRANCH="${{ github.ref_name }}"
+                  else
+                    # Triggered by tag push
+                    VERSION="${{ github.ref_name }}"
+                    # Find the branch that contains this tag
+                    BRANCH=$(git branch -r --contains ${{ github.ref }} | grep -v HEAD | head -1 | sed 's/.*\///')
+                    if [ -z "$BRANCH" ]; then
+                      BRANCH="master"
+                    fi
+                  fi
+                  # Strip 'v' prefix if present (for backwards compatibility)
+                  VERSION="${VERSION#v}"
+                  echo "version=$VERSION" >> $GITHUB_OUTPUT
+                  # Tag WITHOUT 'v' prefix per Obsidian plugin spec
+                  echo "tag=$VERSION" >> $GITHUB_OUTPUT
+                  echo "branch=$BRANCH" >> $GITHUB_OUTPUT
+                  echo "Version: $VERSION"
+                  echo "Target branch: $BRANCH"
+
+            - name: Checkout branch (when triggered by tag)
+              if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/')
+              run: |
+                  git checkout ${{ steps.version.outputs.branch }}
+                  git pull origin ${{ steps.version.outputs.branch }}
+
             - name: Install dependencies
               run: bun install --frozen-lockfile
 
-            - name: Build
-              id: build
+            - name: Update package.json version
+              run: bun run release:update-version ${{ steps.version.outputs.version }}
+
+            - name: Update manifest and versions.json
               run: |
-                  bun run build
-                  bun run release:zip
-                  ls ./dist
-                  echo "tag_name=$(git tag --sort version:refname | tail -n 1)" >> $GITHUB_OUTPUT
+                  export npm_package_version=${{ steps.version.outputs.version }}
+                  bun run release:version-bump
 
-            - name: Create Release
-              id: create_release
-              uses: actions/create-release@v1
+            - name: Build for production
+              run: bun run build
+
+            - name: Generate changelog
+              run: bun run release:changelog
+
+            - name: Log changelog
+              run: |
+                  echo "=== Changelog for ${{ steps.version.outputs.version }} ==="
+                  head -100 CHANGELOG.md
+
+            - name: Commit release changes
+              run: |
+                  git add package.json versions.json manifest.json CHANGELOG.md
+                  git commit -m "chore(release): ${{ steps.version.outputs.version }}" || echo "No changes to commit"
+                  git push origin HEAD:${{ steps.version.outputs.branch }}
+
+            - name: Create and push tag (manual trigger only)
+              if: github.event_name == 'workflow_dispatch'
+              run: |
+                  git tag -a ${{ steps.version.outputs.tag }} -m "Release ${{ steps.version.outputs.version }}"
+                  git push origin ${{ steps.version.outputs.tag }}
+
+            - name: Create release zip
+              run: bun run release:zip
+
+            - name: Get package name
+              id: package
+              run: |
+                  NAME=$(jq -r .name package.json)
+                  echo "name=$NAME" >> $GITHUB_OUTPUT
+
+            - name: Extract changelog for release notes
+              id: changelog
+              run: |
+                  # Extract the latest version section from CHANGELOG.md
+                  NOTES=$(awk '/^## \[?[0-9]/{if(p) exit; p=1} p' CHANGELOG.md)
+                  # Handle multi-line output
+                  echo "notes<<EOF" >> $GITHUB_OUTPUT
+                  echo "$NOTES" >> $GITHUB_OUTPUT
+                  echo "EOF" >> $GITHUB_OUTPUT
+
+            - name: Create GitHub Release
+              uses: softprops/action-gh-release@v2
+              with:
+                  tag_name: ${{ steps.version.outputs.tag }}
+                  name: ${{ steps.version.outputs.version }}
+                  body: ${{ steps.changelog.outputs.notes }}
+                  files: |
+                      dist/${{ steps.package.outputs.name }}.zip
+                      dist/main.js
+                      dist/manifest.json
+                      dist/styles.css
               env:
                   GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-                  VERSION: ${{ github.ref }}
-              with:
-                  tag_name: ${{ github.ref }}
-                  release_name: ${{ github.ref }}
-                  draft: false
-                  prerelease: false
-
-            - name: Upload zip file
-              id: upload-zip
-              uses: actions/upload-release-asset@v1
-              env:
-                  GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-              with:
-                  upload_url: ${{ steps.create_release.outputs.upload_url }}
-                  asset_path: ./dist/${{ env.PLUGIN_NAME }}.zip
-                  asset_name: ${{ env.PLUGIN_NAME }}-${{ steps.build.outputs.tag_name }}.zip
-                  asset_content_type: application/zip
-
-            - name: Upload main.js
-              id: upload-main
-              uses: actions/upload-release-asset@v1
-              env:
-                  GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-              with:
-                  upload_url: ${{ steps.create_release.outputs.upload_url }}
-                  asset_path: ./dist/main.js
-                  asset_name: main.js
-                  asset_content_type: text/javascript
-
-            - name: Upload manifest.json
-              id: upload-manifest
-              uses: actions/upload-release-asset@v1
-              env:
-                  GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-              with:
-                  upload_url: ${{ steps.create_release.outputs.upload_url }}
-                  asset_path: ./dist/manifest.json
-                  asset_name: manifest.json
-                  asset_content_type: application/json
-
-            - name: Upload styles.css
-              id: upload-styles
-              uses: actions/upload-release-asset@v1
-              env:
-                  GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-              with:
-                  upload_url: ${{ steps.create_release.outputs.upload_url }}
-                  asset_path: ./dist/styles.css
-                  asset_name: styles.css
-                  asset_content_type: text/css

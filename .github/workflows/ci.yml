@@ -2,19 +2,17 @@ name: CI
 
 on:
     push:
-        branches:
-            - master
+        branches: [master]
     pull_request:
-
-permissions:
-    actions: read
-    contents: read
+        branches: [master]
 
 jobs:
-    build:
-        runs-on: ubuntu-latest
+    ci:
+        runs-on: ubuntu-slim
+
         steps:
-            - uses: actions/checkout@v4
+            - name: Checkout
+              uses: actions/checkout@v4
 
             - name: Setup Bun
               uses: oven-sh/setup-bun@v2
@@ -30,5 +28,8 @@ jobs:
             - name: Lint
               run: bun run lint
 
-            - name: Build
-              run: bun run build
+            - name: Test
+              run: bun test
+
+            - name: Format check
+              run: bun run format:check
