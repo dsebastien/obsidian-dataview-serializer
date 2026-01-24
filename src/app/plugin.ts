@@ -35,6 +35,11 @@ import { escapeRegExp } from './utils/escape-reg-exp.fn'
 import { isTableQuery } from './utils/is-table-query.fn'
 import { shouldSkipQuery } from './utils/should-skip-query.fn'
 import { refreshButtonExtension } from './refresh-button-extension'
+import {
+    convertQueryAtCursor,
+    convertAllQueries,
+    convertSelectedQuery
+} from './utils/convert-dataview-query.fn'
 
 /**
  * Maximum number of error notifications to show during batch operations
@@ -328,6 +333,128 @@ export class DataviewSerializerPlugin extends Plugin {
                 new Notice(
                     'Dataview serializer block inserted. Replace "LIST FROM #foo" with your query.'
                 )
+            }
+        })
+
+        // Add command to convert Dataview query at cursor to serialized format
+        this.addCommand({
+            id: 'convert-dataview-query-at-cursor',
+            name: 'Convert Dataview query at cursor to serialized format',
+            editorCallback: async (editor) => {
+                const activeFile = this.app.workspace.getActiveFile()
+
+                if (!activeFile) {
+                    new Notice('No active file')
+                    return
+                }
+
+                if (activeFile.extension !== MARKDOWN_FILE_EXTENSION) {
+                    new Notice('The active file is not a Markdown file')
+                    return
+                }
+
+                const text = editor.getValue()
+
+                // Check if there's a selection
+                const selection = editor.getSelection()
+                if (selection && selection.length > 0) {
+                    // Convert queries in the selection
+                    const result = convertSelectedQuery(selection)
+
+                    if (!result.converted) {
+                        if (result.skipped.length > 0) {
+                            new Notice(
+                                `No supported Dataview queries found in selection. Skipped unsupported queries: ${result.skipped.join(', ')}`
+                            )
+                        } else {
+                            new Notice('No Dataview queries found in selection')
+                        }
+                        return
+                    }
+
+                    editor.replaceSelection(result.newText)
+
+                    if (result.skipped.length > 0) {
+                        new Notice(
+                            `Converted ${result.count} query(ies). Skipped unsupported: ${result.skipped.join(', ')}`
+                        )
+                    } else {
+                        new Notice(
+                            `Converted ${result.count} Dataview query(ies) to serialized format`
+                        )
+                    }
+                } else {
+                    // Convert query at cursor position
+                    const cursor = editor.getCursor()
+
+                    // Calculate cursor offset
+                    let cursorOffset = 0
+                    for (let i = 0; i < cursor.line; i++) {
+                        cursorOffset += editor.getLine(i).length + 1 // +1 for newline
+                    }
+                    cursorOffset += cursor.ch
+
+                    const result = convertQueryAtCursor(text, cursorOffset)
+
+                    if (!result.converted) {
+                        if (result.skipped.length > 0) {
+                            new Notice(
+                                `No supported Dataview query at cursor. Skipped unsupported query: ${result.skipped[0]}`
+                            )
+                        } else {
+                            new Notice(
+                                'No Dataview query found at cursor. Place cursor inside a ```dataview block or inline query.'
+                            )
+                        }
+                        return
+                    }
+
+                    editor.setValue(result.newText)
+                    new Notice('Converted Dataview query to serialized format')
+                }
+            }
+        })
+
+        // Add command to convert all Dataview queries in current file to serialized format
+        this.addCommand({
+            id: 'convert-all-dataview-queries-in-file',
+            name: 'Convert all Dataview queries in current file to serialized format',
+            editorCallback: async (editor) => {
+                const activeFile = this.app.workspace.getActiveFile()
+
+                if (!activeFile) {
+                    new Notice('No active file')
+                    return
+                }
+
+                if (activeFile.extension !== MARKDOWN_FILE_EXTENSION) {
+                    new Notice('The active file is not a Markdown file')
+                    return
+                }
+
+                const text = editor.getValue()
+                const result = convertAllQueries(text)
+
+                if (!result.converted) {
+                    if (result.skipped.length > 0) {
+                        new Notice(
+                            `No supported Dataview queries found. Skipped unsupported queries: ${result.skipped.join(', ')}`
+                        )
+                    } else {
+                        new Notice('No Dataview queries found in the current file')
+                    }
+                    return
+                }
+
+                editor.setValue(result.newText)
+
+                if (result.skipped.length > 0) {
+                    new Notice(
+                        `Converted ${result.count} query(ies). Skipped unsupported: ${result.skipped.join(', ')}`
+                    )
+                } else {
+                    new Notice(`Converted ${result.count} Dataview query(ies) to serialized format`)
+                }
             }
         })
 

@@ -26,6 +26,17 @@ Here's an example query:
 <!-- QueryToSerialize: LIST FROM #quotes WHERE public_note = true SORT file.name ASC -->
 ```
 
+You can also write multi-line queries for better readability:
+
+```
+<!-- QueryToSerialize: LIST
+FROM #quotes
+WHERE public_note = true
+SORT file.name ASC -->
+```
+
+Multi-line queries are normalized to a single line in the serialized output marker, but the original multi-line format is preserved in the query definition.
+
 If the above line is present in one of your notes, this plugin will detect it, and will replace it by the following:
 
 ```
@@ -41,8 +52,6 @@ If the above line is present in one of your notes, this plugin will detect it, a
 As you can see above, the result of the query gets added as Markdown below the query. Notice that the serialized version is surrounded by `<!-- SerializedQuery: <query> -->` and `<!-- SerializedQuery END -->`. Those allow the plugin to know what to replace. They should not be removed.
 
 Whenever you update that note, the query will be executed and serialized, replacing the previous serialized version.
-
-WARNING: For now, the queries can only be put on a single line. Take a look at [this issue](https://github.com/dsebastien/obsidian-dataview-serializer/issues/12) for details/updates.
 
 Note that a single note can include multiple queries. As soon as a file is modified, this plugin reads it and tries to locate queries to serialize. It starts by removing all the serialized queries, recognized by the `<!--SerializedQuery: END -->`line. Then, it serializes all the found queries to Markdown and saves the file again.
 
@@ -165,6 +174,39 @@ To serialize only the queries in the currently open file, use the command "Scan 
 #### Add a new Dataview Serializer query
 
 The plugin includes a command called "Insert Dataview serializer block" that can be used to quickly add a new Dataview Serializer query to the current note.
+
+#### Convert existing Dataview queries
+
+If you have existing Dataview queries in your notes (using the standard ` ```dataview ``` ` codeblock syntax or inline `` `= expression` `` queries), you can convert them to the serialized format using these commands:
+
+**Convert Dataview query at cursor to serialized format**
+
+This command converts a Dataview query at the current cursor position to the serialized format. It works in two modes:
+
+- **With selection**: If you have text selected, all Dataview queries within the selection will be converted
+- **Without selection**: The query containing the cursor (codeblock or inline) will be converted
+
+Example - Before:
+````markdown
+```dataview
+LIST FROM #project
+```
+````
+
+After:
+```markdown
+<!-- QueryToSerialize: LIST FROM #project -->
+```
+
+**Convert all Dataview queries in current file to serialized format**
+
+This command scans the entire current file and converts all Dataview codeblocks and inline queries to the serialized format. This is useful when migrating an existing note to use the Dataview Serializer plugin.
+
+Both commands:
+- Support ` ```dataview ``` ` codeblocks and inline `` `= expression` `` queries
+- Only convert supported query types (LIST and TABLE). Unsupported types (CALENDAR, TASK) are skipped and reported
+- Preserve indentation from the original query
+- Normalize multi-line queries to single-line format in the serialized output
 
 ### Error Handling
 
