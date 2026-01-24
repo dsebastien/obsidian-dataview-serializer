@@ -102,6 +102,167 @@ describe('serializeQuery', () => {
         })
     })
 
+    describe('linkFormat setting', () => {
+        it('should simplify links when linkFormat is "shortest" (default)', async () => {
+            const mockApp = createMockApp([{ name: 'unique-note.md' }])
+            const mockApi = createMockDataviewApi('- [[folder/unique-note.md|unique-note]]\n')
+
+            const result = await serializeQuery({
+                query: 'list',
+                originFile: 'origin.md',
+                dataviewApi: mockApi,
+                app: mockApp,
+                linkFormat: 'shortest'
+            })
+
+            expect(result.success).toBe(true)
+            expect(result.serializedContent).toBe('- [[unique-note]]\n')
+        })
+
+        it('should keep full path when linkFormat is "absolute" even for unique files', async () => {
+            const mockApp = createMockApp([{ name: 'unique-note.md' }])
+            const mockApi = createMockDataviewApi('- [[folder/unique-note.md|unique-note]]\n')
+
+            const result = await serializeQuery({
+                query: 'list',
+                originFile: 'origin.md',
+                dataviewApi: mockApi,
+                app: mockApp,
+                linkFormat: 'absolute'
+            })
+
+            // Should keep full path even though file is unique
+            expect(result.success).toBe(true)
+            expect(result.serializedContent).toBe('- [[folder/unique-note.md|unique-note]]\n')
+        })
+
+        it('should keep full path in table queries when linkFormat is "absolute"', async () => {
+            const mockApp = createMockApp([{ name: 'unique-note.md' }])
+            const mockApi = createMockDataviewApi(
+                '| File |\n| --- |\n| [[folder/unique-note.md\\|unique-note]] |'
+            )
+
+            const result = await serializeQuery({
+                query: 'table file.name',
+                originFile: 'origin.md',
+                dataviewApi: mockApi,
+                app: mockApp,
+                linkFormat: 'absolute'
+            })
+
+            // Should keep full path in table queries (pipe remains escaped in tables)
+            expect(result.success).toBe(true)
+            expect(result.serializedContent).toContain('folder/unique-note.md')
+            expect(result.serializedContent).toContain('unique-note')
+        })
+
+        it('should default to "shortest" when linkFormat is not provided', async () => {
+            const mockApp = createMockApp([{ name: 'unique-note.md' }])
+            const mockApi = createMockDataviewApi('- [[folder/unique-note.md|unique-note]]\n')
+
+            const result = await serializeQuery({
+                query: 'list',
+                originFile: 'origin.md',
+                dataviewApi: mockApi,
+                app: mockApp
+                // linkFormat not provided
+            })
+
+            // Should simplify by default
+            expect(result.success).toBe(true)
+            expect(result.serializedContent).toBe('- [[unique-note]]\n')
+        })
+
+        it('should use shortest when linkFormat is "obsidian" and Obsidian setting is "shortest"', async () => {
+            const mockApp = {
+                vault: {
+                    getFiles: () => [{ name: 'unique-note.md' }] as TFile[],
+                    config: { newLinkFormat: 'shortest' }
+                }
+            } as unknown as App
+
+            const mockApi = createMockDataviewApi('- [[folder/unique-note.md|unique-note]]\n')
+
+            const result = await serializeQuery({
+                query: 'list',
+                originFile: 'origin.md',
+                dataviewApi: mockApi,
+                app: mockApp,
+                linkFormat: 'obsidian'
+            })
+
+            expect(result.success).toBe(true)
+            expect(result.serializedContent).toBe('- [[unique-note]]\n')
+        })
+
+        it('should use absolute when linkFormat is "obsidian" and Obsidian setting is "absolute"', async () => {
+            const mockApp = {
+                vault: {
+                    getFiles: () => [{ name: 'unique-note.md' }] as TFile[],
+                    config: { newLinkFormat: 'absolute' }
+                }
+            } as unknown as App
+
+            const mockApi = createMockDataviewApi('- [[folder/unique-note.md|unique-note]]\n')
+
+            const result = await serializeQuery({
+                query: 'list',
+                originFile: 'origin.md',
+                dataviewApi: mockApi,
+                app: mockApp,
+                linkFormat: 'obsidian'
+            })
+
+            expect(result.success).toBe(true)
+            expect(result.serializedContent).toBe('- [[folder/unique-note.md|unique-note]]\n')
+        })
+
+        it('should use absolute when linkFormat is "obsidian" and Obsidian setting is "relative"', async () => {
+            const mockApp = {
+                vault: {
+                    getFiles: () => [{ name: 'unique-note.md' }] as TFile[],
+                    config: { newLinkFormat: 'relative' }
+                }
+            } as unknown as App
+
+            const mockApi = createMockDataviewApi('- [[folder/unique-note.md|unique-note]]\n')
+
+            const result = await serializeQuery({
+                query: 'list',
+                originFile: 'origin.md',
+                dataviewApi: mockApi,
+                app: mockApp,
+                linkFormat: 'obsidian'
+            })
+
+            // Relative maps to absolute for consistency
+            expect(result.success).toBe(true)
+            expect(result.serializedContent).toBe('- [[folder/unique-note.md|unique-note]]\n')
+        })
+
+        it('should default to shortest when linkFormat is "obsidian" and Obsidian config is missing', async () => {
+            const mockApp = {
+                vault: {
+                    getFiles: () => [{ name: 'unique-note.md' }] as TFile[],
+                    config: {}
+                }
+            } as unknown as App
+
+            const mockApi = createMockDataviewApi('- [[folder/unique-note.md|unique-note]]\n')
+
+            const result = await serializeQuery({
+                query: 'list',
+                originFile: 'origin.md',
+                dataviewApi: mockApi,
+                app: mockApp,
+                linkFormat: 'obsidian'
+            })
+
+            expect(result.success).toBe(true)
+            expect(result.serializedContent).toBe('- [[unique-note]]\n')
+        })
+    })
+
     describe('table queries', () => {
         it('should handle table query content', async () => {
             const mockApp = createMockApp([])

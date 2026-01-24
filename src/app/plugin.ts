@@ -567,6 +567,19 @@ export class DataviewSerializerPlugin extends Plugin {
                 log('The loaded settings miss the [addTrailingNewline] property', 'debug')
                 needToSaveSettings = true
             }
+
+            if (
+                loadedSettings.linkFormat !== undefined &&
+                loadedSettings.linkFormat !== null &&
+                (loadedSettings.linkFormat === 'obsidian' ||
+                    loadedSettings.linkFormat === 'shortest' ||
+                    loadedSettings.linkFormat === 'absolute')
+            ) {
+                draft.linkFormat = loadedSettings.linkFormat
+            } else {
+                log('The loaded settings miss the [linkFormat] property', 'debug')
+                needToSaveSettings = true
+            }
         })
 
         // Initialize debug mode from settings
@@ -736,7 +749,8 @@ export class DataviewSerializerPlugin extends Plugin {
                     originFile: file.path,
                     dataviewApi: this.dataviewApi!,
                     app: this.app,
-                    indentation
+                    indentation,
+                    linkFormat: this.settings.linkFormat
                 })
 
                 // Check for errors

@@ -2,7 +2,7 @@ import { App, PluginSettingTab, SearchComponent, Setting } from 'obsidian'
 import type DataviewSerializerPlugin from '../../main'
 import { produce } from 'immer'
 import type { Draft } from 'immer'
-import type { PluginSettings } from '../types/plugin-settings.intf'
+import type { LinkFormat, PluginSettings } from '../types/plugin-settings.intf'
 import { onlyUniqueArray } from '../utils/only-unique-array.fn'
 import { FolderSuggest } from '../utils/folder-suggest'
 import type { ArgsSearchAndRemove } from './args-search-and-remove.intf'
@@ -25,6 +25,7 @@ export class SettingsTab extends PluginSettingTab {
         this.renderRefreshButtonToggle()
         this.renderErrorNotificationsToggle()
         this.renderTrailingNewlineToggle()
+        this.renderLinkFormatDropdown()
         this.renderDebugLoggingToggle()
         this.renderFoldersToScan()
         this.renderFoldersToIgnore()
@@ -118,6 +119,30 @@ export class SettingsTab extends PluginSettingTab {
                     )
                     await this.plugin.saveSettings()
                 })
+            })
+    }
+
+    renderLinkFormatDropdown(): void {
+        new Setting(this.containerEl)
+            .setName('Link format')
+            .setDesc(
+                'Format for internal links in serialized output. "Use Obsidian setting" respects your vault\'s "New link format" preference. "Shortest path" simplifies links when the filename is unique. "Absolute path" always uses the full path, which ensures consistency when syncing vaults across devices.'
+            )
+            .addDropdown((dropdown) => {
+                dropdown
+                    .addOption('obsidian', 'Use Obsidian setting')
+                    .addOption('shortest', 'Shortest path when possible')
+                    .addOption('absolute', 'Absolute path')
+                    .setValue(this.plugin.settings.linkFormat)
+                    .onChange(async (value) => {
+                        this.plugin.settings = produce(
+                            this.plugin.settings,
+                            (draft: Draft<PluginSettings>) => {
+                                draft.linkFormat = value as LinkFormat
+                            }
+                        )
+                        await this.plugin.saveSettings()
+                    })
             })
     }
 

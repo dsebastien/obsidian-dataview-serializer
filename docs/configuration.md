@@ -12,6 +12,15 @@ In the settings of the plugin, you can configure:
 
 - **Debug logging**: When enabled, verbose debug messages will be logged to the browser console. This is useful for troubleshooting issues with the plugin. When disabled (default), only warnings and errors are logged, keeping the console clean.
 
+## Output Settings
+
+- **Add trailing newline**: When enabled, an empty line will be added between the serialized content and the END marker. This is useful for static site generators like Jekyll that require blank lines after tables or lists.
+
+- **Link format**: Controls how internal links are formatted in the serialized output. Options:
+  - **Use Obsidian setting**: Respects your vault's "New link format" preference (Settings → Files and links → New link format). If Obsidian is set to "Relative path" or "Absolute path", the plugin will preserve full paths.
+  - **Shortest path when possible** (default): Simplifies links when the filename is unique in the vault. For example, `[[folder/note.md|note]]` becomes `[[note]]` if there's only one file named `note.md`.
+  - **Absolute path**: Always uses the full path to the file. This ensures consistency when syncing vaults across devices using Git or other tools, preventing commit noise from link format differences.
+
 ## Folder Settings
 
 - **Folders to scan**: The folders that should be scanned when the "Scan and serialize all Dataview queries" command is executed.

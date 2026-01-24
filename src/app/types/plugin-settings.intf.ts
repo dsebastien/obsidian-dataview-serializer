@@ -1,3 +1,11 @@
+/**
+ * Link format options for serialized query output.
+ * - 'obsidian': Use Obsidian's "New link format" setting (default)
+ * - 'shortest': Simplify links when filename is unique in vault
+ * - 'absolute': Always use full path for consistency across devices
+ */
+export type LinkFormat = 'obsidian' | 'shortest' | 'absolute'
+
 export interface PluginSettings {
     foldersToScan: string[]
     ignoredFolders: string[]
@@ -21,6 +29,13 @@ export interface PluginSettings {
      * Useful for static site generators like Jekyll that need blank lines after tables/lists.
      */
     addTrailingNewline: boolean
+    /**
+     * Format for internal links in serialized output.
+     * - 'obsidian': Use Obsidian's "New link format" setting
+     * - 'shortest': Simplify links when filename is unique (default)
+     * - 'absolute': Always use full path for consistency across devices
+     */
+    linkFormat: LinkFormat
 }
 
 export const DEFAULT_SETTINGS: PluginSettings = {
@@ -31,5 +46,6 @@ export const DEFAULT_SETTINGS: PluginSettings = {
     foldersToForceUpdate: [],
     showErrorNotifications: true,
     debugLogging: false,
-    addTrailingNewline: false
+    addTrailingNewline: false,
+    linkFormat: 'shortest'
 }

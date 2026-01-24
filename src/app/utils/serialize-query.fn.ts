@@ -7,6 +7,7 @@ import { log } from '../../utils/log'
 import { App, TFile } from 'obsidian'
 import path from 'path'
 import type { QuerySerializationResult } from '../types/query-result.intf'
+import type { LinkFormat } from '../types/plugin-settings.intf'
 
 interface SerializeQueryParams {
     query: string
@@ -14,6 +15,12 @@ interface SerializeQueryParams {
     dataviewApi: DataviewApi
     app: App
     indentation?: string
+    /**
+     * Format for internal links in output.
+     * - 'shortest': Simplify links when filename is unique (default)
+     * - 'absolute': Always use full path for consistency across devices
+     */
+    linkFormat?: LinkFormat
 }
 
 export const serializeQuery = async (
@@ -21,9 +28,37 @@ export const serializeQuery = async (
 ): Promise<QuerySerializationResult> => {
     const allVaultFiles = params.app.vault.getFiles()
 
+    // Resolve the effective link format
+    // When 'obsidian', read from Obsidian's vault configuration
+    let effectiveLinkFormat: 'shortest' | 'absolute' = 'shortest'
+    const configuredFormat = params.linkFormat ?? 'shortest'
+
+    if (configuredFormat === 'obsidian') {
+        // Read Obsidian's "New link format" setting from vault config
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const vaultConfig = (params.app.vault as any).config
+        const obsidianFormat = vaultConfig?.newLinkFormat as string | undefined
+
+        // Map Obsidian's settings to our format:
+        // - 'shortest' -> 'shortest'
+        // - 'relative' -> 'absolute' (relative paths also preserve full structure)
+        // - 'absolute' -> 'absolute'
+        if (obsidianFormat === 'relative' || obsidianFormat === 'absolute') {
+            effectiveLinkFormat = 'absolute'
+        } else {
+            effectiveLinkFormat = 'shortest'
+        }
+    } else {
+        effectiveLinkFormat = configuredFormat
+    }
+
     // Check if the name is unique. If it is, we will be able to replace the long path with just the note name. Aids
     // readability.
+    // When effectiveLinkFormat is 'absolute', always return false to keep full paths.
     function isNameUnique(name: string): boolean {
+        if (effectiveLinkFormat === 'absolute') {
+            return false
+        }
         const occurrences = allVaultFiles.filter((x: TFile) => x.name == name)
         return occurrences.length <= 1
     }

@@ -221,6 +221,22 @@ When a query fails to serialize (due to invalid syntax or other Dataview errors)
 
 - **Refresh button errors**: When clicking the inline refresh button on a query with an error, you'll see a specific error message for that query.
 
+### Syncing Vaults Across Devices
+
+If you sync your vault across multiple devices using Git or other sync tools, you may encounter issues with internal links having different formats on different devices. For example:
+
+- Desktop: `[[2025-04-01]]`
+- Mobile: `[[30 Journal/31 Daily/2025-04/2025-04-01.md|2025-04-01]]`
+
+This can cause unnecessary commit noise as links keep changing back and forth.
+
+To solve this, go to Settings → Dataview Serializer and change the **Link format** setting to one of:
+
+- **Use Obsidian setting**: Respects your vault's "New link format" preference. Make sure this setting is the same across all your devices.
+- **Absolute path**: Always uses the full path, ensuring consistent output regardless of Obsidian's settings or file uniqueness.
+
+Using "Absolute path" guarantees that all devices produce identical serialized output, eliminating sync conflicts.
+
 ### Troubleshooting
 
 If you're experiencing issues with the plugin:
@@ -233,3 +249,5 @@ If you're experiencing issues with the plugin:
    - Queries that depend on other plugins not being loaded
 
 3. **Console warnings**: Even with debug logging disabled, warnings and errors are always logged to the console. Check there for any issues the plugin encounters.
+
+4. **Link format inconsistencies**: If you're seeing different link formats when syncing across devices, see the "Syncing Vaults Across Devices" section above.
