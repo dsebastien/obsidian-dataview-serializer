@@ -4,7 +4,7 @@
  */
 import type { DataviewApi } from 'obsidian-dataview/lib/api/plugin-api'
 import { log } from '../../utils/log'
-import { App, TFile } from 'obsidian'
+import { App, Notice, TFile } from 'obsidian'
 import path from 'path'
 import type { QuerySerializationResult } from '../types/query-result.intf'
 import type { LinkFormat } from '../types/plugin-settings.intf'
@@ -188,6 +188,7 @@ export const serializeQuery = async (
     } catch (err: unknown) {
         const errorMessage = err instanceof Error ? err.message : String(err)
         log(`Failed to serialize query in file: ${params.originFile}`, 'warn', err)
+        new Notice(`Dataview Serializer: Invalid query found in ${params.originFile}`)
         return {
             success: false,
             serializedContent: '',
