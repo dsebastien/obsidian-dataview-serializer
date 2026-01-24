@@ -47,7 +47,7 @@ jobs:
                     # Find the branch that contains this tag
                     BRANCH=$(git branch -r --contains ${{ github.ref }} | grep -v HEAD | head -1 | sed 's/.*\///')
                     if [ -z "$BRANCH" ]; then
-                      BRANCH="master"
+                      BRANCH="main"
                     fi
                   fi
                   # Strip 'v' prefix if present (for backwards compatibility)
