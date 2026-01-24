@@ -556,6 +556,17 @@ export class DataviewSerializerPlugin extends Plugin {
                 log('The loaded settings miss the [debugLogging] property', 'debug')
                 needToSaveSettings = true
             }
+
+            if (
+                loadedSettings.addTrailingNewline !== undefined &&
+                loadedSettings.addTrailingNewline !== null &&
+                typeof loadedSettings.addTrailingNewline === 'boolean'
+            ) {
+                draft.addTrailingNewline = loadedSettings.addTrailingNewline
+            } else {
+                log('The loaded settings miss the [addTrailingNewline] property', 'debug')
+                needToSaveSettings = true
+            }
         })
 
         // Initialize debug mode from settings
@@ -834,6 +845,12 @@ export class DataviewSerializerPlugin extends Plugin {
 
                     let queryAndSerializedQuery = ''
 
+                    // Determine if we need a trailing newline before the END marker
+                    // This is needed for indented content (to maintain structure) or
+                    // when the setting is enabled (for static site generators like Jekyll)
+                    const needsTrailingNewline =
+                        indentation.length > 0 || this.settings.addTrailingNewline
+
                     if (updateMode === 'once-and-eject') {
                         // For 'once-and-eject', remove all tags and leave only the serialized content
                         // Add a trailing newline to maintain proper document structure
@@ -843,11 +860,11 @@ export class DataviewSerializerPlugin extends Plugin {
                         // The SerializedQuery marker uses the normalized query for matching
                         if (isTableQuery(foundQuery)) {
                             queryAndSerializedQuery = `${originalQueryDefinition}\n${SERIALIZED_QUERY_START}${foundQuery}${QUERY_FLAG_CLOSE}\n\n${serializedQuery}\n${
-                                indentation.length > 0 ? '\n' : ''
+                                needsTrailingNewline ? '\n' : ''
                             }${SERIALIZED_QUERY_END}\n`
                         } else {
                             queryAndSerializedQuery = `${originalQueryDefinition}\n${SERIALIZED_QUERY_START}${foundQuery}${QUERY_FLAG_CLOSE}\n${serializedQuery}\n${
-                                indentation.length > 0 ? '\n' : ''
+                                needsTrailingNewline ? '\n' : ''
                             }${SERIALIZED_QUERY_END}\n`
                         }
                     } else if (isTableQuery(foundQuery)) {
@@ -855,14 +872,14 @@ export class DataviewSerializerPlugin extends Plugin {
                         // Use flagClose for the query definition (preserves user's format)
                         // Use QUERY_FLAG_CLOSE for SerializedQuery markers (plugin-generated)
                         queryAndSerializedQuery = `${indentation}${flagOpen}${foundQuery}${flagClose}\n${SERIALIZED_QUERY_START}${foundQuery}${QUERY_FLAG_CLOSE}\n\n${serializedQuery}\n${
-                            indentation.length > 0 ? '\n' : ''
+                            needsTrailingNewline ? '\n' : ''
                         }${SERIALIZED_QUERY_END}\n`
                     } else {
                         // Single-line list query
                         // Use flagClose for the query definition (preserves user's format)
                         // Use QUERY_FLAG_CLOSE for SerializedQuery markers (plugin-generated)
                         queryAndSerializedQuery = `${indentation}${flagOpen}${foundQuery}${flagClose}\n${SERIALIZED_QUERY_START}${foundQuery}${QUERY_FLAG_CLOSE}\n${serializedQuery}\n${
-                            indentation.length > 0 ? '\n' : ''
+                            needsTrailingNewline ? '\n' : ''
                         }${SERIALIZED_QUERY_END}\n`
                     }
                     log(

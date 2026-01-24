@@ -24,6 +24,7 @@ export class SettingsTab extends PluginSettingTab {
         this.renderAutomaticUpdatesToggle()
         this.renderRefreshButtonToggle()
         this.renderErrorNotificationsToggle()
+        this.renderTrailingNewlineToggle()
         this.renderDebugLoggingToggle()
         this.renderFoldersToScan()
         this.renderFoldersToIgnore()
@@ -98,6 +99,25 @@ export class SettingsTab extends PluginSettingTab {
                         )
                         await this.plugin.saveSettings()
                     })
+            })
+    }
+
+    renderTrailingNewlineToggle(): void {
+        new Setting(this.containerEl)
+            .setName('Add trailing newline')
+            .setDesc(
+                'When enabled, an empty line will be added between the serialized content and the END marker. Useful for static site generators like Jekyll that require blank lines after tables or lists.'
+            )
+            .addToggle((toggle) => {
+                toggle.setValue(this.plugin.settings.addTrailingNewline).onChange(async (value) => {
+                    this.plugin.settings = produce(
+                        this.plugin.settings,
+                        (draft: Draft<PluginSettings>) => {
+                            draft.addTrailingNewline = value
+                        }
+                    )
+                    await this.plugin.saveSettings()
+                })
             })
     }
 

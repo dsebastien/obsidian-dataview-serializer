@@ -16,6 +16,11 @@ export interface PluginSettings {
      * Enable verbose debug logging in the console.
      */
     debugLogging: boolean
+    /**
+     * Add an empty line between the serialized content and the END marker.
+     * Useful for static site generators like Jekyll that need blank lines after tables/lists.
+     */
+    addTrailingNewline: boolean
 }
 
 export const DEFAULT_SETTINGS: PluginSettings = {
@@ -25,5 +30,6 @@ export const DEFAULT_SETTINGS: PluginSettings = {
     showRefreshButton: true,
     foldersToForceUpdate: [],
     showErrorNotifications: true,
-    debugLogging: false
+    debugLogging: false,
+    addTrailingNewline: false
 }
