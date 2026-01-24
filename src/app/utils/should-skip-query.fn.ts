@@ -32,6 +32,9 @@ export function shouldSkipQuery(params: ShouldSkipQueryParams): boolean {
         return true
     }
 
+    // 'once-and-eject' queries are never skipped - if we see the flag, it hasn't been ejected yet
+    // After ejection, the flag will be removed, so the query won't be detected at all
+
     // 'auto' queries are never skipped
     return false
 }

@@ -4,7 +4,8 @@ import {
     QUERY_FLAG_OPEN,
     QUERY_FLAG_CLOSE,
     QUERY_FLAG_MANUAL_OPEN,
-    QUERY_FLAG_ONCE_OPEN
+    QUERY_FLAG_ONCE_OPEN,
+    QUERY_FLAG_ONCE_AND_EJECT_OPEN
 } from '../constants'
 
 describe('findQueries', () => {
@@ -12,6 +13,8 @@ describe('findQueries', () => {
     const makeManualQuery = (query: string) =>
         `${QUERY_FLAG_MANUAL_OPEN}${query}${QUERY_FLAG_CLOSE}`
     const makeOnceQuery = (query: string) => `${QUERY_FLAG_ONCE_OPEN}${query}${QUERY_FLAG_CLOSE}`
+    const makeOnceAndEjectQuery = (query: string) =>
+        `${QUERY_FLAG_ONCE_AND_EJECT_OPEN}${query}${QUERY_FLAG_CLOSE}`
 
     describe('basic query detection', () => {
         it('should find a single list query', () => {
@@ -64,6 +67,14 @@ describe('findQueries', () => {
             expect(result[0]!.flagOpen).toBe(QUERY_FLAG_ONCE_OPEN)
         })
 
+        it('should detect once-and-eject update mode for once-and-eject queries', () => {
+            const text = makeOnceAndEjectQuery('list from "folder"')
+            const result = findQueries(text)
+            expect(result).toHaveLength(1)
+            expect(result[0]!.updateMode).toBe('once-and-eject')
+            expect(result[0]!.flagOpen).toBe(QUERY_FLAG_ONCE_AND_EJECT_OPEN)
+        })
+
         it('should handle mixed query types in the same file', () => {
             const text = `${makeQuery('list from "auto"')}\n${makeManualQuery('list from "manual"')}\n${makeOnceQuery('list from "once"')}`
             const result = findQueries(text)
@@ -74,6 +85,20 @@ describe('findQueries', () => {
             expect(result[1]!.query).toBe('list from "manual"')
             expect(result[2]!.updateMode).toBe('once')
             expect(result[2]!.query).toBe('list from "once"')
+        })
+
+        it('should handle all four query types in the same file', () => {
+            const text = `${makeQuery('list from "auto"')}\n${makeManualQuery('list from "manual"')}\n${makeOnceQuery('list from "once"')}\n${makeOnceAndEjectQuery('list from "eject"')}`
+            const result = findQueries(text)
+            expect(result).toHaveLength(4)
+            expect(result[0]!.updateMode).toBe('auto')
+            expect(result[0]!.query).toBe('list from "auto"')
+            expect(result[1]!.updateMode).toBe('manual')
+            expect(result[1]!.query).toBe('list from "manual"')
+            expect(result[2]!.updateMode).toBe('once')
+            expect(result[2]!.query).toBe('list from "once"')
+            expect(result[3]!.updateMode).toBe('once-and-eject')
+            expect(result[3]!.query).toBe('list from "eject"')
         })
     })
 
@@ -134,6 +159,14 @@ describe('findQueries', () => {
             expect(result[2]!.indentation).toBe('    ')
             expect(result[2]!.updateMode).toBe('once')
         })
+
+        it('should capture indentation for once-and-eject queries', () => {
+            const text = `\t\t${makeOnceAndEjectQuery('table file.name')}`
+            const result = findQueries(text)
+            expect(result).toHaveLength(1)
+            expect(result[0]!.indentation).toBe('\t\t')
+            expect(result[0]!.updateMode).toBe('once-and-eject')
+        })
     })
 
     describe('duplicate handling', () => {
@@ -190,6 +223,12 @@ describe('findQueries', () => {
             const result = findQueries(text)
             expect(result).toHaveLength(0)
         })
+
+        it('should ignore unsupported query types for once-and-eject queries', () => {
+            const text = makeOnceAndEjectQuery('task from "folder"')
+            const result = findQueries(text)
+            expect(result).toHaveLength(0)
+        })
     })
 
     describe('edge cases', () => {
@@ -229,6 +268,11 @@ describe('findQueries', () => {
 
         it('should return empty array for incomplete once query flags', () => {
             const result = findQueries(`${QUERY_FLAG_ONCE_OPEN}list from "folder"`)
+            expect(result).toEqual([])
+        })
+
+        it('should return empty array for incomplete once-and-eject query flags', () => {
+            const result = findQueries(`${QUERY_FLAG_ONCE_AND_EJECT_OPEN}list from "folder"`)
             expect(result).toEqual([])
         })
     })

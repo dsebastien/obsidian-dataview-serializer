@@ -632,7 +632,7 @@ export class DataviewSerializerPlugin extends Plugin {
                     const escapedQueryClose = escapeRegExp(QUERY_FLAG_CLOSE)
 
                     // Regex breakdown:
-                    // Group 1: The Query Definition line (preserved)
+                    // Group 1: The Query Definition line (preserved for normal modes)
                     // Non-capturing Group: The optional existing serialized block (replaced)
                     const queryToSerializeRegex = new RegExp(
                         `^(${escapedIndentation}${escapedFlagOpen}${escapedQuery}.*${escapedQueryClose}\\n)(?:${escapedSerializedStart}${escapedQuery}${escapedQueryClose}\\n[\\s\\S]*?${escapedSerializedEnd}\\n)?`,
@@ -641,7 +641,11 @@ export class DataviewSerializerPlugin extends Plugin {
 
                     let queryAndSerializedQuery = ''
 
-                    if (isTableQuery(foundQuery)) {
+                    if (updateMode === 'once-and-eject') {
+                        // For 'once-and-eject', remove all tags and leave only the serialized content
+                        // Add a trailing newline to maintain proper document structure
+                        queryAndSerializedQuery = `${serializedQuery}\n`
+                    } else if (isTableQuery(foundQuery)) {
                         queryAndSerializedQuery = `${indentation}${flagOpen}${foundQuery}${QUERY_FLAG_CLOSE}\n${SERIALIZED_QUERY_START}${foundQuery}${QUERY_FLAG_CLOSE}\n\n${serializedQuery}\n${
                             indentation.length > 0 ? '\n' : ''
                         }${SERIALIZED_QUERY_END}\n`

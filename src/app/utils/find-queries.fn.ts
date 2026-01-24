@@ -1,6 +1,7 @@
 import {
     QUERY_FLAG_CLOSE,
     QUERY_FLAG_MANUAL_OPEN,
+    QUERY_FLAG_ONCE_AND_EJECT_OPEN,
     QUERY_FLAG_ONCE_OPEN,
     QUERY_FLAG_OPEN
 } from '../constants'
@@ -11,8 +12,9 @@ import { isSupportedQueryType } from './is-supported-query-type.fn'
  * - 'auto': Automatic updates (default behavior)
  * - 'manual': Skips automatic updates; refreshable via commands/button
  * - 'once': Only serializes once; never auto-updates after first serialization
+ * - 'once-and-eject': Serializes once and removes surrounding tags, leaving only the output
  */
-export type QueryUpdateMode = 'auto' | 'manual' | 'once'
+export type QueryUpdateMode = 'auto' | 'manual' | 'once' | 'once-and-eject'
 
 /**
  * Interface to represent a query with its indentation context
@@ -29,6 +31,9 @@ export interface QueryWithContext {
  */
 function detectQueryFlag(line: string): { flagOpen: string; updateMode: QueryUpdateMode } | null {
     // Check in order of specificity (longer prefixes first)
+    if (line.includes(QUERY_FLAG_ONCE_AND_EJECT_OPEN)) {
+        return { flagOpen: QUERY_FLAG_ONCE_AND_EJECT_OPEN, updateMode: 'once-and-eject' }
+    }
     if (line.includes(QUERY_FLAG_MANUAL_OPEN)) {
         return { flagOpen: QUERY_FLAG_MANUAL_OPEN, updateMode: 'manual' }
     }

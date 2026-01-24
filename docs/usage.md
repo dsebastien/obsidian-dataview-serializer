@@ -16,6 +16,7 @@ The queries need to be wrapped in a very specific structure for the plugin to re
 | `<!-- QueryToSerialize: <query> -->` | Automatic updates (default) |
 | `<!-- QueryToSerializeManual: <query> -->` | Manual-only updates |
 | `<!-- QueryToSerializeOnce: <query> -->` | Write-once (never auto-updates after first serialization) |
+| `<!-- QueryToSerializeOnceAndEject: <query> -->` | Write-once and eject (serializes once, then removes all tags leaving only the output) |
 
 Those tags are HTML comments, which are supported by Markdown, and Obsidian. Those are only visible in the source view, meaning that they disappear in the Reading mode. Moreover, the "code" that is within HTML comments is not interpreted by Obsidian. This means that even if you use a tag within a query, it won't be seen by Obsidian as an actual tag.
 
@@ -85,6 +86,33 @@ This is useful for:
 - Queries where you want the initial result preserved
 - Reducing processing overhead for static content
 
+#### Write-Once and Eject Updates
+
+```
+<!-- QueryToSerializeOnceAndEject: LIST FROM #daily-notes LIMIT 5 -->
+```
+
+Write-once-and-eject queries are serialized **only once**, and then all surrounding tags are removed, leaving only the serialized output. After ejection, the query definition is gone, so it can never be updated again.
+
+Before ejection:
+```
+<!-- QueryToSerializeOnceAndEject: LIST FROM #daily-notes LIMIT 5 -->
+```
+
+After ejection:
+```
+- [[2024-01-15]]
+- [[2024-01-14]]
+- [[2024-01-13]]
+- [[2024-01-12]]
+- [[2024-01-11]]
+```
+
+This is useful for:
+- Template files where you want the query to populate once when a new note is created, then become static content
+- One-time data insertion where the query mechanism should disappear after execution
+- Creating "snapshot" content that blends seamlessly with regular markdown
+
 #### Example: Mixed Query Types
 
 You can use different query types in the same file:
@@ -100,6 +128,9 @@ You can use different query types in the same file:
 
 ## Initial Setup Date (never changes)
 <!-- QueryToSerializeOnce: LIST FROM "Setup" LIMIT 1 -->
+
+## Template Content (ejects after first run)
+<!-- QueryToSerializeOnceAndEject: TABLE file.name, file.ctime FROM "Templates" LIMIT 3 -->
 ```
 
 ### Inline Refresh Button

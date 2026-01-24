@@ -39,6 +39,24 @@ describe('shouldSkipQuery', () => {
             expect(result).toBe(false)
         })
 
+        it('should NOT skip once-and-eject queries (not serialized)', () => {
+            const result = shouldSkipQuery({
+                updateMode: 'once-and-eject',
+                isManualTrigger: true,
+                isAlreadySerialized: false
+            })
+            expect(result).toBe(false)
+        })
+
+        it('should NOT skip once-and-eject queries (already serialized)', () => {
+            const result = shouldSkipQuery({
+                updateMode: 'once-and-eject',
+                isManualTrigger: true,
+                isAlreadySerialized: true
+            })
+            expect(result).toBe(false)
+        })
+
         it('should NOT skip auto queries (already serialized)', () => {
             const result = shouldSkipQuery({
                 updateMode: 'auto',
@@ -118,13 +136,33 @@ describe('shouldSkipQuery', () => {
                 expect(result).toBe(true)
             })
         })
+
+        describe('once-and-eject update mode', () => {
+            it('should NOT skip once-and-eject queries (not serialized)', () => {
+                const result = shouldSkipQuery({
+                    updateMode: 'once-and-eject',
+                    isManualTrigger: false,
+                    isAlreadySerialized: false
+                })
+                expect(result).toBe(false)
+            })
+
+            it('should NOT skip once-and-eject queries (already serialized) - flag presence means ejection needed', () => {
+                const result = shouldSkipQuery({
+                    updateMode: 'once-and-eject',
+                    isManualTrigger: false,
+                    isAlreadySerialized: true
+                })
+                expect(result).toBe(false)
+            })
+        })
     })
 
     describe('edge cases', () => {
         it('should handle all combinations correctly', () => {
             // This is a comprehensive truth table test
             const testCases: Array<{
-                updateMode: 'auto' | 'manual' | 'once'
+                updateMode: 'auto' | 'manual' | 'once' | 'once-and-eject'
                 isManualTrigger: boolean
                 isAlreadySerialized: boolean
                 expectedSkip: boolean
@@ -166,6 +204,18 @@ describe('shouldSkipQuery', () => {
                     isAlreadySerialized: true,
                     expectedSkip: false
                 },
+                {
+                    updateMode: 'once-and-eject',
+                    isManualTrigger: true,
+                    isAlreadySerialized: false,
+                    expectedSkip: false
+                },
+                {
+                    updateMode: 'once-and-eject',
+                    isManualTrigger: true,
+                    isAlreadySerialized: true,
+                    expectedSkip: false
+                },
 
                 // Automatic trigger - skip based on rules
                 {
@@ -203,6 +253,19 @@ describe('shouldSkipQuery', () => {
                     isManualTrigger: false,
                     isAlreadySerialized: true,
                     expectedSkip: true
+                },
+                // once-and-eject never skips - if we see the flag, ejection hasn't happened yet
+                {
+                    updateMode: 'once-and-eject',
+                    isManualTrigger: false,
+                    isAlreadySerialized: false,
+                    expectedSkip: false
+                },
+                {
+                    updateMode: 'once-and-eject',
+                    isManualTrigger: false,
+                    isAlreadySerialized: true,
+                    expectedSkip: false
                 }
             ]
 
