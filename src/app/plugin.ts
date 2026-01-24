@@ -48,6 +48,7 @@ import {
     type InlineQueryWithContext
 } from './utils/find-inline-queries.fn'
 import { serializeInlineQuery, isInsideTable } from './utils/serialize-inline-query.fn'
+import { processInBatches } from './utils/batch-processor'
 
 /**
  * Maximum number of error notifications to show during batch operations
@@ -135,14 +136,20 @@ export class DataviewSerializerPlugin extends Plugin {
      */
     async processRecentlyUpdatedFiles(): Promise<void> {
         const allErrors: Array<{ filePath: string; error: { message: string; query: string } }> = []
+        const filesToProcess = [...this.recentlyUpdatedFiles]
+        this.recentlyUpdatedFiles.clear()
 
-        for (const file of this.recentlyUpdatedFiles) {
-            const result = await this.processFile(file)
+        const results = await processInBatches(
+            filesToProcess,
+            (file) => this.processFile(file),
+            5 // Process 5 files concurrently
+        )
+
+        for (const result of results) {
             for (const error of result.errors) {
                 allErrors.push({ filePath: result.filePath, error })
             }
         }
-        this.recentlyUpdatedFiles.clear()
 
         // Show error notifications if enabled for automatic updates
         if (this.settings.showErrorNotifications && allErrors.length > 0) {
@@ -181,8 +188,13 @@ export class DataviewSerializerPlugin extends Plugin {
 
         const allErrors: Array<{ filePath: string; error: { message: string; query: string } }> = []
 
-        for (const file of filesToUpdate) {
-            const result = await this.processFile(file)
+        const results = await processInBatches(
+            filesToUpdate,
+            (file) => this.processFile(file),
+            5 // Process 5 files concurrently
+        )
+
+        for (const result of results) {
             for (const error of result.errors) {
                 allErrors.push({ filePath: result.filePath, error })
             }
@@ -255,8 +267,13 @@ export class DataviewSerializerPlugin extends Plugin {
                     error: { message: string; query: string }
                 }> = []
 
-                for (const vaultFile of allVaultFiles) {
-                    const result = await this.processFile(vaultFile, false, undefined, true)
+                const results = await processInBatches(
+                    allVaultFiles,
+                    (vaultFile) => this.processFile(vaultFile, false, undefined, true),
+                    5 // Process 5 files concurrently
+                )
+
+                for (const result of results) {
                     for (const error of result.errors) {
                         allErrors.push({ filePath: result.filePath, error })
                     }

@@ -20,6 +20,7 @@ bun = true
 [test]
 coverage = false
 onlyFailures = true
+preload = ["./src/test-setup.ts"]
 
 [test.reporter]
 dots = true
