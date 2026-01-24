@@ -1,3 +1,8 @@
+## [2.3.0](https://github.com/dsebastien/obsidian-dataview-serializer/compare/2.2.0...2.3.0) (2026-01-24)
+
+### Features
+
+* **all:** added support for TASK queries ([cea235e](https://github.com/dsebastien/obsidian-dataview-serializer/commit/cea235ef4d3602e5957df3afbf3e798ee1256865))
 ## [2.2.0](https://github.com/dsebastien/obsidian-dataview-serializer/compare/2.0.0...2.2.0) (2026-01-24)
 
 ### Features
