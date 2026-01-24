@@ -1,3 +1,8 @@
+## [2.3.1](https://github.com/dsebastien/obsidian-dataview-serializer/compare/2.3.0...2.3.1) (2026-01-24)
+
+### Bug Fixes
+
+* **all:** implemented a fix for [#47](https://github.com/dsebastien/obsidian-dataview-serializer/issues/47) ([a326b40](https://github.com/dsebastien/obsidian-dataview-serializer/commit/a326b40ee907742f004a174b8d95af22694c4d45))
 ## [2.3.0](https://github.com/dsebastien/obsidian-dataview-serializer/compare/2.2.0...2.3.0) (2026-01-24)
 
 ### Features
