@@ -1,3 +1,17 @@
+## [2.1.0](https://github.com/dsebastien/obsidian-dataview-serializer/compare/2.0.0...2.1.0) (2026-01-24)
+
+### Features
+
+* **all:** added a setting to control how links are generated in serialized queries ([eb77405](https://github.com/dsebastien/obsidian-dataview-serializer/commit/eb77405dc02b4f1e7ca3b5501a8161808cbfbed0))
+* **all:** added setting to add an extra new line before the end marker ([f0d7351](https://github.com/dsebastien/obsidian-dataview-serializer/commit/f0d7351e1cc47caa482d00ef0133375fd159ec3e))
+* **all:** added support for converting dataview queries ([4ee933e](https://github.com/dsebastien/obsidian-dataview-serializer/commit/4ee933eeac770c1b1696fc38e54736045fbd9fa6))
+* **all:** added support for multiline queries ([c151b3a](https://github.com/dsebastien/obsidian-dataview-serializer/commit/c151b3a49b4b1a6fce4fb911fae6c819df4b432f))
+* **all:** improved query rendering ([83ffd35](https://github.com/dsebastien/obsidian-dataview-serializer/commit/83ffd35ed95db3470982a973385209b482133cfd))
+
+### Bug Fixes
+
+* **all:** fix query matching ([8a6289a](https://github.com/dsebastien/obsidian-dataview-serializer/commit/8a6289a30351a18ee37aca9e6268fcd0128e5b51)), closes [#25](https://github.com/dsebastien/obsidian-dataview-serializer/issues/25)
+* **all:** fixed matching issue with idempotency checks vs initial serialized query removal ([2924d97](https://github.com/dsebastien/obsidian-dataview-serializer/commit/2924d9731e4dd87222d1bedde04db70566c0c61a))
 ## [2.0.0](https://github.com/dsebastien/obsidian-dataview-serializer/compare/1.9.0...2.0.0) (2026-01-24)
 
 ### Features
