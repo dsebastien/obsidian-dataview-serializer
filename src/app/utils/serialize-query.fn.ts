@@ -8,6 +8,36 @@ import { App, TFile } from 'obsidian'
 import path from 'path'
 import type { QuerySerializationResult } from '../types/query-result.intf'
 import type { LinkFormat } from '../types/plugin-settings.intf'
+import { isTaskQuery } from './is-task-query.fn'
+
+/**
+ * Strip checkbox markers from task output to convert tasks to regular list items.
+ * This prevents feedback loops where serialized tasks would be picked up by subsequent TASK queries.
+ *
+ * Converts:
+ * - `- [ ] Task text` to `- Task text`
+ * - `- [x] Completed task` to `- Completed task`
+ * - Handles various checkbox states like [/], [-], [>], etc.
+ *
+ * Reference: https://github.com/dsebastien/obsidian-dataview-serializer/issues/19
+ *
+ * @param taskOutput The raw markdown output from a TASK query
+ * @returns Output with checkbox markers removed, converting tasks to regular list items
+ */
+function stripTaskCheckboxes(taskOutput: string): string {
+    if (!taskOutput) {
+        return taskOutput
+    }
+
+    // Match task checkbox patterns: - [ ], - [x], - [X], - [/], - [-], - [>], etc.
+    // The pattern matches:
+    // - Optional leading whitespace
+    // - A dash followed by space
+    // - A checkbox in brackets [.] where . is any single character
+    // - A space after the checkbox
+    // We replace the checkbox part while preserving the list marker
+    return taskOutput.replace(/^(\s*-\s*)\[.\]\s*/gm, '$1')
+}
 
 interface SerializeQueryParams {
     query: string
@@ -72,6 +102,13 @@ export const serializeQuery = async (
     try {
         serializedQuery = await params.dataviewApi.tryQueryMarkdown(params.query, params.originFile)
         // Reference: https://github.com/dsebastien/obsidian-dataview-serializer/issues/3
+
+        // For TASK queries, strip checkbox markers to convert tasks to regular list items.
+        // This prevents feedback loops where serialized tasks would be picked up by subsequent queries.
+        // Reference: https://github.com/dsebastien/obsidian-dataview-serializer/issues/19
+        if (isTaskQuery(params.query)) {
+            serializedQuery = stripTaskCheckboxes(serializedQuery)
+        }
 
         if (params.query.toLocaleLowerCase().contains('table')) {
             serializedQuery = serializedQuery.replaceAll('\\\\', '\\').replaceAll('\n<', '<')

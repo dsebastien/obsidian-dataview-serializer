@@ -16,7 +16,9 @@ Turning Dataview queries into Markdown also ensures that the generated content a
 - **Manual mode**: Option to disable automatic updates and only serialize queries on demand
 - **Command palette integration**: Commands to serialize all queries, current file queries, or insert new query blocks
 
-Currently, this plugin is only compatible with `LIST` and `TABLE` queries. `CALENDAR` and `TASK` queries are not supported.
+Currently, this plugin is compatible with `LIST`, `TABLE`, and `TASK` queries. `CALENDAR` queries are not supported.
+
+**Note:** TASK queries have their checkbox markers stripped in the serialized output to prevent feedback loops. The result will be a regular list instead of a task list. See the [Usage documentation](usage.md#task-query-behavior) for details.
 
 ### About
 

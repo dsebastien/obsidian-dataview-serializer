@@ -192,13 +192,47 @@ describe('findQueries', () => {
         })
     })
 
-    describe('unsupported query types', () => {
-        it('should ignore task queries', () => {
+    describe('supported query types - task', () => {
+        it('should find task queries', () => {
             const text = makeQuery('task from "folder"')
             const result = findQueries(text)
-            expect(result).toHaveLength(0)
+            expect(result).toHaveLength(1)
+            expect(result[0]!.query).toBe('task from "folder"')
         })
 
+        it('should find task queries with WHERE clause', () => {
+            const text = makeQuery('TASK WHERE !completed')
+            const result = findQueries(text)
+            expect(result).toHaveLength(1)
+            expect(result[0]!.query).toBe('TASK WHERE !completed')
+        })
+
+        it('should find manual task queries', () => {
+            const text = makeManualQuery('task from "folder"')
+            const result = findQueries(text)
+            expect(result).toHaveLength(1)
+            expect(result[0]!.query).toBe('task from "folder"')
+            expect(result[0]!.updateMode).toBe('manual')
+        })
+
+        it('should find once task queries', () => {
+            const text = makeOnceQuery('task WHERE completed')
+            const result = findQueries(text)
+            expect(result).toHaveLength(1)
+            expect(result[0]!.query).toBe('task WHERE completed')
+            expect(result[0]!.updateMode).toBe('once')
+        })
+
+        it('should find once-and-eject task queries', () => {
+            const text = makeOnceAndEjectQuery('task from "folder"')
+            const result = findQueries(text)
+            expect(result).toHaveLength(1)
+            expect(result[0]!.query).toBe('task from "folder"')
+            expect(result[0]!.updateMode).toBe('once-and-eject')
+        })
+    })
+
+    describe('unsupported query types', () => {
         it('should ignore calendar queries', () => {
             const text = makeQuery('calendar from "folder"')
             const result = findQueries(text)
@@ -206,14 +240,14 @@ describe('findQueries', () => {
         })
 
         it('should only include supported queries from mixed input', () => {
-            const text = `${makeQuery('list')}\n${makeQuery('task')}\n${makeQuery('table file.name')}`
+            const text = `${makeQuery('list')}\n${makeQuery('calendar')}\n${makeQuery('table file.name')}`
             const result = findQueries(text)
             expect(result).toHaveLength(2)
             expect(result.map((r) => r.query)).toEqual(['list', 'table file.name'])
         })
 
         it('should ignore unsupported query types for manual queries', () => {
-            const text = makeManualQuery('task from "folder"')
+            const text = makeManualQuery('calendar from "folder"')
             const result = findQueries(text)
             expect(result).toHaveLength(0)
         })
@@ -225,7 +259,7 @@ describe('findQueries', () => {
         })
 
         it('should ignore unsupported query types for once-and-eject queries', () => {
-            const text = makeOnceAndEjectQuery('task from "folder"')
+            const text = makeOnceAndEjectQuery('calendar from "folder"')
             const result = findQueries(text)
             expect(result).toHaveLength(0)
         })
@@ -459,9 +493,20 @@ ${QUERY_FLAG_CLOSE}`
             expect(result[0]!.originalQueryDefinition).toBeUndefined()
         })
 
-        it('should ignore unsupported query types in multi-line format', () => {
+        it('should find task queries in multi-line format', () => {
             const text = `${QUERY_FLAG_OPEN}
 TASK
+WHERE !completed
+FROM "folder"
+${QUERY_FLAG_CLOSE}`
+            const result = findQueries(text)
+            expect(result).toHaveLength(1)
+            expect(result[0]!.query).toBe('TASK WHERE !completed FROM "folder"')
+        })
+
+        it('should ignore unsupported query types in multi-line format', () => {
+            const text = `${QUERY_FLAG_OPEN}
+CALENDAR
 FROM "folder"
 ${QUERY_FLAG_CLOSE}`
             const result = findQueries(text)

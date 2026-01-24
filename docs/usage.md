@@ -204,7 +204,7 @@ This command scans the entire current file and converts all Dataview codeblocks 
 
 Both commands:
 - Support ` ```dataview ``` ` codeblocks and inline `` `= expression` `` queries
-- Only convert supported query types (LIST and TABLE). Unsupported types (CALENDAR, TASK) are skipped and reported
+- Only convert supported query types (LIST, TABLE, and TASK). Unsupported types (CALENDAR) are skipped and reported
 - Preserve indentation from the original query
 - Normalize multi-line queries to single-line format in the serialized output
 
@@ -220,6 +220,17 @@ When a query fails to serialize (due to invalid syntax or other Dataview errors)
 - **Batch processing**: When scanning multiple files, the plugin shows up to 3 individual error notifications plus a summary if there are more errors.
 
 - **Refresh button errors**: When clicking the inline refresh button on a query with an error, you'll see a specific error message for that query.
+
+### TASK Query Behavior
+
+When serializing TASK queries, the plugin **strips the checkbox markers** (`[ ]`, `[x]`, etc.) from the output. This means:
+
+- `- [ ] Incomplete task` becomes `- Incomplete task`
+- `- [x] Completed task` becomes `- Completed task`
+
+**Why?** This is necessary to prevent feedback loops. Without stripping checkboxes, the serialized tasks would be recognized as actual tasks by Dataview on subsequent runs, causing duplicates to accumulate with each update.
+
+**Caveat:** The serialized output of TASK queries will be a regular Markdown list, not a task list. You will lose the visual indication of task completion status (checkboxes). If you need to preserve checkbox states, consider using a LIST query with task metadata fields instead.
 
 ### Syncing Vaults Across Devices
 

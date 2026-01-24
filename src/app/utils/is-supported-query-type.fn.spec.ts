@@ -18,15 +18,17 @@ describe('isSupportedQueryType', () => {
             expect(isSupportedQueryType('table file.name, date')).toBe(true)
             expect(isSupportedQueryType('TABLE WITHOUT ID file.name')).toBe(true)
         })
+
+        it('should return true for task queries', () => {
+            expect(isSupportedQueryType('task')).toBe(true)
+            expect(isSupportedQueryType('TASK')).toBe(true)
+            expect(isSupportedQueryType('Task')).toBe(true)
+            expect(isSupportedQueryType('task from "folder"')).toBe(true)
+            expect(isSupportedQueryType('TASK WHERE !completed')).toBe(true)
+        })
     })
 
     describe('unsupported query types', () => {
-        it('should return false for task queries', () => {
-            expect(isSupportedQueryType('task')).toBe(false)
-            expect(isSupportedQueryType('TASK')).toBe(false)
-            expect(isSupportedQueryType('task from "folder"')).toBe(false)
-        })
-
         it('should return false for calendar queries', () => {
             expect(isSupportedQueryType('calendar')).toBe(false)
             expect(isSupportedQueryType('CALENDAR')).toBe(false)

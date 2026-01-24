@@ -263,6 +263,132 @@ describe('serializeQuery', () => {
         })
     })
 
+    describe('task queries', () => {
+        it('should strip checkbox markers from task output', async () => {
+            const mockApp = createMockApp([])
+            const mockApi = createMockDataviewApi('- [ ] Incomplete task\n- [x] Completed task')
+
+            const result = await serializeQuery({
+                query: 'task',
+                originFile: 'origin.md',
+                dataviewApi: mockApi,
+                app: mockApp
+            })
+
+            expect(result.success).toBe(true)
+            // Checkboxes should be stripped, converting tasks to regular list items
+            expect(result.serializedContent).toBe('- Incomplete task\n- Completed task')
+            expect(result.serializedContent).not.toContain('[ ]')
+            expect(result.serializedContent).not.toContain('[x]')
+        })
+
+        it('should strip various checkbox states', async () => {
+            const mockApp = createMockApp([])
+            const mockApi = createMockDataviewApi(
+                '- [ ] Unchecked\n- [x] Checked\n- [X] Checked uppercase\n- [/] Partial\n- [-] Cancelled'
+            )
+
+            const result = await serializeQuery({
+                query: 'task',
+                originFile: 'origin.md',
+                dataviewApi: mockApi,
+                app: mockApp
+            })
+
+            expect(result.success).toBe(true)
+            expect(result.serializedContent).toBe(
+                '- Unchecked\n- Checked\n- Checked uppercase\n- Partial\n- Cancelled'
+            )
+        })
+
+        it('should simplify links in task output for unique file names', async () => {
+            const mockApp = createMockApp([{ name: 'project.md' }])
+            const mockApi = createMockDataviewApi('- [ ] Task from [[folder/project.md|project]]\n')
+
+            const result = await serializeQuery({
+                query: 'task WHERE !completed',
+                originFile: 'origin.md',
+                dataviewApi: mockApi,
+                app: mockApp
+            })
+
+            expect(result.success).toBe(true)
+            // Checkbox stripped and link simplified
+            expect(result.serializedContent).toBe('- Task from [[project]]\n')
+        })
+
+        it('should keep full path in task output for non-unique file names', async () => {
+            const mockApp = createMockApp([{ name: 'todo.md' }, { name: 'todo.md' }])
+            const mockApi = createMockDataviewApi('- [ ] Task from [[folder/todo.md|todo]]\n')
+
+            const result = await serializeQuery({
+                query: 'task',
+                originFile: 'origin.md',
+                dataviewApi: mockApi,
+                app: mockApp
+            })
+
+            expect(result.success).toBe(true)
+            // Checkbox stripped but path kept for non-unique files
+            expect(result.serializedContent).toBe('- Task from [[folder/todo.md|todo]]\n')
+        })
+
+        it('should respect linkFormat "absolute" for task queries', async () => {
+            const mockApp = createMockApp([{ name: 'unique-task.md' }])
+            const mockApi = createMockDataviewApi(
+                '- [x] Done task from [[folder/unique-task.md|unique-task]]\n'
+            )
+
+            const result = await serializeQuery({
+                query: 'task WHERE completed',
+                originFile: 'origin.md',
+                dataviewApi: mockApi,
+                app: mockApp,
+                linkFormat: 'absolute'
+            })
+
+            expect(result.success).toBe(true)
+            // Checkbox stripped but full path kept due to absolute format
+            expect(result.serializedContent).toBe(
+                '- Done task from [[folder/unique-task.md|unique-task]]\n'
+            )
+        })
+
+        it('should preserve indented tasks', async () => {
+            const mockApp = createMockApp([])
+            const mockApi = createMockDataviewApi(
+                '- [ ] Parent task\n  - [ ] Child task\n    - [x] Grandchild task'
+            )
+
+            const result = await serializeQuery({
+                query: 'task',
+                originFile: 'origin.md',
+                dataviewApi: mockApi,
+                app: mockApp
+            })
+
+            expect(result.success).toBe(true)
+            expect(result.serializedContent).toBe(
+                '- Parent task\n  - Child task\n    - Grandchild task'
+            )
+        })
+
+        it('should handle empty task output', async () => {
+            const mockApp = createMockApp([])
+            const mockApi = createMockDataviewApi('')
+
+            const result = await serializeQuery({
+                query: 'task WHERE false',
+                originFile: 'origin.md',
+                dataviewApi: mockApi,
+                app: mockApp
+            })
+
+            expect(result.success).toBe(true)
+            expect(result.serializedContent).toBe('')
+        })
+    })
+
     describe('table queries', () => {
         it('should handle table query content', async () => {
             const mockApp = createMockApp([])
