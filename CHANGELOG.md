@@ -8,7 +8,7 @@
 ### Features
 
 * **all:** added support for TASK queries ([cea235e](https://github.com/dsebastien/obsidian-dataview-serializer/commit/cea235ef4d3602e5957df3afbf3e798ee1256865))
-## [2.2.0](https://github.com/dsebastien/obsidian-dataview-serializer/compare/2.0.0...2.2.0) (2026-01-24)
+## [2.2.0](https://github.com/dsebastien/obsidian-dataview-serializer/compare/2.1.0...2.2.0) (2026-01-24)
 
 ### Features
 
@@ -22,6 +22,11 @@
 
 * **all:** fix query matching ([8a6289a](https://github.com/dsebastien/obsidian-dataview-serializer/commit/8a6289a30351a18ee37aca9e6268fcd0128e5b51)), closes [#25](https://github.com/dsebastien/obsidian-dataview-serializer/issues/25)
 * **all:** fixed matching issue with idempotency checks vs initial serialized query removal ([2924d97](https://github.com/dsebastien/obsidian-dataview-serializer/commit/2924d9731e4dd87222d1bedde04db70566c0c61a))
+## [2.1.0](https://github.com/dsebastien/obsidian-dataview-serializer/compare/2.0.0...2.1.0) (2026-01-24)
+
+### Features
+
+* **all:** added support for inline Dataview queries ([#44](https://github.com/dsebastien/obsidian-dataview-serializer/issues/44))
 ## [2.0.0](https://github.com/dsebastien/obsidian-dataview-serializer/compare/1.9.0...2.0.0) (2026-01-24)
 
 ### Features
@@ -40,13 +45,45 @@
 
 * **all:** wait for all plugins to be loaded to avoid loading this plugin before Dataview ([76f7093](https://github.com/dsebastien/obsidian-dataview-serializer/commit/76f7093f19ee169fd164d9410f09483ca875e85e)), closes [#32](https://github.com/dsebastien/obsidian-dataview-serializer/issues/32)
 ## [1.9.0](https://github.com/dsebastien/obsidian-dataview-serializer/compare/1.8.1...1.9.0) (2026-01-06)
+
+### Features
+
+* **all:** added manual mode setting to control whether automatic serialization is enabled ([#41](https://github.com/dsebastien/obsidian-dataview-serializer/issues/41))
 ## [1.8.1](https://github.com/dsebastien/obsidian-dataview-serializer/compare/1.8.0...1.8.1) (2025-08-03)
+
+### Bug Fixes
+
+* **all:** restore broken aliases in links
 ## [1.8.0](https://github.com/dsebastien/obsidian-dataview-serializer/compare/1.7.3...1.8.0) (2025-05-23)
+
+### Features
+
+* **all:** added command to quickly add dataview serializer block ([#14](https://github.com/dsebastien/obsidian-dataview-serializer/issues/14))
 ## [1.7.3](https://github.com/dsebastien/obsidian-dataview-serializer/compare/1.7.2...1.7.3) (2025-05-23)
+
+### Bug Fixes
+
+* **all:** improved handling of indented queries
 ## [1.7.2](https://github.com/dsebastien/obsidian-dataview-serializer/compare/1.7.1...1.7.2) (2025-05-23)
+
+### Bug Fixes
+
+* **all:** improved code that finds queries to serialize
 ## [1.7.1](https://github.com/dsebastien/obsidian-dataview-serializer/compare/1.7.0...1.7.1) (2025-05-23)
+
+### Bug Fixes
+
+* **all:** improved serialized queries indentation, indent empty lines correctly
 ## [1.7.0](https://github.com/dsebastien/obsidian-dataview-serializer/compare/1.6.0...1.7.0) (2025-05-23)
+
+### Features
+
+* **all:** identify query context (blockquote) to maintain output formatting ([#36](https://github.com/dsebastien/obsidian-dataview-serializer/issues/36))
 ## [1.6.0](https://github.com/dsebastien/obsidian-dataview-serializer/compare/1.5.1...1.6.0) (2025-05-23)
+
+### Features
+
+* **all:** better handle links with aliases in tables ([#35](https://github.com/dsebastien/obsidian-dataview-serializer/issues/35))
 ## [1.5.1](https://github.com/dsebastien/obsidian-dataview-serializer/compare/1.5.0...1.5.1) (2024-11-26)
 
 ### Reverts
@@ -58,18 +95,88 @@
 
 * Enable updates to all files, not just recently modified ([35cbd62](https://github.com/dsebastien/obsidian-dataview-serializer/commit/35cbd62f4327c4755cf7b6604bac423173432f9d))
 ## [1.4.1](https://github.com/dsebastien/obsidian-dataview-serializer/compare/1.4.0...1.4.1) (2024-10-27)
+
+### Bug Fixes
+
+* **all:** set esbuild platform to browser for better compatibility
 ## [1.4.0](https://github.com/dsebastien/obsidian-dataview-serializer/compare/1.3.0...1.4.0) (2024-10-09)
+
+### Features
+
+* **all:** detect and keep aliases that don't match filename
+* **all:** treat markdown links differently from wikilinks
 ## [1.3.0](https://github.com/dsebastien/obsidian-dataview-serializer/compare/1.2.0...1.3.0) (2024-08-25)
+
+### Features
+
+* **all:** use short links whenever possible ([#20](https://github.com/dsebastien/obsidian-dataview-serializer/issues/20))
 ## [1.2.0](https://github.com/dsebastien/obsidian-dataview-serializer/compare/1.1.5...1.2.0) (2024-07-04)
+
+### Bug Fixes
+
+* **all:** fixed table display issue ([#3](https://github.com/dsebastien/obsidian-dataview-serializer/issues/3))
 ## [1.1.5](https://github.com/dsebastien/obsidian-dataview-serializer/compare/1.1.4...1.1.5) (2024-07-04)
+
+### Bug Fixes
+
+* **all:** skip file modifications when content unchanged
+* **all:** increased delay to improve reliability ([#10](https://github.com/dsebastien/obsidian-dataview-serializer/issues/10))
 ## [1.1.4](https://github.com/dsebastien/obsidian-dataview-serializer/compare/1.1.3...1.1.4) (2024-06-05)
+
+### Bug Fixes
+
+* **all:** set origin file path when generating markdown ([#3](https://github.com/dsebastien/obsidian-dataview-serializer/issues/3))
 ## [1.1.3](https://github.com/dsebastien/obsidian-dataview-serializer/compare/1.1.2...1.1.3) (2024-06-05)
+
+### Bug Fixes
+
+* **all:** fixed command registration ([#7](https://github.com/dsebastien/obsidian-dataview-serializer/issues/7))
 ## [1.1.2](https://github.com/dsebastien/obsidian-dataview-serializer/compare/1.1.1...1.1.2) (2024-05-23)
+
+### Refactor
+
+* **all:** extracted styles to separate CSS file
 ## [1.1.1](https://github.com/dsebastien/obsidian-dataview-serializer/compare/1.1.0...1.1.1) (2024-05-22)
+
+### Bug Fixes
+
+* **all:** attempted fix for table rendering issue ([#3](https://github.com/dsebastien/obsidian-dataview-serializer/issues/3))
 ## [1.1.0](https://github.com/dsebastien/obsidian-dataview-serializer/compare/1.0.5...1.1.0) (2024-05-22)
+
+### Features
+
+* **all:** switched to HTML comments for markers ([#2](https://github.com/dsebastien/obsidian-dataview-serializer/issues/2))
+
+### Bug Fixes
+
+* **all:** reduced logging verbosity
 ## [1.0.5](https://github.com/dsebastien/obsidian-dataview-serializer/compare/1.0.4...1.0.5) (2024-05-18)
+
+### Bug Fixes
+
+* **all:** updated logging
 ## [1.0.4](https://github.com/dsebastien/obsidian-dataview-serializer/compare/1.0.3...1.0.4) (2024-05-16)
+
+### Features
+
+* **all:** used TextInputSuggest for settings input
 ## [1.0.3](https://github.com/dsebastien/obsidian-dataview-serializer/compare/1.0.2...1.0.3) (2024-05-14)
+
+### Bug Fixes
+
+* **all:** fixed release workflow
 ## [1.0.2](https://github.com/dsebastien/obsidian-dataview-serializer/compare/1.0.1...1.0.2) (2024-05-14)
+
+### Bug Fixes
+
+* **all:** fixed image path in README
 ## [1.0.1](https://github.com/dsebastien/obsidian-dataview-serializer/compare/1.0.0...1.0.1) (2024-05-14)
+
+### Bug Fixes
+
+* **all:** CI/workflow updates
 ## 1.0.0 (2024-05-13)
+
+### Features
+
+* **all:** initial release of Dataview Serializer plugin
