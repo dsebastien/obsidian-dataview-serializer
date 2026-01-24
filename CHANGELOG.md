@@ -1,3 +1,9 @@
+## [2.4.0](https://github.com/dsebastien/obsidian-dataview-serializer/compare/2.3.2...2.4.0) (2026-01-24)
+
+### Features
+
+* **all:** added a notice for invalid queries with the file path ([f816442](https://github.com/dsebastien/obsidian-dataview-serializer/commit/f81644235869571e77695107cca5a8048a77023f))
+* **all:** added query serialization batching to improve perf ([1fb7a32](https://github.com/dsebastien/obsidian-dataview-serializer/commit/1fb7a3220582ed7c04d5c651fb5141c1ee5c49b3))
 ## [2.3.2](https://github.com/dsebastien/obsidian-dataview-serializer/compare/2.3.1...2.3.2) (2026-01-24)
 
 ### Features
