@@ -152,18 +152,36 @@ export const serializeQuery = async (
         } else {
             // Not a table. Assuming for now a list as that's all we're processing.
             // Set up to match the pattern
-            // [[path to note\|alias]] - we are only interested in the path and \| that follow it
-            const linkExp = new RegExp(/\[\[(.+?)\|.+?\]\]/g)
+            // [[path to note|alias]] - we capture both path and alias
+            const linkExp = new RegExp(/\[\[(.+?)\|(.+?)\]\]/g)
 
             // Returned links are delivered as the full path to the .md (or other filetype) file, aliased to the note name
             const matchedLinks = [...serializedQuery.matchAll(linkExp)]
             for (const match of matchedLinks) {
                 // Matched array
-                // mathc[0]: Full matched string
-                // match{1]: Matched group 1 = filepath
-                // mathc[2]: alias
-                if (isNameUnique(path.basename(match[1]!))) {
-                    serializedQuery = serializedQuery.replace(match[1] + '|', '')
+                // match[0]: Full matched string
+                // match[1]: Matched group 1 = filepath
+                // match[2]: Matched group 2 = alias
+                const name = path.basename(match[1]!)
+                const alias = match[2]!
+                if (isNameUnique(name)) {
+                    // The name is unique, so ok to replace the path
+                    if (!isValidAlias(name, alias)) {
+                        // Name and alias match. Can replace the lot and leave what is the alias as the link
+                        serializedQuery = serializedQuery.replace(match[1] + '|', '')
+                    } else {
+                        // Name and alias are different. Need to remove the path and keep the alias
+                        if (name.endsWith('.md')) {
+                            // For .md we can keep just the note name without extension
+                            serializedQuery = serializedQuery.replace(
+                                match[1] + '|',
+                                path.parse(name).name + '|'
+                            )
+                        } else {
+                            // File types not .md need to keep full filename
+                            serializedQuery = serializedQuery.replace(match[1] + '|', name + '|')
+                        }
+                    }
                 }
             }
         }

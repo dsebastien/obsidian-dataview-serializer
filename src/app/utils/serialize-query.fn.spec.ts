@@ -100,6 +100,56 @@ describe('serializeQuery', () => {
             expect(result.success).toBe(true)
             expect(result.serializedContent).toBe('- [[folder/note.md|note]]\n')
         })
+
+        it('should preserve custom display name for unique file (link() function with display)', async () => {
+            // Issue #47: link(file.name, display_name) should preserve display text
+            const mockApp = createMockApp([{ name: 'Hello1.md' }])
+            // Dataview outputs: [[Hello1.md|h1]] when using link(file.name, display_name)
+            const mockApi = createMockDataviewApi('- [[folder/Hello1.md|h1]]\n')
+
+            const result = await serializeQuery({
+                query: 'LIST WITHOUT ID link(file.name, display_name) FROM #test',
+                originFile: 'origin.md',
+                dataviewApi: mockApi,
+                app: mockApp
+            })
+
+            expect(result.success).toBe(true)
+            // Should output [[Hello1|h1]] not [[h1]] (which would be a broken link)
+            expect(result.serializedContent).toBe('- [[Hello1|h1]]\n')
+        })
+
+        it('should preserve custom display name for non-unique file', async () => {
+            const mockApp = createMockApp([{ name: 'note.md' }, { name: 'note.md' }])
+            const mockApi = createMockDataviewApi('- [[folder/note.md|custom display]]\n')
+
+            const result = await serializeQuery({
+                query: 'list',
+                originFile: 'origin.md',
+                dataviewApi: mockApi,
+                app: mockApp
+            })
+
+            // Should keep full path and display for non-unique files
+            expect(result.success).toBe(true)
+            expect(result.serializedContent).toBe('- [[folder/note.md|custom display]]\n')
+        })
+
+        it('should handle non-.md files with custom display names', async () => {
+            const mockApp = createMockApp([{ name: 'image.png' }])
+            const mockApi = createMockDataviewApi('- [[assets/image.png|My Image]]\n')
+
+            const result = await serializeQuery({
+                query: 'list',
+                originFile: 'origin.md',
+                dataviewApi: mockApi,
+                app: mockApp
+            })
+
+            expect(result.success).toBe(true)
+            // Non-.md files keep full filename with extension
+            expect(result.serializedContent).toBe('- [[image.png|My Image]]\n')
+        })
     })
 
     describe('linkFormat setting', () => {
@@ -386,6 +436,41 @@ describe('serializeQuery', () => {
 
             expect(result.success).toBe(true)
             expect(result.serializedContent).toBe('')
+        })
+
+        it('should preserve custom display name in task output for unique file (link() function)', async () => {
+            // Issue #47: link() with display should work in TASK queries too
+            const mockApp = createMockApp([{ name: 'project.md' }])
+            const mockApi = createMockDataviewApi(
+                '- [ ] Task from [[folder/project.md|My Project]]\n'
+            )
+
+            const result = await serializeQuery({
+                query: 'task',
+                originFile: 'origin.md',
+                dataviewApi: mockApi,
+                app: mockApp
+            })
+
+            expect(result.success).toBe(true)
+            // Checkbox stripped and custom display name preserved
+            expect(result.serializedContent).toBe('- Task from [[project|My Project]]\n')
+        })
+
+        it('should preserve custom display name in task output for non-unique file', async () => {
+            const mockApp = createMockApp([{ name: 'todo.md' }, { name: 'todo.md' }])
+            const mockApi = createMockDataviewApi('- [x] Done from [[folder/todo.md|Work Todo]]\n')
+
+            const result = await serializeQuery({
+                query: 'task',
+                originFile: 'origin.md',
+                dataviewApi: mockApi,
+                app: mockApp
+            })
+
+            expect(result.success).toBe(true)
+            // Checkbox stripped, full path and display kept for non-unique files
+            expect(result.serializedContent).toBe('- Done from [[folder/todo.md|Work Todo]]\n')
         })
     })
 
