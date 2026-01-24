@@ -634,8 +634,11 @@ export class DataviewSerializerPlugin extends Plugin {
                     // Regex breakdown:
                     // Group 1: The Query Definition line (preserved for normal modes)
                     // Non-capturing Group: The optional existing serialized block (replaced)
+                    // Note: We match the exact query without .* to prevent similar queries from
+                    // matching each other (e.g., "LIST FROM #project" should not match
+                    // "LIST FROM #project and #done")
                     const queryToSerializeRegex = new RegExp(
-                        `^(${escapedIndentation}${escapedFlagOpen}${escapedQuery}.*${escapedQueryClose}\\n)(?:${escapedSerializedStart}${escapedQuery}${escapedQueryClose}\\n[\\s\\S]*?${escapedSerializedEnd}\\n)?`,
+                        `^(${escapedIndentation}${escapedFlagOpen}${escapedQuery}${escapedQueryClose}\\n)(?:${escapedSerializedStart}${escapedQuery}${escapedQueryClose}\\n[\\s\\S]*?${escapedSerializedEnd}\\n)?`,
                         'gm'
                     )
 
