@@ -13,20 +13,22 @@
 .dvs-query-line {
     background-color: var(--background-primary-alt);
     border-left: 3px solid var(--text-accent);
-    @apply rounded-r;
+    @apply rounded-r !pl-2;
 }
 
-/* Line decorations for serialized results boundaries */
-.dvs-results-start-line {
-    background-color: color-mix(in srgb, var(--color-green) 10%, transparent);
-    border-left: 3px solid var(--color-green);
-    @apply rounded-r;
-}
-
+/* Line decorations for serialized results boundaries - faded in source mode */
+.dvs-results-start-line,
 .dvs-results-end-line {
-    background-color: color-mix(in srgb, var(--color-green) 10%, transparent);
-    border-left: 3px solid var(--color-green);
-    @apply rounded-r;
+    @apply opacity-30 !pl-2 text-xs italic;
+    color: var(--text-faint) !important;
+    white-space: nowrap;
+    overflow: hidden;
+
+    /* To improve later
+    display: block;
+    max-width: 20ch;
+    text-overflow: ellipsis;
+    */
 }
 
 /* ============================================
