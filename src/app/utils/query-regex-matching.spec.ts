@@ -16,7 +16,9 @@ import {
 describe('query regex matching', () => {
     /**
      * Build the regex used in plugin.ts to match and replace queries.
-     * This matches the logic from plugin.ts lines 637-642.
+     * This matches the logic from plugin.ts for single-line queries.
+     * Note: \\s* before the closing flag allows trailing whitespace between the
+     * query and --> (users may have extra spaces before the closing comment)
      */
     function buildQueryToSerializeRegex(
         query: string,
@@ -31,7 +33,7 @@ describe('query regex matching', () => {
         const escapedQueryClose = escapeRegExp(QUERY_FLAG_CLOSE)
 
         return new RegExp(
-            `^(${escapedIndentation}${escapedFlagOpen}${escapedQuery}${escapedQueryClose}\\n)(?:${escapedSerializedStart}${escapedQuery}${escapedQueryClose}\\n[\\s\\S]*?${escapedSerializedEnd}\\n)?`,
+            `^(${escapedIndentation}${escapedFlagOpen}${escapedQuery}\\s*${escapedQueryClose}\\n)(?:${escapedSerializedStart}${escapedQuery}${escapedQueryClose}\\n[\\s\\S]*?${escapedSerializedEnd}\\n)?`,
             'gm'
         )
     }
@@ -140,6 +142,98 @@ ${SERIALIZED_QUERY_END}
             const fileContent = `${indentation}${QUERY_FLAG_OPEN}${query}${QUERY_FLAG_CLOSE}\n`
 
             expect(regex.test(fileContent)).toBe(true)
+        })
+    })
+
+    /**
+     * Regression tests for: https://github.com/dsebastien/obsidian-dataview-serializer/issues/53
+     * Issue: Queries with trailing whitespace before --> were not matching
+     */
+    describe('issue #53: trailing whitespace before closing flag', () => {
+        it('should match a query with extra spaces before closing flag', () => {
+            const query = 'list from #class/video-game'
+            const regex = buildQueryToSerializeRegex(query)
+            // Note: extra spaces before -->
+            const fileContent = `${QUERY_FLAG_OPEN}${query}   ${QUERY_FLAG_CLOSE}\n`
+
+            expect(regex.test(fileContent)).toBe(true)
+        })
+
+        it('should match a query with tabs before closing flag', () => {
+            const query = 'LIST FROM #project'
+            const regex = buildQueryToSerializeRegex(query)
+            const fileContent = `${QUERY_FLAG_OPEN}${query}\t\t${QUERY_FLAG_CLOSE}\n`
+
+            expect(regex.test(fileContent)).toBe(true)
+        })
+
+        it('should match a query with mixed whitespace before closing flag', () => {
+            const query = 'TABLE file.name FROM "folder"'
+            const regex = buildQueryToSerializeRegex(query)
+            const fileContent = `${QUERY_FLAG_OPEN}${query}  \t ${QUERY_FLAG_CLOSE}\n`
+
+            expect(regex.test(fileContent)).toBe(true)
+        })
+
+        it('should still match a query with no extra whitespace', () => {
+            const query = 'LIST FROM #project'
+            const regex = buildQueryToSerializeRegex(query)
+            const fileContent = `${QUERY_FLAG_OPEN}${query}${QUERY_FLAG_CLOSE}\n`
+
+            expect(regex.test(fileContent)).toBe(true)
+        })
+
+        it('should correctly replace query with trailing whitespace', () => {
+            const query = 'list from #class/video-game'
+            const regex = buildQueryToSerializeRegex(query)
+            // File with extra spaces before -->
+            const fileContent = `${QUERY_FLAG_OPEN}${query}   ${QUERY_FLAG_CLOSE}\n`
+
+            const replacement = `${QUERY_FLAG_OPEN}${query}${QUERY_FLAG_CLOSE}
+${SERIALIZED_QUERY_START}${query}${QUERY_FLAG_CLOSE}
+- [[Game 1]]
+- [[Game 2]]
+
+${SERIALIZED_QUERY_END}
+`
+
+            const result = fileContent.replace(regex, replacement)
+
+            // Should have replaced and added serialized content
+            expect(result).toContain(SERIALIZED_QUERY_START)
+            expect(result).toContain('[[Game 1]]')
+            expect(result).toContain(SERIALIZED_QUERY_END)
+        })
+
+        it('should match query with trailing whitespace and existing serialized block', () => {
+            const query = 'LIST FROM #project'
+            const regex = buildQueryToSerializeRegex(query)
+            // Query line has trailing spaces, serialized block exists
+            const fileContent = `${QUERY_FLAG_OPEN}${query}   ${QUERY_FLAG_CLOSE}
+${SERIALIZED_QUERY_START}${query}${QUERY_FLAG_CLOSE}
+- [[Note 1]]
+- [[Note 2]]
+${SERIALIZED_QUERY_END}
+`
+
+            const matches = fileContent.match(regex)
+            expect(matches).toHaveLength(1)
+        })
+
+        it('should handle file with multiple queries having different whitespace patterns', () => {
+            const query1 = 'LIST FROM #project'
+            const query2 = 'LIST FROM #done'
+
+            // query1 has extra spaces, query2 has no extra spaces
+            const fileContent = `${QUERY_FLAG_OPEN}${query1}   ${QUERY_FLAG_CLOSE}
+${QUERY_FLAG_OPEN}${query2}${QUERY_FLAG_CLOSE}
+`
+
+            const regex1 = buildQueryToSerializeRegex(query1)
+            const regex2 = buildQueryToSerializeRegex(query2)
+
+            expect(fileContent.match(regex1)).toHaveLength(1)
+            expect(fileContent.match(regex2)).toHaveLength(1)
         })
     })
 

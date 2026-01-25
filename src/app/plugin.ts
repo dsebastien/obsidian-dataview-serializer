@@ -876,8 +876,10 @@ export class DataviewSerializerPlugin extends Plugin {
                         // Note: We match the exact query without .* to prevent similar queries from
                         // matching each other (e.g., "LIST FROM #project" should not match
                         // "LIST FROM #project and #done")
+                        // Note: \\s* before the closing flag allows trailing whitespace between the
+                        // query and --> (users may have extra spaces before the closing comment)
                         queryToSerializeRegex = new RegExp(
-                            `^(${escapedIndentation}${escapedFlagOpen}${escapedQuery}${escapedQueryDefClose}\\n)(?:${escapedSerializedStart}${escapedQuery}${escapedSerializedClose}\\n[\\s\\S]*?${escapedSerializedEnd}\\n)?`,
+                            `^(${escapedIndentation}${escapedFlagOpen}${escapedQuery}\\s*${escapedQueryDefClose}\\n)(?:${escapedSerializedStart}${escapedQuery}${escapedSerializedClose}\\n[\\s\\S]*?${escapedSerializedEnd}\\n)?`,
                             'gm'
                         )
                     }
