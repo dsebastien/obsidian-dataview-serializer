@@ -793,9 +793,14 @@ export class DataviewSerializerPlugin extends Plugin {
                 }
 
                 // Check if query is already serialized (needed for 'once' mode check)
-                // Check for both legacy and alternative syntax result markers
+                // Look for a serialized block that immediately follows THIS query definition
+                // We match ANY query text in the SerializedQuery marker (not the exact query)
+                // because the user may have modified the query since it was last serialized
+                const escapedFlagOpenForCheck = escapeRegExp(flagOpen)
+                const escapedQueryForCheck = escapeRegExp(foundQuery)
+                const escapedFlagCloseForCheck = escapeRegExp(flagClose)
                 const alreadySerializedRegex = new RegExp(
-                    `(?:${escapeRegExp(SERIALIZED_QUERY_START)}|${escapeRegExp(SERIALIZED_QUERY_START_ALT)})${escapeRegExp(foundQuery)}${escapeRegExp(QUERY_FLAG_CLOSE)}`,
+                    `${escapedFlagOpenForCheck}${escapedQueryForCheck}\\s*${escapedFlagCloseForCheck}\\n(?:${escapeRegExp(SERIALIZED_QUERY_START)}|${escapeRegExp(SERIALIZED_QUERY_START_ALT)})[^\\n]*${escapeRegExp(QUERY_FLAG_CLOSE)}`,
                     'm'
                 )
                 const isAlreadySerialized = !!text.match(alreadySerializedRegex)
@@ -839,9 +844,11 @@ export class DataviewSerializerPlugin extends Plugin {
                 // Idempotency check: compare new result with existing serialized content
                 // If they're identical, skip this query to prevent unnecessary file modifications
                 // This prevents infinite update loops for queries that always produce the same output
-                // Check for both legacy and alternative syntax result markers
+                // Look for a serialized block that immediately follows THIS query definition
+                // We match ANY query text in the SerializedQuery marker (not the exact query)
+                // because the user may have modified the query since it was last serialized
                 const existingSerializedRegex = new RegExp(
-                    `(?:${escapeRegExp(SERIALIZED_QUERY_START)}|${escapeRegExp(SERIALIZED_QUERY_START_ALT)})${escapeRegExp(foundQuery)}${escapeRegExp(QUERY_FLAG_CLOSE)}\\n([\\s\\S]*?)(?:${escapeRegExp(SERIALIZED_QUERY_END)}|${escapeRegExp(SERIALIZED_QUERY_END_ALT)})`,
+                    `${escapedFlagOpenForCheck}${escapedQueryForCheck}\\s*${escapedFlagCloseForCheck}\\n(?:${escapeRegExp(SERIALIZED_QUERY_START)}|${escapeRegExp(SERIALIZED_QUERY_START_ALT)})[^\\n]*${escapeRegExp(QUERY_FLAG_CLOSE)}\\n([\\s\\S]*?)(?:${escapeRegExp(SERIALIZED_QUERY_END)}|${escapeRegExp(SERIALIZED_QUERY_END_ALT)})`,
                     'm'
                 )
                 const existingMatch = text.match(existingSerializedRegex)
@@ -891,9 +898,11 @@ export class DataviewSerializerPlugin extends Plugin {
                     if (originalQueryDefinition) {
                         // Multi-line query: match the original multi-line definition
                         // Note: originalQueryDefinition already includes the closing flag
+                        // We match ANY query text in the SerializedQuery marker (using [^\\n]*)
+                        // because the user may have modified the query since it was last serialized
                         const escapedOriginalDefinition = escapeRegExp(originalQueryDefinition)
                         queryToSerializeRegex = new RegExp(
-                            `(${escapedOriginalDefinition}\\n)(?:${escapedSerializedStart}${escapedQuery}${escapedSerializedClose}\\n[\\s\\S]*?${escapedSerializedEnd}\\n)?`,
+                            `(${escapedOriginalDefinition}\\n)(?:${escapedSerializedStart}[^\\n]*${escapedSerializedClose}\\n[\\s\\S]*?${escapedSerializedEnd}\\n)?`,
                             'gm'
                         )
                     } else {
@@ -901,13 +910,15 @@ export class DataviewSerializerPlugin extends Plugin {
                         // Regex breakdown:
                         // Group 1: The Query Definition line (preserved for normal modes)
                         // Non-capturing Group: The optional existing serialized block (replaced)
-                        // Note: We match the exact query without .* to prevent similar queries from
-                        // matching each other (e.g., "LIST FROM #project" should not match
-                        // "LIST FROM #project and #done")
+                        // Note: We match the exact query in the QueryToSerialize line to prevent
+                        // similar queries from matching each other (e.g., "LIST FROM #project"
+                        // should not match "LIST FROM #project and #done")
+                        // Note: We match ANY query text in the SerializedQuery marker (using [^\\n]*)
+                        // because the user may have modified the query since it was last serialized
                         // Note: \\s* before the closing flag allows trailing whitespace between the
                         // query and --> (users may have extra spaces before the closing comment)
                         queryToSerializeRegex = new RegExp(
-                            `^(${escapedIndentation}${escapedFlagOpen}${escapedQuery}\\s*${escapedQueryDefClose}\\n)(?:${escapedSerializedStart}${escapedQuery}${escapedSerializedClose}\\n[\\s\\S]*?${escapedSerializedEnd}\\n)?`,
+                            `^(${escapedIndentation}${escapedFlagOpen}${escapedQuery}\\s*${escapedQueryDefClose}\\n)(?:${escapedSerializedStart}[^\\n]*${escapedSerializedClose}\\n[\\s\\S]*?${escapedSerializedEnd}\\n)?`,
                             'gm'
                         )
                     }

@@ -377,4 +377,214 @@ ${QUERY_FLAG_CLOSE}`
             expect(regex.test(fileContent)).toBe(true)
         })
     })
+
+    /**
+     * Regression tests for: https://github.com/dsebastien/obsidian-dataview-serializer/issues/56
+     * Issue: When a query is modified, the old serialized results were retained and new results
+     * added to the top, causing duplicate serialized blocks.
+     *
+     * Fix: The replacement regex now matches ANY query text in the SerializedQuery marker
+     * (using [^\\n]* instead of the exact query), so when a query is modified, the old
+     * serialized block is found and replaced, not left orphaned.
+     */
+    describe('issue #56: modified queries should replace old serialized content', () => {
+        /**
+         * Build the FIXED regex that matches any query text in the SerializedQuery marker.
+         * This is the new implementation that fixes issue #56.
+         */
+        function buildFixedQueryToSerializeRegex(
+            query: string,
+            indentation = '',
+            flagOpen = QUERY_FLAG_OPEN
+        ): RegExp {
+            const escapedQuery = escapeRegExp(query)
+            const escapedIndentation = escapeRegExp(indentation)
+            const escapedFlagOpen = escapeRegExp(flagOpen)
+            const escapedSerializedStart = escapeRegExp(SERIALIZED_QUERY_START)
+            const escapedSerializedEnd = escapeRegExp(SERIALIZED_QUERY_END)
+            const escapedQueryClose = escapeRegExp(QUERY_FLAG_CLOSE)
+
+            // Key fix: Use [^\\n]* instead of ${escapedQuery} in the SerializedQuery marker
+            // This matches ANY query text, allowing us to find and replace the old serialized
+            // block even when the query has been modified
+            return new RegExp(
+                `^(${escapedIndentation}${escapedFlagOpen}${escapedQuery}\\s*${escapedQueryClose}\\n)(?:${escapedSerializedStart}[^\\n]*${escapedQueryClose}\\n[\\s\\S]*?${escapedSerializedEnd}\\n)?`,
+                'gm'
+            )
+        }
+
+        it('should match modified query with old serialized block (issue #56 scenario)', () => {
+            // User originally had query with "15" and it was serialized
+            const oldQuery = 'table embed(link(thumbnail, "15")) FROM #class/book'
+            // User modified query to "150"
+            const newQuery = 'table embed(link(thumbnail, "150")) FROM #class/book'
+
+            // File content after user modifies the query (but before plugin processes)
+            // Note: QueryToSerialize has new query, but SerializedQuery still has old query
+            const fileContent = `${QUERY_FLAG_OPEN}${newQuery}${QUERY_FLAG_CLOSE}
+${SERIALIZED_QUERY_START}${oldQuery}${QUERY_FLAG_CLOSE}
+| File | Thumbnail |
+| --- | --- |
+| Book1 | ![[thumb1.png]] |
+${SERIALIZED_QUERY_END}
+`
+
+            // The fixed regex should match the ENTIRE block (query definition + old serialized block)
+            const regex = buildFixedQueryToSerializeRegex(newQuery)
+            const matches = fileContent.match(regex)
+
+            // Should match exactly one block
+            expect(matches).toHaveLength(1)
+            // The match should include both the query definition AND the old serialized block
+            expect(matches?.[0]).toContain(QUERY_FLAG_OPEN + newQuery)
+            expect(matches?.[0]).toContain(SERIALIZED_QUERY_START)
+            expect(matches?.[0]).toContain(SERIALIZED_QUERY_END)
+        })
+
+        it('should correctly replace old serialized content when query is modified', () => {
+            const oldQuery = 'table embed(link(thumbnail, "15")) FROM #class/book'
+            const newQuery = 'table embed(link(thumbnail, "150")) FROM #class/book'
+
+            // File content with old serialized block
+            const fileContent = `${QUERY_FLAG_OPEN}${newQuery}${QUERY_FLAG_CLOSE}
+${SERIALIZED_QUERY_START}${oldQuery}${QUERY_FLAG_CLOSE}
+| File | Thumbnail |
+| --- | --- |
+| Book1 | ![[thumb1.png|15]] |
+${SERIALIZED_QUERY_END}
+`
+
+            // New serialized content (with larger thumbnails)
+            const replacement = `${QUERY_FLAG_OPEN}${newQuery}${QUERY_FLAG_CLOSE}
+${SERIALIZED_QUERY_START}${newQuery}${QUERY_FLAG_CLOSE}
+
+| File | Thumbnail |
+| --- | --- |
+| Book1 | ![[thumb1.png|150]] |
+
+${SERIALIZED_QUERY_END}
+`
+
+            const regex = buildFixedQueryToSerializeRegex(newQuery)
+            const result = fileContent.replace(regex, replacement)
+
+            // Should have the new query in both places
+            expect(result).toContain(`${QUERY_FLAG_OPEN}${newQuery}`)
+            expect(result).toContain(`${SERIALIZED_QUERY_START}${newQuery}`)
+            // Should have the new thumbnail size
+            expect(result).toContain('|150]]')
+            // Should NOT have duplicate SerializedQuery blocks
+            expect(result.split(SERIALIZED_QUERY_START).length).toBe(2) // 1 occurrence = 2 parts
+            expect(result.split(SERIALIZED_QUERY_END).length).toBe(2)
+        })
+
+        it('should not leave orphaned serialized blocks', () => {
+            const oldQuery = 'LIST FROM #tag1'
+            const newQuery = 'LIST FROM #tag1 AND #tag2'
+
+            const fileContent = `Some content before
+
+${QUERY_FLAG_OPEN}${newQuery}${QUERY_FLAG_CLOSE}
+${SERIALIZED_QUERY_START}${oldQuery}${QUERY_FLAG_CLOSE}
+- [[Note 1]]
+- [[Note 2]]
+${SERIALIZED_QUERY_END}
+
+Some content after
+`
+
+            const replacement = `${QUERY_FLAG_OPEN}${newQuery}${QUERY_FLAG_CLOSE}
+${SERIALIZED_QUERY_START}${newQuery}${QUERY_FLAG_CLOSE}
+- [[Note 3]]
+
+${SERIALIZED_QUERY_END}
+`
+
+            const regex = buildFixedQueryToSerializeRegex(newQuery)
+            const result = fileContent.replace(regex, replacement)
+
+            // Verify no orphaned blocks
+            expect(result.split(SERIALIZED_QUERY_START).length).toBe(2)
+            expect(result.split(SERIALIZED_QUERY_END).length).toBe(2)
+            // Verify old content is gone
+            expect(result).not.toContain('[[Note 1]]')
+            expect(result).not.toContain('[[Note 2]]')
+            // Verify new content is present
+            expect(result).toContain('[[Note 3]]')
+            // Verify surrounding content preserved
+            expect(result).toContain('Some content before')
+            expect(result).toContain('Some content after')
+        })
+
+        it('should still correctly distinguish between different queries in same file', () => {
+            const query1 = 'LIST FROM #project'
+            const query2 = 'LIST FROM #done'
+
+            // File with two different queries, each with serialized blocks
+            const fileContent = `${QUERY_FLAG_OPEN}${query1}${QUERY_FLAG_CLOSE}
+${SERIALIZED_QUERY_START}${query1}${QUERY_FLAG_CLOSE}
+- [[Project 1]]
+${SERIALIZED_QUERY_END}
+
+${QUERY_FLAG_OPEN}${query2}${QUERY_FLAG_CLOSE}
+${SERIALIZED_QUERY_START}${query2}${QUERY_FLAG_CLOSE}
+- [[Done 1]]
+${SERIALIZED_QUERY_END}
+`
+
+            const regex1 = buildFixedQueryToSerializeRegex(query1)
+            const regex2 = buildFixedQueryToSerializeRegex(query2)
+
+            // Each regex should match only its own query
+            const matches1 = fileContent.match(regex1)
+            const matches2 = fileContent.match(regex2)
+
+            expect(matches1).toHaveLength(1)
+            expect(matches2).toHaveLength(1)
+            expect(matches1?.[0]).toContain('[[Project 1]]')
+            expect(matches1?.[0]).not.toContain('[[Done 1]]')
+            expect(matches2?.[0]).toContain('[[Done 1]]')
+            expect(matches2?.[0]).not.toContain('[[Project 1]]')
+        })
+
+        it('should handle query modification when multiple queries exist', () => {
+            // Query 1 unchanged, Query 2 modified
+            const query1 = 'LIST FROM #unchanged'
+            const oldQuery2 = 'LIST FROM #modified version1'
+            const newQuery2 = 'LIST FROM #modified version2'
+
+            const fileContent = `${QUERY_FLAG_OPEN}${query1}${QUERY_FLAG_CLOSE}
+${SERIALIZED_QUERY_START}${query1}${QUERY_FLAG_CLOSE}
+- [[Unchanged 1]]
+${SERIALIZED_QUERY_END}
+
+${QUERY_FLAG_OPEN}${newQuery2}${QUERY_FLAG_CLOSE}
+${SERIALIZED_QUERY_START}${oldQuery2}${QUERY_FLAG_CLOSE}
+- [[Modified Old]]
+${SERIALIZED_QUERY_END}
+`
+
+            // Only replace the modified query
+            const replacement2 = `${QUERY_FLAG_OPEN}${newQuery2}${QUERY_FLAG_CLOSE}
+${SERIALIZED_QUERY_START}${newQuery2}${QUERY_FLAG_CLOSE}
+- [[Modified New]]
+${SERIALIZED_QUERY_END}
+`
+
+            const regex2 = buildFixedQueryToSerializeRegex(newQuery2)
+            const result = fileContent.replace(regex2, replacement2)
+
+            // Query 1 should be unchanged
+            expect(result).toContain(`${QUERY_FLAG_OPEN}${query1}`)
+            expect(result).toContain(`${SERIALIZED_QUERY_START}${query1}`)
+            expect(result).toContain('[[Unchanged 1]]')
+            // Query 2 should be updated
+            expect(result).toContain(`${QUERY_FLAG_OPEN}${newQuery2}`)
+            expect(result).toContain(`${SERIALIZED_QUERY_START}${newQuery2}`)
+            expect(result).toContain('[[Modified New]]')
+            expect(result).not.toContain('[[Modified Old]]')
+            // Should have exactly 2 serialized blocks
+            expect(result.split(SERIALIZED_QUERY_START).length).toBe(3) // 2 occurrences = 3 parts
+        })
+    })
 })
