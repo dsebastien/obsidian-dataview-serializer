@@ -1,3 +1,12 @@
+## [2.4.2](https://github.com/dsebastien/obsidian-dataview-serializer/compare/2.4.1...2.4.2) (2026-01-25)
+
+### Features
+
+* **all:** added support for DataviewJS queries ([dafa77c](https://github.com/dsebastien/obsidian-dataview-serializer/commit/dafa77c7556b668cb6c6f312994825213356497a))
+
+### Bug Fixes
+
+* **all:** removed node path module usage to fix iOS issue ([b9f23de](https://github.com/dsebastien/obsidian-dataview-serializer/commit/b9f23de83245dc1509cc025c1b540c4db73870d0))
 ## [2.4.1](https://github.com/dsebastien/obsidian-dataview-serializer/compare/2.4.0...2.4.1) (2026-01-25)
 
 ### Bug Fixes
