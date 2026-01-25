@@ -36,6 +36,12 @@ export interface PluginSettings {
      * - 'absolute': Always use full path for consistency across devices
      */
     linkFormat: LinkFormat
+    /**
+     * Enable DataviewJS query serialization.
+     * When enabled, JavaScript-based Dataview queries can be serialized to static markdown.
+     * Default: true
+     */
+    enableDataviewJS: boolean
 }
 
 export const DEFAULT_SETTINGS: PluginSettings = {
@@ -47,5 +53,6 @@ export const DEFAULT_SETTINGS: PluginSettings = {
     showErrorNotifications: true,
     debugLogging: false,
     addTrailingNewline: false,
-    linkFormat: 'shortest'
+    linkFormat: 'shortest',
+    enableDataviewJS: true
 }

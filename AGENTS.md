@@ -49,6 +49,17 @@ Read the Business Rules document at the start of each session to understand the 
 
 **MUST UPDATE** documentation when making changes. Keep it terse, accurate, no fluff.
 
+### User-Facing Documentation
+
+User-facing documentation lives in `./docs/`:
+
+- `usage.md` - How to use the plugin (query syntax, examples, features)
+- `configuration.md` - Plugin settings and configuration options
+- `tips.md` - Tips and best practices
+- `release-notes.md` - Changelog for users
+
+**IMPORTANT**: When adding, changing, or removing features, always update the relevant files in `./docs/`. This documentation is published and visible to end users.
+
 ### Core Coding Rules
 
 **MUST READ** TypeScript type definitions you can find in the Obsidian dependency now.
@@ -525,6 +536,60 @@ The plugin supports two equivalent syntax variants. Both work simultaneously.
 | `<!-- dataview-serializer-iq-manual: =<expr> -->result<!-- /dataview-serializer-iq -->`         | Manual-only inline          |
 | `<!-- dataview-serializer-iq-once: =<expr> -->result<!-- /dataview-serializer-iq -->`           | Write-once inline           |
 | `<!-- dataview-serializer-iq-once-and-eject: =<expr> -->result<!-- /dataview-serializer-iq -->` | Write-once and eject inline |
+
+### DataviewJS Queries (Legacy Syntax)
+
+| Marker                                                  | Purpose              |
+| ------------------------------------------------------- | -------------------- |
+| `<!-- DataviewJSToSerialize: <js-code> -->`             | Auto-update JS query |
+| `<!-- DataviewJSToSerializeManual: <js-code> -->`       | Manual-only JS query |
+| `<!-- DataviewJSToSerializeOnce: <js-code> -->`         | Write-once JS query  |
+| `<!-- DataviewJSToSerializeOnceAndEject: <js-code> -->` | Write-once and eject |
+| `<!-- SerializedDataviewJS -->`                         | Result start marker  |
+| `<!-- SerializedDataviewJS END -->`                     | Result end marker    |
+
+### DataviewJS Queries (Alternative Syntax)
+
+| Marker                                                      | Purpose              |
+| ----------------------------------------------------------- | -------------------- |
+| `<!-- dataview-serializer-js: <js-code> -->`                | Auto-update JS query |
+| `<!-- dataview-serializer-js-manual: <js-code> -->`         | Manual-only JS query |
+| `<!-- dataview-serializer-js-once: <js-code> -->`           | Write-once JS query  |
+| `<!-- dataview-serializer-js-once-and-eject: <js-code> -->` | Write-once and eject |
+| `<!-- dataview-serializer-js-result -->`                    | Result start marker  |
+| `<!-- dataview-serializer-js-result-end -->`                | Result end marker    |
+
+### DataviewJS Supported Methods
+
+**Rendering methods (captured and converted to markdown):**
+
+- `dv.list(values)` → Bullet list
+- `dv.table(headers, rows)` → Markdown table
+- `dv.taskList(tasks)` → Task list (checkboxes stripped)
+- `dv.paragraph(text)` → Plain text block
+- `dv.header(level, text)` → Markdown header
+- `dv.span(text)` → Inline text
+- `dv.el(tag, content, attrs)` → HTML element to markdown (p, div, h1-h6, b, strong, i, em, code, pre, a, img, br, hr, blockquote, li)
+- `dv.execute(query)` → Executes query via `queryMarkdown()` and captures output
+
+**Passthrough methods (delegated to real Dataview API):**
+
+- `dv.pages()`, `dv.pagePaths()`, `dv.page()`, `dv.current()`
+- `dv.array()`, `dv.isArray()`, `dv.date()`, `dv.duration()`
+- `dv.fileLink()`, `dv.sectionLink()`, `dv.blockLink()`
+- `dv.compare()`, `dv.equal()`, `dv.clone()`, `dv.parse()`
+- `dv.io.load()`, `dv.io.csv()`, `dv.io.normalize()` (async supported)
+- `dv.evaluate()`, `dv.tryEvaluate()`
+- `dv.query()`, `dv.tryQuery()`, `dv.queryMarkdown()`, `dv.tryQueryMarkdown()`
+- `dv.markdownTable()`, `dv.markdownList()`, `dv.markdownTaskList()`
+- `dv.luxon`, `dv.func`, `dv.value`, `dv.widget`
+
+**Not supported:**
+
+- `dv.view()` (external templates)
+- `dv.executeJs()` (nested execution)
+
+**Note:** For detailed usage examples and user documentation, see `./docs/usage.md`.
 
 ### Supported Query Types
 

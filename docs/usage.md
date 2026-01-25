@@ -256,6 +256,218 @@ When enabled in settings, a refresh button (🔄) appears next to each serialize
 
 This is useful when you want to quickly update a single query without waiting for automatic updates or running a command. It also provides a way to manually refresh `QueryToSerializeManual` and `QueryToSerializeOnce` queries.
 
+## DataviewJS Queries
+
+In addition to standard Dataview DQL queries, this plugin supports **DataviewJS queries**. DataviewJS allows you to write JavaScript code that uses the Dataview API to create complex, dynamic outputs.
+
+### DataviewJS Query Syntax
+
+DataviewJS queries use HTML comment markers similar to block queries, but with a `JS` suffix:
+
+| Syntax | Behavior |
+|--------|----------|
+| `<!-- DataviewJSToSerialize: <js-code> -->` | Automatic updates |
+| `<!-- DataviewJSToSerializeManual: <js-code> -->` | Manual-only updates |
+| `<!-- DataviewJSToSerializeOnce: <js-code> -->` | Write-once (never auto-updates) |
+| `<!-- DataviewJSToSerializeOnceAndEject: <js-code> -->` | Write-once and eject |
+
+#### Alternative Syntax
+
+| Original | Alternative |
+|----------|-------------|
+| `<!-- DataviewJSToSerialize: <js-code> -->` | `<!-- dataview-serializer-js: <js-code> -->` |
+| `<!-- DataviewJSToSerializeManual: <js-code> -->` | `<!-- dataview-serializer-js-manual: <js-code> -->` |
+| `<!-- DataviewJSToSerializeOnce: <js-code> -->` | `<!-- dataview-serializer-js-once: <js-code> -->` |
+| `<!-- DataviewJSToSerializeOnceAndEject: <js-code> -->` | `<!-- dataview-serializer-js-once-and-eject: <js-code> -->` |
+
+### Basic Examples
+
+**Simple list:**
+```markdown
+<!-- dataview-serializer-js:
+dv.list(dv.pages("#project").file.link)
+-->
+<!-- dataview-serializer-js-result -->
+- [[Project A]]
+- [[Project B]]
+<!-- dataview-serializer-js-result-end -->
+```
+
+**Table with computed columns:**
+```markdown
+<!-- dataview-serializer-js:
+dv.table(
+  ["Name", "Status", "Days Old"],
+  dv.pages("#task")
+    .map(p => [
+      p.file.link,
+      p.status,
+      Math.floor((Date.now() - p.file.ctime) / (1000 * 60 * 60 * 24))
+    ])
+)
+-->
+```
+
+**Multi-line JavaScript (recommended for complex queries):**
+```markdown
+<!-- dataview-serializer-js:
+const projects = dv.pages("#project")
+  .where(p => p.status !== "archived")
+  .sort(p => p.priority, "desc");
+
+dv.header(2, "Active Projects");
+dv.table(
+  ["Project", "Priority", "Due Date"],
+  projects.map(p => [p.file.link, p.priority, p.due])
+);
+-->
+```
+
+### Supported dv Methods
+
+**Rendering methods** (output is captured and converted to markdown):
+
+| Method | Output |
+|--------|--------|
+| `dv.list(values)` | Bullet list |
+| `dv.table(headers, rows)` | Markdown table |
+| `dv.taskList(tasks)` | Task list (checkboxes stripped) |
+| `dv.paragraph(text)` | Plain text block |
+| `dv.header(level, text)` | Markdown header (# to ######) |
+| `dv.span(text)` | Inline text |
+| `dv.el(tag, content, attrs)` | HTML element to markdown |
+| `dv.execute(query)` | Executes DQL query and captures output |
+
+**Query and data methods** (delegated to real Dataview API):
+
+- `dv.pages(source)`, `dv.pagePaths(source)`, `dv.page(path)`, `dv.current()`
+- `dv.query(source)`, `dv.queryMarkdown(source)`, `dv.tryQuery()`, `dv.tryQueryMarkdown()`
+- `dv.evaluate(expr)`, `dv.tryEvaluate(expr)`
+
+**Utility methods**:
+
+- `dv.array(value)`, `dv.isArray(value)`
+- `dv.date(text)`, `dv.duration(text)`
+- `dv.fileLink(path, embed?, display?)`, `dv.sectionLink()`, `dv.blockLink()`
+- `dv.compare(a, b)`, `dv.equal(a, b)`, `dv.clone(value)`, `dv.parse(value)`
+- `dv.markdownList()`, `dv.markdownTable()`, `dv.markdownTaskList()`
+
+**Async I/O methods**:
+
+- `dv.io.load(path)` - Load file contents as string
+- `dv.io.csv(path)` - Load and parse CSV file
+- `dv.io.normalize(path)` - Normalize relative path to absolute
+
+**Properties**:
+
+- `dv.luxon` - Luxon DateTime library
+- `dv.func`, `dv.value`, `dv.widget` - Dataview internals
+
+### Using dv.fileLink()
+
+`dv.fileLink()` returns a **Link object**, not a string. To output a link, you must pass it to a rendering method:
+
+```markdown
+<!-- dataview-serializer-js:
+// This does nothing (just creates a Link object):
+dv.fileLink("2021-08-08")
+
+// This outputs the link:
+dv.paragraph(dv.fileLink("2021-08-08"))
+// → [[2021-08-08]]
+
+// With display text:
+dv.span(dv.fileLink("note", false, "My Note"))
+// → [[note|My Note]]
+
+// As an embed:
+dv.paragraph(dv.fileLink("image.png", true))
+// → ![[image.png]]
+
+// In a list:
+dv.list([
+  dv.fileLink("note1"),
+  dv.fileLink("note2")
+])
+// → - [[note1]]
+// → - [[note2]]
+-->
+```
+
+### Using dv.el() for Custom Formatting
+
+`dv.el()` lets you create HTML elements that are converted to markdown:
+
+```markdown
+<!-- dataview-serializer-js:
+dv.el("h2", "Section Title")        // → ## Section Title
+dv.el("p", "A paragraph of text")   // → A paragraph of text
+dv.el("strong", "Bold text")        // → **Bold text**
+dv.el("em", "Italic text")          // → *Italic text*
+dv.el("code", "const x = 1")        // → `const x = 1`
+dv.el("a", "Click here", { href: "https://example.com" })  // → [Click here](https://example.com)
+dv.el("hr")                         // → ---
+-->
+```
+
+Supported tags: `p`, `div`, `span`, `h1`-`h6`, `b`, `strong`, `i`, `em`, `code`, `pre`, `a`, `img`, `br`, `hr`, `blockquote`, `li`
+
+### Using dv.execute() for Embedded DQL Queries
+
+`dv.execute()` runs a standard DQL query and captures the output:
+
+```markdown
+<!-- dataview-serializer-js:
+dv.header(2, "Recent Notes");
+await dv.execute("LIST FROM #note SORT file.ctime DESC LIMIT 5");
+
+dv.header(2, "Project Tasks");
+await dv.execute("TASK FROM #project WHERE !completed");
+-->
+```
+
+### Async/Await Support
+
+DataviewJS queries support `async/await` for asynchronous operations:
+
+```markdown
+<!-- dataview-serializer-js:
+// Load external data
+const content = await dv.io.load("data/config.json");
+const config = JSON.parse(content);
+
+dv.paragraph(`Current version: ${config.version}`);
+
+// Load CSV data
+const data = await dv.io.csv("data/items.csv");
+dv.table(
+  ["Name", "Value"],
+  data.map(row => [row.name, row.value])
+);
+-->
+```
+
+### Not Supported
+
+The following methods are **not supported** in serialized DataviewJS:
+
+| Method | Reason |
+|--------|--------|
+| `dv.view(path)` | Requires external template files |
+| `dv.executeJs(code)` | Nested JavaScript execution not allowed |
+
+### Known Limitations
+
+1. **`--` operator forbidden**: HTML comments cannot contain `--`. Use `i -= 1` instead of `i--`, or avoid `--` in string literals.
+
+2. **5-second timeout**: JavaScript execution times out after 5 seconds to prevent infinite loops.
+
+3. **No DOM access**: The `dv` object is a proxy that captures output. Direct DOM manipulation is not available.
+
+### Enabling/Disabling DataviewJS
+
+DataviewJS support can be toggled in Settings → Dataview Serializer → "Enable DataviewJS queries". When disabled, DataviewJS queries will be ignored during serialization.
+
 ### Idempotency Protection
 
 The plugin includes built-in protection against unnecessary file modifications. Before updating a serialized query, the plugin compares the new result with the existing serialized content. If they are identical, the file is not modified.

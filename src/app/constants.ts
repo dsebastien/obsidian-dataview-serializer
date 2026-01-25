@@ -65,3 +65,27 @@ export const QUERY_TYPE_TABLE = 'table'
 export const QUERY_TYPE_TASK = 'task'
 
 export const SUPPORTED_QUERY_TYPES = [QUERY_TYPE_LIST, QUERY_TYPE_TABLE, QUERY_TYPE_TASK]
+
+// DataviewJS query markers - Legacy syntax
+export const DATAVIEWJS_FLAG_OPEN = `<!-- DataviewJSToSerialize:`
+export const DATAVIEWJS_FLAG_MANUAL_OPEN = `<!-- DataviewJSToSerializeManual:`
+export const DATAVIEWJS_FLAG_ONCE_OPEN = `<!-- DataviewJSToSerializeOnce:`
+export const DATAVIEWJS_FLAG_ONCE_AND_EJECT_OPEN = `<!-- DataviewJSToSerializeOnceAndEject:`
+// Closing flag is the same as regular queries: ` -->`
+
+// DataviewJS query markers - Alternative syntax
+export const DATAVIEWJS_FLAG_OPEN_ALT = `<!-- dataview-serializer-js:`
+export const DATAVIEWJS_FLAG_MANUAL_OPEN_ALT = `<!-- dataview-serializer-js-manual:`
+export const DATAVIEWJS_FLAG_ONCE_OPEN_ALT = `<!-- dataview-serializer-js-once:`
+export const DATAVIEWJS_FLAG_ONCE_AND_EJECT_OPEN_ALT = `<!-- dataview-serializer-js-once-and-eject:`
+
+// DataviewJS result markers - Legacy syntax
+export const SERIALIZED_DATAVIEWJS_START = `<!-- SerializedDataviewJS`
+export const SERIALIZED_DATAVIEWJS_END = '<!-- SerializedDataviewJS END -->'
+
+// DataviewJS result markers - Alternative syntax
+export const SERIALIZED_DATAVIEWJS_START_ALT = `<!-- dataview-serializer-js-result`
+export const SERIALIZED_DATAVIEWJS_END_ALT = '<!-- dataview-serializer-js-result-end -->'
+
+// DataviewJS execution timeout (5 seconds)
+export const DATAVIEWJS_TIMEOUT_MS = 5000

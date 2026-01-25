@@ -27,7 +27,19 @@ import {
     INLINE_QUERY_FLAG_ONCE_AND_EJECT_OPEN_ALT,
     INLINE_QUERY_FLAG_CLOSE,
     INLINE_QUERY_END,
-    INLINE_QUERY_END_ALT
+    INLINE_QUERY_END_ALT,
+    DATAVIEWJS_FLAG_OPEN,
+    DATAVIEWJS_FLAG_MANUAL_OPEN,
+    DATAVIEWJS_FLAG_ONCE_OPEN,
+    DATAVIEWJS_FLAG_ONCE_AND_EJECT_OPEN,
+    DATAVIEWJS_FLAG_OPEN_ALT,
+    DATAVIEWJS_FLAG_MANUAL_OPEN_ALT,
+    DATAVIEWJS_FLAG_ONCE_OPEN_ALT,
+    DATAVIEWJS_FLAG_ONCE_AND_EJECT_OPEN_ALT,
+    SERIALIZED_DATAVIEWJS_START,
+    SERIALIZED_DATAVIEWJS_END,
+    SERIALIZED_DATAVIEWJS_START_ALT,
+    SERIALIZED_DATAVIEWJS_END_ALT
 } from './constants'
 import type { PluginSettings } from './types/plugin-settings.intf'
 
@@ -182,6 +194,73 @@ function detectInlineQueriesInLine(text: string): InlineQueryFlagInfo[] {
         seen.add(r.openIdx)
         return true
     })
+}
+
+/**
+ * Detect which DataviewJS flag is present in a line and return the flag info
+ */
+function detectDataviewJSFlagInLine(text: string): QueryFlagInfo | null {
+    // Check in order of specificity (longer prefixes first)
+    // Alternative syntax first (longer prefixes)
+    const ejectAltIdx = text.indexOf(DATAVIEWJS_FLAG_ONCE_AND_EJECT_OPEN_ALT)
+    if (ejectAltIdx !== -1) {
+        return {
+            flagOpen: DATAVIEWJS_FLAG_ONCE_AND_EJECT_OPEN_ALT,
+            openIdx: ejectAltIdx,
+            queryType: 'eject'
+        }
+    }
+    const manualAltIdx = text.indexOf(DATAVIEWJS_FLAG_MANUAL_OPEN_ALT)
+    if (manualAltIdx !== -1) {
+        return {
+            flagOpen: DATAVIEWJS_FLAG_MANUAL_OPEN_ALT,
+            openIdx: manualAltIdx,
+            queryType: 'manual'
+        }
+    }
+    const onceAltIdx = text.indexOf(DATAVIEWJS_FLAG_ONCE_OPEN_ALT)
+    if (onceAltIdx !== -1) {
+        return {
+            flagOpen: DATAVIEWJS_FLAG_ONCE_OPEN_ALT,
+            openIdx: onceAltIdx,
+            queryType: 'once'
+        }
+    }
+    const autoAltIdx = text.indexOf(DATAVIEWJS_FLAG_OPEN_ALT)
+    if (autoAltIdx !== -1) {
+        return {
+            flagOpen: DATAVIEWJS_FLAG_OPEN_ALT,
+            openIdx: autoAltIdx,
+            queryType: 'auto'
+        }
+    }
+
+    // Legacy syntax
+    const ejectIdx = text.indexOf(DATAVIEWJS_FLAG_ONCE_AND_EJECT_OPEN)
+    if (ejectIdx !== -1) {
+        return {
+            flagOpen: DATAVIEWJS_FLAG_ONCE_AND_EJECT_OPEN,
+            openIdx: ejectIdx,
+            queryType: 'eject'
+        }
+    }
+    const manualIdx = text.indexOf(DATAVIEWJS_FLAG_MANUAL_OPEN)
+    if (manualIdx !== -1) {
+        return {
+            flagOpen: DATAVIEWJS_FLAG_MANUAL_OPEN,
+            openIdx: manualIdx,
+            queryType: 'manual'
+        }
+    }
+    const onceIdx = text.indexOf(DATAVIEWJS_FLAG_ONCE_OPEN)
+    if (onceIdx !== -1) {
+        return { flagOpen: DATAVIEWJS_FLAG_ONCE_OPEN, openIdx: onceIdx, queryType: 'once' }
+    }
+    const autoIdx = text.indexOf(DATAVIEWJS_FLAG_OPEN)
+    if (autoIdx !== -1) {
+        return { flagOpen: DATAVIEWJS_FLAG_OPEN, openIdx: autoIdx, queryType: 'auto' }
+    }
+    return null
 }
 
 interface FileProcessingResult {
@@ -436,6 +515,7 @@ export const refreshButtonExtension = (
                     queryType: QueryType
                     queryLines: string[]
                     lineNumbers: number[]
+                    isDataviewJS?: boolean
                 }
 
                 let multiLineState: MultiLineDecorationState = {
@@ -444,7 +524,19 @@ export const refreshButtonExtension = (
                     flagOpen: '',
                     queryType: 'auto',
                     queryLines: [],
-                    lineNumbers: []
+                    lineNumbers: [],
+                    isDataviewJS: false
+                }
+
+                // Separate state for DataviewJS multi-line queries
+                let dvjsMultiLineState: MultiLineDecorationState = {
+                    isCapturing: false,
+                    startLineNumber: -1,
+                    flagOpen: '',
+                    queryType: 'auto',
+                    queryLines: [],
+                    lineNumbers: [],
+                    isDataviewJS: true
                 }
 
                 for (const { from, to } of view.visibleRanges) {
@@ -592,10 +684,138 @@ export const refreshButtonExtension = (
                             }
                         }
 
+                        // Check for DataviewJS multi-line state
+                        if (dvjsMultiLineState.isCapturing) {
+                            // We're in the middle of a DataviewJS multi-line query
+                            dvjsMultiLineState.queryLines.push(text)
+                            dvjsMultiLineState.lineNumbers.push(i)
+
+                            // Add line decoration for this line
+                            decorations.push({
+                                from: line.from,
+                                to: line.from,
+                                decoration: queryLineDecoration
+                            })
+
+                            // Check if this line contains the closing flag
+                            const closeIdx = text.indexOf(QUERY_FLAG_CLOSE)
+                            const closeIdxTrimmed = text.indexOf(QUERY_FLAG_CLOSE.trim())
+                            const actualCloseIdx = closeIdx !== -1 ? closeIdx : closeIdxTrimmed
+                            const actualCloseFlag =
+                                closeIdx !== -1 ? QUERY_FLAG_CLOSE : QUERY_FLAG_CLOSE.trim()
+
+                            if (actualCloseIdx !== -1) {
+                                // DataviewJS multi-line query complete - extract the JS code
+                                const fullText = dvjsMultiLineState.queryLines.join('\n')
+                                const { flagOpen } = dvjsMultiLineState
+
+                                // Find opening flag position
+                                let openFlagIdx = fullText.indexOf(flagOpen)
+                                let flagLength = flagOpen.length
+                                if (openFlagIdx === -1) {
+                                    openFlagIdx = fullText.indexOf(flagOpen.trim())
+                                    flagLength = flagOpen.trim().length
+                                }
+
+                                // Find closing flag position in full text
+                                let closeFlagIdx = fullText.indexOf(QUERY_FLAG_CLOSE)
+                                if (closeFlagIdx === -1) {
+                                    closeFlagIdx = fullText.indexOf(QUERY_FLAG_CLOSE.trim())
+                                }
+
+                                if (openFlagIdx !== -1 && closeFlagIdx !== -1) {
+                                    // Extract the JS code (keep it as-is for identification)
+                                    const jsCode = fullText
+                                        .substring(openFlagIdx + flagLength, closeFlagIdx)
+                                        .trim()
+
+                                    // Add widget at the end of the closing line
+                                    const endPos =
+                                        line.from + actualCloseIdx + actualCloseFlag.length
+
+                                    decorations.push({
+                                        from: endPos,
+                                        to: endPos,
+                                        decoration: Decoration.widget({
+                                            widget: new QueryWidgetGroup(
+                                                jsCode,
+                                                dvjsMultiLineState.queryType
+                                            ),
+                                            side: 1
+                                        })
+                                    })
+                                }
+
+                                // Reset state
+                                dvjsMultiLineState = {
+                                    isCapturing: false,
+                                    startLineNumber: -1,
+                                    flagOpen: '',
+                                    queryType: 'auto',
+                                    queryLines: [],
+                                    lineNumbers: [],
+                                    isDataviewJS: true
+                                }
+                            }
+                        } else if (!multiLineState.isCapturing && settings.enableDataviewJS) {
+                            // Check for DataviewJS query definition
+                            const dvjsFlagInfo = detectDataviewJSFlagInLine(text)
+                            if (dvjsFlagInfo) {
+                                const { flagOpen, openIdx, queryType } = dvjsFlagInfo
+
+                                // Check if closing flag is on the same line (rare for DataviewJS)
+                                const closeIdx = text.indexOf(QUERY_FLAG_CLOSE, openIdx)
+                                const closeIdxTrimmed = text.indexOf(
+                                    QUERY_FLAG_CLOSE.trim(),
+                                    openIdx
+                                )
+                                const actualCloseIdx = closeIdx !== -1 ? closeIdx : closeIdxTrimmed
+                                const actualCloseFlag =
+                                    closeIdx !== -1 ? QUERY_FLAG_CLOSE : QUERY_FLAG_CLOSE.trim()
+
+                                // Add line decoration
+                                decorations.push({
+                                    from: line.from,
+                                    to: line.from,
+                                    decoration: queryLineDecoration
+                                })
+
+                                if (actualCloseIdx !== -1) {
+                                    // Single-line DataviewJS query (rare but possible)
+                                    const jsCode = text
+                                        .substring(openIdx + flagOpen.length, actualCloseIdx)
+                                        .trim()
+                                    const endPos =
+                                        line.from + actualCloseIdx + actualCloseFlag.length
+
+                                    decorations.push({
+                                        from: endPos,
+                                        to: endPos,
+                                        decoration: Decoration.widget({
+                                            widget: new QueryWidgetGroup(jsCode, queryType),
+                                            side: 1
+                                        })
+                                    })
+                                } else {
+                                    // Start capturing DataviewJS multi-line query
+                                    dvjsMultiLineState = {
+                                        isCapturing: true,
+                                        startLineNumber: i,
+                                        flagOpen,
+                                        queryType,
+                                        queryLines: [text],
+                                        lineNumbers: [i],
+                                        isDataviewJS: true
+                                    }
+                                }
+                            }
+                        }
+
                         // Check for serialized query start line (only if not capturing multi-line)
                         // Check for both legacy and alternative syntax
                         if (
                             !multiLineState.isCapturing &&
+                            !dvjsMultiLineState.isCapturing &&
                             (text.includes(SERIALIZED_QUERY_START) ||
                                 text.includes(SERIALIZED_QUERY_START_ALT))
                         ) {
@@ -609,8 +829,37 @@ export const refreshButtonExtension = (
                         // Check for serialized query end line
                         // Check for both legacy and alternative syntax
                         if (
-                            text.includes(SERIALIZED_QUERY_END) ||
-                            text.includes(SERIALIZED_QUERY_END_ALT)
+                            !multiLineState.isCapturing &&
+                            !dvjsMultiLineState.isCapturing &&
+                            (text.includes(SERIALIZED_QUERY_END) ||
+                                text.includes(SERIALIZED_QUERY_END_ALT))
+                        ) {
+                            decorations.push({
+                                from: line.from,
+                                to: line.from,
+                                decoration: resultsEndDecoration
+                            })
+                        }
+
+                        // Check for DataviewJS serialized result markers
+                        if (
+                            !multiLineState.isCapturing &&
+                            !dvjsMultiLineState.isCapturing &&
+                            (text.includes(SERIALIZED_DATAVIEWJS_START) ||
+                                text.includes(SERIALIZED_DATAVIEWJS_START_ALT))
+                        ) {
+                            decorations.push({
+                                from: line.from,
+                                to: line.from,
+                                decoration: resultsStartDecoration
+                            })
+                        }
+
+                        if (
+                            !multiLineState.isCapturing &&
+                            !dvjsMultiLineState.isCapturing &&
+                            (text.includes(SERIALIZED_DATAVIEWJS_END) ||
+                                text.includes(SERIALIZED_DATAVIEWJS_END_ALT))
                         ) {
                             decorations.push({
                                 from: line.from,

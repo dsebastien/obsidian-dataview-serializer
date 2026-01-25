@@ -12,6 +12,8 @@ In the settings of the plugin, you can configure:
 
 - **Debug logging**: When enabled, verbose debug messages will be logged to the browser console. This is useful for troubleshooting issues with the plugin. When disabled (default), only warnings and errors are logged, keeping the console clean.
 
+- **Enable DataviewJS queries**: When enabled (default), the plugin will process DataviewJS queries in addition to standard Dataview DQL queries. DataviewJS queries allow you to write JavaScript code using the Dataview API. When disabled, DataviewJS queries will be ignored during serialization.
+
 ## Output Settings
 
 - **Add trailing newline**: When enabled, an empty line will be added between the serialized content and the END marker. This is useful for static site generators like Jekyll that require blank lines after tables or lists.

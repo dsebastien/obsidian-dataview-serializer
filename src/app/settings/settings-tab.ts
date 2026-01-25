@@ -23,6 +23,7 @@ export class SettingsTab extends PluginSettingTab {
 
         this.renderAutomaticUpdatesToggle()
         this.renderRefreshButtonToggle()
+        this.renderDataviewJSToggle()
         this.renderErrorNotificationsToggle()
         this.renderTrailingNewlineToggle()
         this.renderLinkFormatDropdown()
@@ -75,6 +76,25 @@ export class SettingsTab extends PluginSettingTab {
                         this.plugin.settings,
                         (draft: Draft<PluginSettings>) => {
                             draft.showRefreshButton = value
+                        }
+                    )
+                    await this.plugin.saveSettings()
+                })
+            })
+    }
+
+    renderDataviewJSToggle(): void {
+        new Setting(this.containerEl)
+            .setName('Enable DataviewJS serialization')
+            .setDesc(
+                'When enabled, JavaScript-based Dataview queries can be serialized to static markdown. Note: JavaScript code cannot contain "--" due to HTML comment limitations.'
+            )
+            .addToggle((toggle) => {
+                toggle.setValue(this.plugin.settings.enableDataviewJS).onChange(async (value) => {
+                    this.plugin.settings = produce(
+                        this.plugin.settings,
+                        (draft: Draft<PluginSettings>) => {
+                            draft.enableDataviewJS = value
                         }
                     )
                     await this.plugin.saveSettings()

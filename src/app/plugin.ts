@@ -17,7 +17,11 @@ import {
     SERIALIZED_QUERY_END,
     SERIALIZED_QUERY_START,
     SERIALIZED_QUERY_START_ALT,
-    SERIALIZED_QUERY_END_ALT
+    SERIALIZED_QUERY_END_ALT,
+    SERIALIZED_DATAVIEWJS_START,
+    SERIALIZED_DATAVIEWJS_END,
+    SERIALIZED_DATAVIEWJS_START_ALT,
+    SERIALIZED_DATAVIEWJS_END_ALT
 } from './constants'
 import type { DataviewApi } from 'obsidian-dataview/lib/api/plugin-api'
 import type { QuerySerializationResult } from './types/query-result.intf'
@@ -49,6 +53,11 @@ import {
 } from './utils/find-inline-queries.fn'
 import { serializeInlineQuery, isInsideTable } from './utils/serialize-inline-query.fn'
 import { processInBatches } from './utils/batch-processor'
+import {
+    findDataviewJSQueries,
+    type DataviewJSQueryWithContext
+} from './utils/find-dataviewjs-queries.fn'
+import { serializeDataviewJSQuery } from './utils/serialize-dataviewjs-query.fn'
 
 /**
  * Maximum number of error notifications to show during batch operations
@@ -605,6 +614,17 @@ export class DataviewSerializerPlugin extends Plugin {
                 log('The loaded settings miss the [linkFormat] property', 'debug')
                 needToSaveSettings = true
             }
+
+            if (
+                loadedSettings.enableDataviewJS !== undefined &&
+                loadedSettings.enableDataviewJS !== null &&
+                typeof loadedSettings.enableDataviewJS === 'boolean'
+            ) {
+                draft.enableDataviewJS = loadedSettings.enableDataviewJS
+            } else {
+                log('The loaded settings miss the [enableDataviewJS] property', 'debug')
+                needToSaveSettings = true
+            }
         })
 
         // Initialize debug mode from settings
@@ -719,8 +739,16 @@ export class DataviewSerializerPlugin extends Plugin {
             const text = await this.app.vault.cachedRead(file)
             const foundQueries: QueryWithContext[] = findQueries(text)
             const foundInlineQueries: InlineQueryWithContext[] = findInlineQueries(text)
+            const foundDataviewJSQueries: DataviewJSQueryWithContext[] = this.settings
+                .enableDataviewJS
+                ? findDataviewJSQueries(text)
+                : []
 
-            if (foundQueries.length === 0 && foundInlineQueries.length === 0) {
+            if (
+                foundQueries.length === 0 &&
+                foundInlineQueries.length === 0 &&
+                foundDataviewJSQueries.length === 0
+            ) {
                 // No queries to serialize found in the file
                 return result
             }
@@ -966,6 +994,19 @@ export class DataviewSerializerPlugin extends Plugin {
                 isManualTrigger
             )
 
+            // Process DataviewJS queries (if enabled)
+            if (this.settings.enableDataviewJS && foundDataviewJSQueries.length > 0) {
+                updatedText = await this.processDataviewJSQueries(
+                    updatedText,
+                    text,
+                    file.path,
+                    result,
+                    foundDataviewJSQueries,
+                    targetQuery,
+                    isManualTrigger
+                )
+            }
+
             // Keep track of the last time this file was updated to avoid modification loops
             const nextPossibleUpdateTimeForFile = add(new Date(), {
                 seconds: MINIMUM_SECONDS_BETWEEN_UPDATES
@@ -1105,6 +1146,150 @@ export class DataviewSerializerPlugin extends Plugin {
                 updatedText.substring(0, startOffset) +
                 replacement +
                 updatedText.substring(startOffset + fullMatch.length)
+        }
+
+        return updatedText
+    }
+
+    /**
+     * Process DataviewJS queries in the given text.
+     * This handles JavaScript-based Dataview queries.
+     *
+     * @param updatedText The current text content (may have been modified by previous processing)
+     * @param originalText The original file text (for idempotency checks)
+     * @param filePath The file path for evaluation context
+     * @param result The file processing result to add errors to
+     * @param foundDataviewJSQueries The DataviewJS queries found in the text
+     * @param targetQuery Optional specific query to process
+     * @param isManualTrigger Whether this is a manual trigger (vs automatic)
+     * @returns The updated text with serialized DataviewJS queries
+     */
+    private async processDataviewJSQueries(
+        updatedText: string,
+        originalText: string,
+        filePath: string,
+        result: FileProcessingResult,
+        foundDataviewJSQueries: DataviewJSQueryWithContext[],
+        targetQuery?: string,
+        isManualTrigger = false
+    ): Promise<string> {
+        log(
+            `[DEBUG] Processing ${foundDataviewJSQueries.length} DataviewJS queries in file [${filePath}]`,
+            'debug'
+        )
+
+        for (const dvjsQuery of foundDataviewJSQueries) {
+            const { jsCode, updateMode, indentation, syntaxVariant, originalQueryDefinition } =
+                dvjsQuery
+
+            // If we are targeting a specific query, skip others
+            // For DataviewJS, we use the JS code as the identifier
+            if (targetQuery && jsCode !== targetQuery) {
+                continue
+            }
+
+            // Determine the result markers based on syntax variant
+            const serializedStart =
+                syntaxVariant === 'alternative'
+                    ? SERIALIZED_DATAVIEWJS_START_ALT
+                    : SERIALIZED_DATAVIEWJS_START
+            const serializedEnd =
+                syntaxVariant === 'alternative'
+                    ? SERIALIZED_DATAVIEWJS_END_ALT
+                    : SERIALIZED_DATAVIEWJS_END
+
+            // Check if query is already serialized (for 'once' mode check)
+            // Check if there's already a result block after this query definition
+            const queryDefIndex = originalText.indexOf(originalQueryDefinition)
+            const textAfterQuery =
+                queryDefIndex !== -1
+                    ? originalText.substring(queryDefIndex + originalQueryDefinition.length)
+                    : ''
+            const isAlreadySerialized =
+                textAfterQuery.trimStart().startsWith(serializedStart.trim()) ||
+                textAfterQuery.trimStart().startsWith(SERIALIZED_DATAVIEWJS_START.trim()) ||
+                textAfterQuery.trimStart().startsWith(SERIALIZED_DATAVIEWJS_START_ALT.trim())
+
+            log(
+                `[DEBUG] DataviewJS: isAlreadySerialized: ${isAlreadySerialized}, mode: ${updateMode}`,
+                'debug'
+            )
+
+            // Skip queries based on update mode during automatic updates
+            if (shouldSkipQuery({ updateMode, isManualTrigger, isAlreadySerialized })) {
+                log(`[DEBUG] Skipping DataviewJS query due to shouldSkipQuery`, 'debug')
+                continue
+            }
+
+            log(`Processing DataviewJS query in file [${filePath}]`, 'debug')
+
+            // Serialize the DataviewJS query
+            const serializationResult = await serializeDataviewJSQuery({
+                jsCode,
+                originFile: filePath,
+                dataviewApi: this.dataviewApi!,
+                indentation
+            })
+
+            // Check for errors
+            if (!serializationResult.success && serializationResult.error) {
+                log(
+                    `[DEBUG] DataviewJS serialization error: ${serializationResult.error.message}`,
+                    'debug'
+                )
+                result.errors.push({
+                    message: serializationResult.error.message,
+                    query: jsCode.substring(0, 50) + (jsCode.length > 50 ? '...' : '')
+                })
+                continue
+            }
+
+            const serializedContent = serializationResult.serializedContent
+
+            // Idempotency check: compare new result with existing serialized content
+            // Find existing serialized block for this query
+            const existingSerializedRegex = new RegExp(
+                `${escapeRegExp(originalQueryDefinition)}\\n(?:${escapeRegExp(SERIALIZED_DATAVIEWJS_START)}|${escapeRegExp(SERIALIZED_DATAVIEWJS_START_ALT)})${escapeRegExp(QUERY_FLAG_CLOSE)}\\n([\\s\\S]*?)(?:${escapeRegExp(SERIALIZED_DATAVIEWJS_END)}|${escapeRegExp(SERIALIZED_DATAVIEWJS_END_ALT)})`,
+                'm'
+            )
+            const existingMatch = originalText.match(existingSerializedRegex)
+            if (existingMatch) {
+                const existingContent = existingMatch[1]?.trim() ?? ''
+                const newContent = serializedContent.trim()
+
+                if (existingContent === newContent) {
+                    log(`Skipping DataviewJS query in [${filePath}] - content unchanged`, 'debug')
+                    continue
+                }
+            }
+
+            // Build the replacement
+            if (serializedContent !== '' || updateMode === 'once-and-eject') {
+                const escapedQueryDefinition = escapeRegExp(originalQueryDefinition)
+
+                // Regex to match the query definition and any existing serialized block
+                const queryToSerializeRegex = new RegExp(
+                    `(${escapedQueryDefinition}\\n)(?:(?:${escapeRegExp(SERIALIZED_DATAVIEWJS_START)}|${escapeRegExp(SERIALIZED_DATAVIEWJS_START_ALT)})${escapeRegExp(QUERY_FLAG_CLOSE)}\\n[\\s\\S]*?(?:${escapeRegExp(SERIALIZED_DATAVIEWJS_END)}|${escapeRegExp(SERIALIZED_DATAVIEWJS_END_ALT)})\\n)?`,
+                    'gm'
+                )
+
+                // Determine if we need a trailing newline before the END marker
+                const needsTrailingNewline =
+                    indentation.length > 0 || this.settings.addTrailingNewline
+
+                let replacement: string
+                if (updateMode === 'once-and-eject') {
+                    // For 'once-and-eject', remove all tags and leave only the serialized content
+                    replacement = `${serializedContent}\n`
+                } else {
+                    // Build the full serialized block
+                    replacement = `${originalQueryDefinition}\n${serializedStart}${QUERY_FLAG_CLOSE}\n${serializedContent}\n${
+                        needsTrailingNewline ? '\n' : ''
+                    }${serializedEnd}\n`
+                }
+
+                updatedText = updatedText.replace(queryToSerializeRegex, replacement)
+            }
         }
 
         return updatedText
