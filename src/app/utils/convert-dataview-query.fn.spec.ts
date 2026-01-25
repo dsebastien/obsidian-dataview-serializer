@@ -433,3 +433,70 @@ LIST FROM #project
         expect(result.skipped).toHaveLength(0)
     })
 })
+
+/**
+ * Regression tests for pre-compiled regex safety.
+ * These tests verify that sequential calls work correctly with shared regex objects.
+ * The global flag causes regexes to maintain state via lastIndex, which must be reset.
+ */
+describe('pre-compiled regex sequential calls', () => {
+    test('findDataviewCodeblocks returns consistent results on sequential calls', () => {
+        const text1 = '```dataview\nLIST FROM #tag1\n```'
+        const text2 = '```dataview\nTABLE file.name FROM #tag2\n```'
+
+        // First call
+        const results1 = findDataviewCodeblocks(text1)
+        expect(results1).toHaveLength(1)
+        expect(results1[0]?.query).toBe('LIST FROM #tag1')
+
+        // Second call - should work identically (lastIndex must be reset)
+        const results2 = findDataviewCodeblocks(text2)
+        expect(results2).toHaveLength(1)
+        expect(results2[0]?.query).toBe('TABLE file.name FROM #tag2')
+
+        // Third call with same text as first - verify no state leakage
+        const results3 = findDataviewCodeblocks(text1)
+        expect(results3).toHaveLength(1)
+        expect(results3[0]?.query).toBe('LIST FROM #tag1')
+    })
+
+    test('findDataviewInlineQueries returns consistent results on sequential calls', () => {
+        const text1 = 'Some text `=this.field1` more'
+        const text2 = 'Other `=this.field2` end'
+
+        // First call
+        const results1 = findDataviewInlineQueries(text1)
+        expect(results1).toHaveLength(1)
+        expect(results1[0]?.query).toBe('this.field1')
+
+        // Second call - should work identically
+        const results2 = findDataviewInlineQueries(text2)
+        expect(results2).toHaveLength(1)
+        expect(results2[0]?.query).toBe('this.field2')
+
+        // Third call with same text as first
+        const results3 = findDataviewInlineQueries(text1)
+        expect(results3).toHaveLength(1)
+        expect(results3[0]?.query).toBe('this.field1')
+    })
+
+    test('findAllDataviewQueries handles mixed types across sequential calls', () => {
+        const textCodeblock = '```dataview\nLIST\n```'
+        const textInline = '`=this.name`'
+        const textMixed = '```dataview\nTABLE\n```\n`=this.field`'
+
+        // Alternate between different input types
+        const r1 = findAllDataviewQueries(textCodeblock)
+        const r2 = findAllDataviewQueries(textInline)
+        const r3 = findAllDataviewQueries(textMixed)
+        const r4 = findAllDataviewQueries(textCodeblock)
+
+        expect(r1).toHaveLength(1)
+        expect(r1[0]?.type).toBe('codeblock')
+        expect(r2).toHaveLength(1)
+        expect(r2[0]?.type).toBe('inline')
+        expect(r3).toHaveLength(2)
+        expect(r4).toHaveLength(1)
+        expect(r4[0]?.query).toBe('LIST')
+    })
+})

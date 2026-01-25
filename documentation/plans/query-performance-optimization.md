@@ -2,51 +2,19 @@
 
 ## Summary
 
-Optimize the Obsidian Dataview Serializer plugin's query processing performance through caching, parallel processing, and regex compilation improvements.
+Optimize the Obsidian Dataview Serializer plugin's query processing performance through caching and string manipulation improvements.
 
-## Identified Bottlenecks (by Impact)
+## Remaining Bottlenecks (by Impact)
 
-| Bottleneck                                 | Impact | Location                            | Status  |
-| ------------------------------------------ | ------ | ----------------------------------- | ------- |
-| Sequential file processing                 | HIGH   | `plugin.ts:136-282`                 | ✅ DONE |
-| No caching for vault files/link uniqueness | HIGH   | `serialize-query.fn.ts:59,92`       | Pending |
-| Regex recompilation per call               | MEDIUM | `find-inline-queries.fn.ts:154-157` | Pending |
-| Regex per query in processFile             | MEDIUM | `plugin.ts:752-866`                 | Pending |
-| Inefficient string indentation             | LOW    | `serialize-query.fn.ts:203-207`     | Pending |
+| Bottleneck                                 | Impact | Location                        |
+| ------------------------------------------ | ------ | ------------------------------- |
+| No caching for vault files/link uniqueness | HIGH   | `serialize-query.fn.ts:59,92`   |
+| Regex per query in processFile             | MEDIUM | `plugin.ts:752-866`             |
+| Inefficient string indentation             | LOW    | `serialize-query.fn.ts:203-207` |
 
 ## Implementation Plan
 
-### Phase 1: Pre-compile Static Regex Patterns
-
-**File:** `src/app/utils/find-inline-queries.fn.ts`
-
-Move regex compilation outside the function. Currently creates 8 new RegExp objects per `findInlineQueries()` call.
-
-```typescript
-// Pre-compile regex patterns at module level
-const COMPILED_INLINE_PATTERNS = INLINE_QUERY_FLAGS.map(
-    ({ flag, updateMode, syntaxVariant, endMarker }) => {
-        const escapedFlagOpen = escapeRegExp(flag)
-        const escapedFlagClose = escapeRegExp(INLINE_QUERY_FLAG_CLOSE)
-        const escapedEnd = escapeRegExp(endMarker)
-        return {
-            regex: new RegExp(
-                `${escapedFlagOpen}(=[^-]*(?:-(?!->)[^-]*)*)${escapedFlagClose}([\\s\\S]*?)${escapedEnd}`,
-                'g'
-            ),
-            updateMode,
-            flag,
-            syntaxVariant
-        }
-    }
-)
-```
-
-Then in `findInlineQueries()`, iterate over `COMPILED_INLINE_PATTERNS` and reset `regex.lastIndex = 0` before each use.
-
----
-
-### Phase 2: Vault File Cache
+### Phase 1: Vault File Cache
 
 **New file:** `src/app/cache/vault-file-cache.ts`
 
@@ -117,7 +85,7 @@ export class VaultFileCache {
 
 ---
 
-### Phase 3: Optimize String Indentation
+### Phase 2: Optimize String Indentation
 
 **File:** `src/app/utils/serialize-query.fn.ts` lines 202-208
 
@@ -137,7 +105,7 @@ if (params.indentation && serializedQuery) {
 
 ---
 
-### Phase 4: Cache Query-Specific Regex Patterns
+### Phase 3: Cache Query-Specific Regex Patterns
 
 **File:** `src/app/plugin.ts`
 
@@ -166,27 +134,13 @@ Use for the 3 regexes created per query in `processFile()`:
 
 ---
 
-## Completed
-
-### Parallel Batch Processing (formerly Phase 3)
-
-**Implemented:** `src/app/utils/batch-processor.ts`
-
-- Created `processInBatches<T, R>()` utility function
-- Processes items in parallel batches of 5
-- Updated `processRecentlyUpdatedFiles()`, `processForceUpdateFiles()`, and `serialize-all-dataview-queries` command
-
----
-
 ## Files to Modify
 
-| File                                      | Changes                               | Status  |
-| ----------------------------------------- | ------------------------------------- | ------- |
-| `src/app/utils/batch-processor.ts`        | Parallel batch utility                | ✅ DONE |
-| `src/app/utils/find-inline-queries.fn.ts` | Pre-compile regex patterns            | Pending |
-| `src/app/utils/serialize-query.fn.ts`     | Use vault cache, optimize indentation | Pending |
-| `src/app/plugin.ts`                       | Add caches, regex cache               | Pending |
-| `src/app/cache/vault-file-cache.ts`       | **NEW** - Vault file caching          | Pending |
+| File                                  | Changes                           |
+| ------------------------------------- | --------------------------------- |
+| `src/app/utils/serialize-query.fn.ts` | Vault cache, optimize indentation |
+| `src/app/plugin.ts`                   | Add caches, regex cache           |
+| `src/app/cache/vault-file-cache.ts`   | **NEW** - Vault file caching      |
 
 ## Verification
 
@@ -200,6 +154,6 @@ Use for the 3 regexes created per query in `processFile()`:
 
 ## Expected Improvements
 
-- **Serialize-all command:** 50-70% faster for large vaults (parallel + caching)
-- **Single file processing:** 30-50% faster for files with multiple queries (regex cache + vault cache)
+- **Serialize-all command:** 30-50% faster for large vaults (caching)
+- **Single file processing:** 20-40% faster for files with multiple queries (regex cache + vault cache)
 - **Memory:** Slight increase (~5-10%) due to caches (bounded by cache invalidation)

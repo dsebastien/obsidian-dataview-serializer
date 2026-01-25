@@ -373,4 +373,70 @@ Age: <!-- dataview-serializer-iq: =this.age -->30<!-- /dataview-serializer-iq --
             expect(result).toBe('<!-- IQ: =this.name -->John<!-- /IQ -->')
         })
     })
+
+    /**
+     * Regression tests for pre-compiled regex safety.
+     * These tests verify that sequential calls work correctly with shared regex objects.
+     * The global flag causes regexes to maintain state via lastIndex, which must be reset.
+     */
+    describe('pre-compiled regex sequential calls', () => {
+        test('findInlineQueries returns consistent results on sequential calls', () => {
+            const text1 = '<!-- IQ: =this.field1 -->value1<!-- /IQ -->'
+            const text2 = '<!-- IQ: =this.field2 -->value2<!-- /IQ -->'
+
+            // First call
+            const results1 = findInlineQueries(text1)
+            expect(results1).toHaveLength(1)
+            expect(results1[0]?.expression).toBe('=this.field1')
+
+            // Second call - should work identically (lastIndex must be reset)
+            const results2 = findInlineQueries(text2)
+            expect(results2).toHaveLength(1)
+            expect(results2[0]?.expression).toBe('=this.field2')
+
+            // Third call with same text as first - verify no state leakage
+            const results3 = findInlineQueries(text1)
+            expect(results3).toHaveLength(1)
+            expect(results3[0]?.expression).toBe('=this.field1')
+        })
+
+        test('findRawInlineQueries returns consistent results on sequential calls', () => {
+            const text1 = 'Some text `=this.field1` more text'
+            const text2 = 'Other text `=this.field2` end'
+
+            // First call
+            const results1 = findRawInlineQueries(text1)
+            expect(results1).toHaveLength(1)
+            expect(results1[0]?.expression).toBe('=this.field1')
+
+            // Second call - should work identically
+            const results2 = findRawInlineQueries(text2)
+            expect(results2).toHaveLength(1)
+            expect(results2[0]?.expression).toBe('=this.field2')
+
+            // Third call with same text as first
+            const results3 = findRawInlineQueries(text1)
+            expect(results3).toHaveLength(1)
+            expect(results3[0]?.expression).toBe('=this.field1')
+        })
+
+        test('findInlineQueries handles multiple patterns across sequential calls', () => {
+            const textLegacy = '<!-- IQManual: =this.legacy -->legacy<!-- /IQ -->'
+            const textAlt =
+                '<!-- dataview-serializer-iq-manual: =this.alt -->alt<!-- /dataview-serializer-iq -->'
+
+            // Alternate between different patterns
+            const r1 = findInlineQueries(textLegacy)
+            const r2 = findInlineQueries(textAlt)
+            const r3 = findInlineQueries(textLegacy)
+            const r4 = findInlineQueries(textAlt)
+
+            expect(r1[0]?.expression).toBe('=this.legacy')
+            expect(r1[0]?.syntaxVariant).toBe('legacy')
+            expect(r2[0]?.expression).toBe('=this.alt')
+            expect(r2[0]?.syntaxVariant).toBe('alternative')
+            expect(r3[0]?.expression).toBe('=this.legacy')
+            expect(r4[0]?.expression).toBe('=this.alt')
+        })
+    })
 })

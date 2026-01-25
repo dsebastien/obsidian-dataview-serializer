@@ -35,6 +35,8 @@ export interface ConversionResult {
 /**
  * Regex to match Dataview codeblocks
  * Captures: full match, content inside the codeblock
+ *
+ * WARNING: Uses global flag - reset lastIndex before use, no await during iteration.
  */
 const DATAVIEW_CODEBLOCK_REGEX = /^([ \t]*)```dataview\r?\n([\s\S]*?)\r?\n\1```/gm
 
@@ -42,6 +44,8 @@ const DATAVIEW_CODEBLOCK_REGEX = /^([ \t]*)```dataview\r?\n([\s\S]*?)\r?\n\1```/
  * Regex to match Dataview inline queries (backtick format)
  * Matches: `= expression`
  * Note: Dataview inline queries start with `= (backtick, equals sign)
+ *
+ * WARNING: Uses global flag - reset lastIndex before use, no await during iteration.
  */
 const DATAVIEW_INLINE_REGEX = /`=\s*([^`]+)`/g
 
@@ -50,10 +54,11 @@ const DATAVIEW_INLINE_REGEX = /`=\s*([^`]+)`/g
  */
 export function findDataviewCodeblocks(text: string): DetectedDataviewQuery[] {
     const results: DetectedDataviewQuery[] = []
-    const regex = new RegExp(DATAVIEW_CODEBLOCK_REGEX.source, 'gm')
+    // Reset lastIndex for reuse of pre-compiled regex
+    DATAVIEW_CODEBLOCK_REGEX.lastIndex = 0
 
     let match: RegExpExecArray | null
-    while ((match = regex.exec(text)) !== null) {
+    while ((match = DATAVIEW_CODEBLOCK_REGEX.exec(text)) !== null) {
         const indentation = match[1] ?? ''
         const queryContent = match[2]?.trim() ?? ''
 
@@ -76,10 +81,11 @@ export function findDataviewCodeblocks(text: string): DetectedDataviewQuery[] {
  */
 export function findDataviewInlineQueries(text: string): DetectedDataviewQuery[] {
     const results: DetectedDataviewQuery[] = []
-    const regex = new RegExp(DATAVIEW_INLINE_REGEX.source, 'g')
+    // Reset lastIndex for reuse of pre-compiled regex
+    DATAVIEW_INLINE_REGEX.lastIndex = 0
 
     let match: RegExpExecArray | null
-    while ((match = regex.exec(text)) !== null) {
+    while ((match = DATAVIEW_INLINE_REGEX.exec(text)) !== null) {
         const queryContent = match[1]?.trim() ?? ''
 
         if (queryContent) {

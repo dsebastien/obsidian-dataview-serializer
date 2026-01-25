@@ -10,6 +10,23 @@ import type { LinkFormat } from '../types/plugin-settings.intf'
 import { isTaskQuery } from './is-task-query.fn'
 
 /**
+ * Pre-compiled regex for wiki links in table cells.
+ * Dataview escapes pipes as \| within wiki links in tables.
+ * Captures: [[path\|alias]] or [[path|alias]]
+ *
+ * WARNING: Uses global flag. Safe with matchAll() which creates internal iterator.
+ */
+const TABLE_LINK_REGEX = /\[\[(.+?)\\?\|(.+?)\]\]/g
+
+/**
+ * Pre-compiled regex for wiki links in list output.
+ * Captures: [[path|alias]]
+ *
+ * WARNING: Uses global flag. Safe with matchAll() which creates internal iterator.
+ */
+const LIST_LINK_REGEX = /\[\[(.+?)\|(.+?)\]\]/g
+
+/**
  * Get the filename from a file path (browser-compatible replacement for path.basename)
  * @param filePath The full file path
  * @returns The filename (last segment of the path)
@@ -134,14 +151,11 @@ export const serializeQuery = async (
         if (params.query.toLocaleLowerCase().contains('table')) {
             serializedQuery = serializedQuery.replaceAll('\\\\', '\\').replaceAll('\n<', '<')
 
-            // Set up to match wiki links in table cells
-            // Dataview escapes pipes as \| within wiki links in tables
-            // The regex captures: [[path\|alias]] or [[path|alias]]
-            // Using \\? to handle the optional backslash before the pipe (not captured in group 1)
-            const linkExp = new RegExp(/\[\[(.+?)\\?\|(.+?)\]\]/g)
+            // Reset lastIndex for reuse of pre-compiled regex
+            TABLE_LINK_REGEX.lastIndex = 0
 
             // Returned links are delivered as the full path to the .md (or other filetype) file, aliased to the note name
-            const matchedLinks = [...serializedQuery.matchAll(linkExp)]
+            const matchedLinks = [...serializedQuery.matchAll(TABLE_LINK_REGEX)]
             for (const match of matchedLinks) {
                 // Matched array
                 // match[0]: Full matched string (e.g., [[folder/note.md\|alias]])
@@ -181,12 +195,11 @@ export const serializeQuery = async (
             }
         } else {
             // Not a table. Assuming for now a list as that's all we're processing.
-            // Set up to match the pattern
-            // [[path to note|alias]] - we capture both path and alias
-            const linkExp = new RegExp(/\[\[(.+?)\|(.+?)\]\]/g)
+            // Reset lastIndex for reuse of pre-compiled regex
+            LIST_LINK_REGEX.lastIndex = 0
 
             // Returned links are delivered as the full path to the .md (or other filetype) file, aliased to the note name
-            const matchedLinks = [...serializedQuery.matchAll(linkExp)]
+            const matchedLinks = [...serializedQuery.matchAll(LIST_LINK_REGEX)]
             for (const match of matchedLinks) {
                 // Matched array
                 // match[0]: Full matched string

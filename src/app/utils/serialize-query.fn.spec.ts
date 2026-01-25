@@ -706,4 +706,133 @@ describe('serializeQuery', () => {
             expect(result.error).toBeUndefined()
         })
     })
+
+    /**
+     * Regression tests for pre-compiled regex safety.
+     * serializeQuery uses matchAll() which is inherently safe (creates internal iterator),
+     * but these tests document expected behavior and catch future regressions.
+     */
+    describe('pre-compiled regex sequential calls', () => {
+        it('should return consistent results for list queries on sequential calls', async () => {
+            const mockApp = createMockApp([{ name: 'unique1.md' }, { name: 'unique2.md' }])
+
+            // First call with list output
+            const mockApi1 = createMockDataviewApi('- [[folder/unique1.md|unique1]]\n')
+            const result1 = await serializeQuery({
+                query: 'list',
+                originFile: 'origin.md',
+                dataviewApi: mockApi1,
+                app: mockApp
+            })
+
+            // Second call with different list output
+            const mockApi2 = createMockDataviewApi('- [[folder/unique2.md|unique2]]\n')
+            const result2 = await serializeQuery({
+                query: 'list',
+                originFile: 'origin.md',
+                dataviewApi: mockApi2,
+                app: mockApp
+            })
+
+            // Third call same as first
+            const mockApi3 = createMockDataviewApi('- [[folder/unique1.md|unique1]]\n')
+            const result3 = await serializeQuery({
+                query: 'list',
+                originFile: 'origin.md',
+                dataviewApi: mockApi3,
+                app: mockApp
+            })
+
+            expect(result1.success).toBe(true)
+            expect(result1.serializedContent).toBe('- [[unique1]]\n')
+            expect(result2.success).toBe(true)
+            expect(result2.serializedContent).toBe('- [[unique2]]\n')
+            expect(result3.success).toBe(true)
+            expect(result3.serializedContent).toBe('- [[unique1]]\n')
+        })
+
+        it('should return consistent results for table queries on sequential calls', async () => {
+            const mockApp = createMockApp([{ name: 'note1.md' }, { name: 'note2.md' }])
+
+            // First call with table output
+            const mockApi1 = createMockDataviewApi(
+                '| File |\n| --- |\n| [[folder/note1.md\\|note1]] |'
+            )
+            const result1 = await serializeQuery({
+                query: 'table',
+                originFile: 'origin.md',
+                dataviewApi: mockApi1,
+                app: mockApp
+            })
+
+            // Second call with different table output
+            const mockApi2 = createMockDataviewApi(
+                '| File |\n| --- |\n| [[folder/note2.md\\|note2]] |'
+            )
+            const result2 = await serializeQuery({
+                query: 'table',
+                originFile: 'origin.md',
+                dataviewApi: mockApi2,
+                app: mockApp
+            })
+
+            // Third call same as first
+            const mockApi3 = createMockDataviewApi(
+                '| File |\n| --- |\n| [[folder/note1.md\\|note1]] |'
+            )
+            const result3 = await serializeQuery({
+                query: 'table',
+                originFile: 'origin.md',
+                dataviewApi: mockApi3,
+                app: mockApp
+            })
+
+            expect(result1.success).toBe(true)
+            expect(result1.serializedContent).toBe('| File |\n| --- |\n| [[note1]] |')
+            expect(result2.success).toBe(true)
+            expect(result2.serializedContent).toBe('| File |\n| --- |\n| [[note2]] |')
+            expect(result3.success).toBe(true)
+            expect(result3.serializedContent).toBe('| File |\n| --- |\n| [[note1]] |')
+        })
+
+        it('should handle mixed list and table queries across sequential calls', async () => {
+            const mockApp = createMockApp([{ name: 'file.md' }])
+
+            // List query
+            const mockApi1 = createMockDataviewApi('- [[folder/file.md|file]]\n')
+            const result1 = await serializeQuery({
+                query: 'list',
+                originFile: 'origin.md',
+                dataviewApi: mockApi1,
+                app: mockApp
+            })
+
+            // Table query
+            const mockApi2 = createMockDataviewApi(
+                '| File |\n| --- |\n| [[folder/file.md\\|file]] |'
+            )
+            const result2 = await serializeQuery({
+                query: 'table',
+                originFile: 'origin.md',
+                dataviewApi: mockApi2,
+                app: mockApp
+            })
+
+            // List query again
+            const mockApi3 = createMockDataviewApi('- [[folder/file.md|file]]\n')
+            const result3 = await serializeQuery({
+                query: 'list',
+                originFile: 'origin.md',
+                dataviewApi: mockApi3,
+                app: mockApp
+            })
+
+            expect(result1.success).toBe(true)
+            expect(result1.serializedContent).toBe('- [[file]]\n')
+            expect(result2.success).toBe(true)
+            expect(result2.serializedContent).toBe('| File |\n| --- |\n| [[file]] |')
+            expect(result3.success).toBe(true)
+            expect(result3.serializedContent).toBe('- [[file]]\n')
+        })
+    })
 })

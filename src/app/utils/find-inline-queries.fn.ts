@@ -122,6 +122,39 @@ function escapeRegExp(str: string): string {
 }
 
 /**
+ * Pre-compiled regex patterns for inline queries.
+ * Compiled once at module load to avoid creating 8 RegExp objects per findInlineQueries() call.
+ *
+ * WARNING: These regexes use the global flag and share state via lastIndex.
+ * Safe to use in synchronous loops (reset lastIndex before each use).
+ * DO NOT add await statements between exec() calls when iterating.
+ */
+const COMPILED_INLINE_PATTERNS = INLINE_QUERY_FLAGS.map(
+    ({ flag, updateMode, syntaxVariant, endMarker }) => {
+        const escapedFlagOpen = escapeRegExp(flag)
+        const escapedFlagClose = escapeRegExp(INLINE_QUERY_FLAG_CLOSE)
+        const escapedEnd = escapeRegExp(endMarker)
+        return {
+            regex: new RegExp(
+                `${escapedFlagOpen}(=[^-]*(?:-(?!->)[^-]*)*)${escapedFlagClose}([\\s\\S]*?)${escapedEnd}`,
+                'g'
+            ),
+            updateMode,
+            flag,
+            syntaxVariant
+        }
+    }
+)
+
+/**
+ * Pre-compiled regex for raw inline queries (backtick format: `=expression`).
+ * Compiled once at module load.
+ *
+ * WARNING: Uses global flag - reset lastIndex before use, no await during iteration.
+ */
+const RAW_INLINE_QUERY_REGEX = /`=([^`]+)`/g
+
+/**
  * Find all serialized inline queries in the given text.
  *
  * Detects patterns like:
@@ -140,21 +173,9 @@ function escapeRegExp(str: string): string {
 export function findInlineQueries(text: string): InlineQueryWithContext[] {
     const results: InlineQueryWithContext[] = []
 
-    for (const { flag, updateMode, syntaxVariant, endMarker } of INLINE_QUERY_FLAGS) {
-        // Build regex for this flag type
-        // Pattern: <!-- IQ: =expr -->result<!-- /IQ --> (or alternative syntax)
-        // The expression starts with = and continues until the close flag
-        const escapedFlagOpen = escapeRegExp(flag)
-        const escapedFlagClose = escapeRegExp(INLINE_QUERY_FLAG_CLOSE)
-        const escapedEnd = escapeRegExp(endMarker)
-
-        // Match: flag_open + expression + flag_close + result + end
-        // Expression: starts with = and can contain anything except -->
-        // Result: everything between flag_close and end marker
-        const regex = new RegExp(
-            `${escapedFlagOpen}(=[^-]*(?:-(?!->)[^-]*)*)${escapedFlagClose}([\\s\\S]*?)${escapedEnd}`,
-            'g'
-        )
+    for (const { regex, flag, updateMode, syntaxVariant } of COMPILED_INLINE_PATTERNS) {
+        // Reset lastIndex for reuse of pre-compiled regex
+        regex.lastIndex = 0
 
         let match: RegExpExecArray | null
         while ((match = regex.exec(text)) !== null) {
@@ -217,12 +238,11 @@ export function findInlineQueries(text: string): InlineQueryWithContext[] {
 export function findRawInlineQueries(text: string): RawInlineQuery[] {
     const results: RawInlineQuery[] = []
 
-    // Pattern: `=expression`
-    // The expression can contain anything except backticks
-    const regex = /`=([^`]+)`/g
+    // Reset lastIndex for reuse of pre-compiled regex
+    RAW_INLINE_QUERY_REGEX.lastIndex = 0
 
     let match: RegExpExecArray | null
-    while ((match = regex.exec(text)) !== null) {
+    while ((match = RAW_INLINE_QUERY_REGEX.exec(text)) !== null) {
         const expression = match[1]?.trim() ?? ''
 
         // Skip if no expression found
