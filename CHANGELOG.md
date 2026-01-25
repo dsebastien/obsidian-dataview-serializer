@@ -1,3 +1,8 @@
+## [2.4.3](https://github.com/dsebastien/obsidian-dataview-serializer/compare/2.4.2...2.4.3) (2026-01-25)
+
+### Bug Fixes
+
+* **all:** added a fix for absolute paths ignoring setting for tables ([3765e11](https://github.com/dsebastien/obsidian-dataview-serializer/commit/3765e118673933ddc9da7421991301dd8a9dd346)), closes [#55](https://github.com/dsebastien/obsidian-dataview-serializer/issues/55)
 ## [2.4.2](https://github.com/dsebastien/obsidian-dataview-serializer/compare/2.4.1...2.4.2) (2026-01-25)
 
 ### Features
