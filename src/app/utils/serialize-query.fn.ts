@@ -5,10 +5,31 @@
 import type { DataviewApi } from 'obsidian-dataview/lib/api/plugin-api'
 import { log } from '../../utils/log'
 import { App, Notice, TFile } from 'obsidian'
-import path from 'path'
 import type { QuerySerializationResult } from '../types/query-result.intf'
 import type { LinkFormat } from '../types/plugin-settings.intf'
 import { isTaskQuery } from './is-task-query.fn'
+
+/**
+ * Get the filename from a file path (browser-compatible replacement for path.basename)
+ * @param filePath The full file path
+ * @returns The filename (last segment of the path)
+ */
+function getBasename(filePath: string): string {
+    return filePath.split('/').pop() ?? filePath
+}
+
+/**
+ * Get the filename without extension (browser-compatible replacement for path.parse().name)
+ * @param filename The filename (with or without extension)
+ * @returns The filename without its extension
+ */
+function getNameWithoutExtension(filename: string): string {
+    const lastDotIndex = filename.lastIndexOf('.')
+    if (lastDotIndex <= 0) {
+        return filename
+    }
+    return filename.substring(0, lastDotIndex)
+}
 
 /**
  * Strip checkbox markers from task output to convert tasks to regular list items.
@@ -95,7 +116,7 @@ export const serializeQuery = async (
 
     // Determine if the note name and alias are different
     function isValidAlias(name: string, alias: string): boolean {
-        return path.parse(name).name !== alias
+        return getNameWithoutExtension(name) !== alias
     }
 
     let serializedQuery = ''
@@ -124,7 +145,7 @@ export const serializeQuery = async (
                 // mathc[0]: Full matched string
                 // match{1]: Matched group 1 = filepath
                 // match[2]: Alias
-                const name = path.basename(match[1]!)
+                const name = getBasename(match[1]!)
                 const alias = match[2]!
                 if (isNameUnique(name)) {
                     // The name is unique, so ok to replace the path
@@ -137,7 +158,7 @@ export const serializeQuery = async (
                             // For .md we can keep just the note name without extension
                             serializedQuery = serializedQuery.replace(
                                 match[1] + '\\|',
-                                path.parse(name).name + '|'
+                                getNameWithoutExtension(name) + '|'
                             )
                         } else {
                             // File types not .md need to keep full filename
@@ -162,7 +183,7 @@ export const serializeQuery = async (
                 // match[0]: Full matched string
                 // match[1]: Matched group 1 = filepath
                 // match[2]: Matched group 2 = alias
-                const name = path.basename(match[1]!)
+                const name = getBasename(match[1]!)
                 const alias = match[2]!
                 if (isNameUnique(name)) {
                     // The name is unique, so ok to replace the path
@@ -175,7 +196,7 @@ export const serializeQuery = async (
                             // For .md we can keep just the note name without extension
                             serializedQuery = serializedQuery.replace(
                                 match[1] + '|',
-                                path.parse(name).name + '|'
+                                getNameWithoutExtension(name) + '|'
                             )
                         } else {
                             // File types not .md need to keep full filename
