@@ -1,3 +1,8 @@
+## [2.4.4](https://github.com/dsebastien/obsidian-dataview-serializer/compare/2.4.3...2.4.4) (2026-01-25)
+
+### Bug Fixes
+
+* **all:** ensure previous serialized queries are cleaned up correctly ([d23252a](https://github.com/dsebastien/obsidian-dataview-serializer/commit/d23252a53837cd25110da5e483fe4364af5495f7)), closes [#56](https://github.com/dsebastien/obsidian-dataview-serializer/issues/56)
 ## [2.4.3](https://github.com/dsebastien/obsidian-dataview-serializer/compare/2.4.2...2.4.3) (2026-01-25)
 
 ### Bug Fixes
