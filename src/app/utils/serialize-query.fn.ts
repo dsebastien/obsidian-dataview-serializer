@@ -134,40 +134,49 @@ export const serializeQuery = async (
         if (params.query.toLocaleLowerCase().contains('table')) {
             serializedQuery = serializedQuery.replaceAll('\\\\', '\\').replaceAll('\n<', '<')
 
-            // Set up to match the pattern
-            // [[path to note\|alias]] - we are only interested in the path and \| that follow it
-            const linkExp = new RegExp(/\[\[(.+?)\|(.+?)\]\]/g)
+            // Set up to match wiki links in table cells
+            // Dataview escapes pipes as \| within wiki links in tables
+            // The regex captures: [[path\|alias]] or [[path|alias]]
+            // Using \\? to handle the optional backslash before the pipe (not captured in group 1)
+            const linkExp = new RegExp(/\[\[(.+?)\\?\|(.+?)\]\]/g)
 
             // Returned links are delivered as the full path to the .md (or other filetype) file, aliased to the note name
             const matchedLinks = [...serializedQuery.matchAll(linkExp)]
             for (const match of matchedLinks) {
                 // Matched array
-                // mathc[0]: Full matched string
-                // match{1]: Matched group 1 = filepath
+                // match[0]: Full matched string (e.g., [[folder/note.md\|alias]])
+                // match[1]: Matched group 1 = filepath (without trailing backslash)
                 // match[2]: Alias
-                const name = getBasename(match[1]!)
+                const filepath = match[1]!
+                const name = getBasename(filepath)
                 const alias = match[2]!
                 if (isNameUnique(name)) {
                     // The name is unique, so ok to replace the path
                     if (!isValidAlias(name, alias)) {
-                        // Name and alias match. Can replace the lot and leave what is the alias as the link
-                        serializedQuery = serializedQuery.replace(match[1] + '\\|', '')
+                        // Name and alias match. Simplify to just [[alias]]
+                        serializedQuery = serializedQuery.replace(match[0], '[[' + alias + ']]')
                     } else {
                         // Name and alias are different. Need to remove the path and keep the alias
                         if (name.endsWith('.md')) {
                             // For .md we can keep just the note name without extension
                             serializedQuery = serializedQuery.replace(
-                                match[1] + '\\|',
-                                getNameWithoutExtension(name) + '|'
+                                match[0],
+                                '[[' + getNameWithoutExtension(name) + '\\|' + alias + ']]'
                             )
                         } else {
                             // File types not .md need to keep full filename
-                            serializedQuery = serializedQuery.replace(match[1] + '\\|', name + '|')
+                            serializedQuery = serializedQuery.replace(
+                                match[0],
+                                '[[' + name + '\\|' + alias + ']]'
+                            )
                         }
                     }
                 } else {
-                    // Name is not unique, keep the full path but remove the backslash from the pipe
-                    serializedQuery = serializedQuery.replace(match[1] + '\\|', match[1] + '|')
+                    // Name is not unique, keep the full path (with escaped pipe for table)
+                    serializedQuery = serializedQuery.replace(
+                        match[0],
+                        '[[' + filepath + '\\|' + alias + ']]'
+                    )
                 }
             }
         } else {

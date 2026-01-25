@@ -491,6 +491,66 @@ describe('serializeQuery', () => {
             expect(result.serializedContent).toContain('| Note | 2024 |')
         })
 
+        // Issue #55: TABLE queries should simplify links like LIST queries
+        it('should simplify links for unique file names in table queries', async () => {
+            const mockApp = createMockApp([{ name: 'unique-note.md' }])
+            // Dataview escapes pipes in table cells as \|
+            const mockApi = createMockDataviewApi(
+                '| File |\n| --- |\n| [[folder/unique-note.md\\|unique-note]] |'
+            )
+
+            const result = await serializeQuery({
+                query: 'table',
+                originFile: 'origin.md',
+                dataviewApi: mockApi,
+                app: mockApp,
+                linkFormat: 'shortest'
+            })
+
+            expect(result.success).toBe(true)
+            // Should simplify to just the note name (with escaped pipe for table format)
+            expect(result.serializedContent).toBe('| File |\n| --- |\n| [[unique-note]] |')
+        })
+
+        it('should keep full path for non-unique file names in table queries', async () => {
+            const mockApp = createMockApp([{ name: 'note.md' }, { name: 'note.md' }])
+            const mockApi = createMockDataviewApi(
+                '| File |\n| --- |\n| [[folder/note.md\\|note]] |'
+            )
+
+            const result = await serializeQuery({
+                query: 'table',
+                originFile: 'origin.md',
+                dataviewApi: mockApi,
+                app: mockApp
+            })
+
+            expect(result.success).toBe(true)
+            // Should keep full path for non-unique files (escaped pipe preserved)
+            expect(result.serializedContent).toBe(
+                '| File |\n| --- |\n| [[folder/note.md\\|note]] |'
+            )
+        })
+
+        it('should preserve custom display name for unique file in table queries', async () => {
+            // Issue #47 equivalent for TABLE: link() with display should work
+            const mockApp = createMockApp([{ name: 'Hello1.md' }])
+            const mockApi = createMockDataviewApi(
+                '| File |\n| --- |\n| [[folder/Hello1.md\\|h1]] |'
+            )
+
+            const result = await serializeQuery({
+                query: 'TABLE WITHOUT ID link(file.name, display_name) FROM #test',
+                originFile: 'origin.md',
+                dataviewApi: mockApi,
+                app: mockApp
+            })
+
+            expect(result.success).toBe(true)
+            // Should output [[Hello1\|h1]] not [[h1]] (escaped pipe preserved)
+            expect(result.serializedContent).toBe('| File |\n| --- |\n| [[Hello1\\|h1]] |')
+        })
+
         it('should replace double backslashes with single backslashes', async () => {
             const mockApp = createMockApp([])
             // Dataview outputs double backslashes in table markdown
