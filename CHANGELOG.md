@@ -1,3 +1,8 @@
+## [2.4.1](https://github.com/dsebastien/obsidian-dataview-serializer/compare/2.4.0...2.4.1) (2026-01-25)
+
+### Bug Fixes
+
+* **all:** fixed  matching for single-line queries where there are spaces before the end marker ([9d91f81](https://github.com/dsebastien/obsidian-dataview-serializer/commit/9d91f8176ee5ff60b1ab68c1f9f30b1485039c67))
 ## [2.4.0](https://github.com/dsebastien/obsidian-dataview-serializer/compare/2.3.2...2.4.0) (2026-01-24)
 
 ### Features
