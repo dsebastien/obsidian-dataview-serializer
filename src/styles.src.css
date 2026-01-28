@@ -1,4 +1,10 @@
-@import 'tailwindcss';
+/* Import only Tailwind theme and utilities, NOT base/preflight.
+   The base layer contains global CSS resets (e.g., img, svg { display: block })
+   that leak outside the plugin and break other Obsidian features like Bases tables.
+   Since we add decorations to Obsidian's existing UI (not building from scratch),
+   we only need utilities via @apply - Obsidian provides the foundation. */
+@import 'tailwindcss/theme' layer(theme);
+@import 'tailwindcss/utilities' layer(utilities);
 
 /* Support section */
 .support-header-margin {
