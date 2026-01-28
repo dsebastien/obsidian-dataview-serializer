@@ -1,3 +1,12 @@
+## [2.4.5](https://github.com/dsebastien/obsidian-dataview-serializer/compare/2.4.4...2.4.5) (2026-01-28)
+
+### Bug Fixes
+
+* **all:** removed Tailwind CSS reset to avoid side-effects ([8941c6c](https://github.com/dsebastien/obsidian-dataview-serializer/commit/8941c6cbd9d3db84931c084aaafd8775fa036908))
+
+### Performance Improvements
+
+* **all:** precompile regular expressions ([5e835f9](https://github.com/dsebastien/obsidian-dataview-serializer/commit/5e835f9ee23c1afa951a679c9648d1a37da3d766))
 ## [2.4.4](https://github.com/dsebastien/obsidian-dataview-serializer/compare/2.4.3...2.4.4) (2026-01-25)
 
 ### Bug Fixes
