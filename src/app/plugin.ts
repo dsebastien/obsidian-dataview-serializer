@@ -53,6 +53,7 @@ import {
 } from './utils/find-inline-queries.fn'
 import { serializeInlineQuery, isInsideTable } from './utils/serialize-inline-query.fn'
 import { processInBatches } from './utils/batch-processor'
+import { removeAllQueries } from './utils/remove-all-queries.fn'
 import {
     findDataviewJSQueries,
     type DataviewJSQueryWithContext
@@ -489,6 +490,38 @@ export class DataviewSerializerPlugin extends Plugin {
                 } else {
                     new Notice(`Converted ${result.count} Dataview query(ies) to serialized format`)
                 }
+            }
+        })
+
+        // Add command to remove all Dataview serializer queries from the current file
+        this.addCommand({
+            id: 'remove-all-queries-in-current-file',
+            name: 'Remove all Dataview serializer queries from current file',
+            editorCallback: (editor) => {
+                const activeFile = this.app.workspace.getActiveFile()
+
+                if (!activeFile) {
+                    new Notice('No active file')
+                    return
+                }
+
+                if (activeFile.extension !== MARKDOWN_FILE_EXTENSION) {
+                    new Notice('The active file is not a Markdown file')
+                    return
+                }
+
+                const text = editor.getValue()
+                const result = removeAllQueries(text)
+
+                if (result.removedCount === 0) {
+                    new Notice('No Dataview serializer queries found in the current file')
+                    return
+                }
+
+                editor.setValue(result.newText)
+                new Notice(
+                    `Removed ${result.removedCount} Dataview serializer query(ies) from: ${activeFile.name}`
+                )
             }
         })
 

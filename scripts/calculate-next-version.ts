@@ -68,9 +68,7 @@ function analyzeBumpType(commits: string[]): BumpType {
 
         // Check for features (minor bump)
         if (/^feat(\([^)]+\))?:/.test(commit)) {
-            if (bumpType !== 'major') {
-                bumpType = 'minor'
-            }
+            bumpType = 'minor'
         }
 
         // Check for fixes and other patch-level changes

@@ -524,6 +524,17 @@ Both commands:
 - Preserve indentation from the original query
 - Normalize multi-line queries to single-line format in the serialized output
 
+#### Remove all queries from current file
+
+The command "Remove all Dataview serializer queries from current file" strips all plugin query constructs and their serialized output from the current file. This removes:
+
+- Block queries (query definitions and result blocks)
+- Inline queries
+- DataviewJS queries (query definitions and result blocks)
+- Both legacy and alternative syntax variants
+
+Regular markdown content is preserved. This is useful when you want to completely eject from the plugin, leaving only the non-query content behind.
+
 ### Error Handling
 
 When a query fails to serialize (due to invalid syntax or other Dataview errors), the plugin provides helpful feedback:
