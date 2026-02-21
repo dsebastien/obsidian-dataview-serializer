@@ -2,7 +2,15 @@
 
 All notable changes to this project will be documented in this file.
 
+## [2.5.0](https://github.com/dsebastien/obsidian-dataview-serializer/compare/2.4.5...2.5.0) (2026-02-21)
 
+### Features
+
+* **all:** added command to remove all dataview serializer queries ([77afd5e](https://github.com/dsebastien/obsidian-dataview-serializer/commit/77afd5e9fb9f9ef18ba8bfc3dabbc29749e2c6a5))
+* **all:** added validate and release scripts ([fbf5eec](https://github.com/dsebastien/obsidian-dataview-serializer/commit/fbf5eec5949a7fb174e302b55b0ada0cf8fe69a6))
+* **all:** improved notes ([dad5651](https://github.com/dsebastien/obsidian-dataview-serializer/commit/dad5651fe0f82cb5722a8ab4b8e9316c876cc8f5))
+* **all:** updated release ([4420257](https://github.com/dsebastien/obsidian-dataview-serializer/commit/442025752559317baa54ae3535443b6b25e706bf))
+* **all:** updated scripts ([7a8fba7](https://github.com/dsebastien/obsidian-dataview-serializer/commit/7a8fba709f224747f0c37557b3789fe408b6e29d))
 
 ## [2.4.5](https://github.com/dsebastien/obsidian-dataview-serializer/compare/2.4.4...2.4.5) (2026-01-28)
 
@@ -124,4 +132,5 @@ All notable changes to this project will be documented in this file.
 ## [1.0.2](https://github.com/dsebastien/obsidian-dataview-serializer/compare/1.0.1...1.0.2) (2024-05-14)
 ## [1.0.1](https://github.com/dsebastien/obsidian-dataview-serializer/compare/1.0.0...1.0.1) (2024-05-14)
 ## 1.0.0 (2024-05-13)
+
 

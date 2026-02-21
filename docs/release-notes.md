@@ -1,5 +1,15 @@
 # Release Notes
 
+## 2.5.0 (2026-02-21)
+
+### Features
+
+* **all:** added command to remove all dataview serializer queries
+* **all:** added validate and release scripts
+* **all:** improved notes
+* **all:** updated release
+* **all:** updated scripts
+
 ## 2.4.5 (2026-01-28)
 
 ### Bug Fixes
