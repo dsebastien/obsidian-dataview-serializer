@@ -833,7 +833,7 @@ export class DataviewSerializerPlugin extends Plugin {
                 const escapedQueryForCheck = escapeRegExp(foundQuery)
                 const escapedFlagCloseForCheck = escapeRegExp(flagClose)
                 const alreadySerializedRegex = new RegExp(
-                    `${escapedFlagOpenForCheck}${escapedQueryForCheck}\\s*${escapedFlagCloseForCheck}\\n(?:${escapeRegExp(SERIALIZED_QUERY_START)}|${escapeRegExp(SERIALIZED_QUERY_START_ALT)})[^\\n]*${escapeRegExp(QUERY_FLAG_CLOSE)}`,
+                    `${escapedFlagOpenForCheck}${escapedQueryForCheck}\\s*${escapedFlagCloseForCheck}(?:\\n|$)(?:${escapeRegExp(SERIALIZED_QUERY_START)}|${escapeRegExp(SERIALIZED_QUERY_START_ALT)})[^\\n]*${escapeRegExp(QUERY_FLAG_CLOSE)}`,
                     'm'
                 )
                 const isAlreadySerialized = !!text.match(alreadySerializedRegex)
@@ -881,7 +881,7 @@ export class DataviewSerializerPlugin extends Plugin {
                 // We match ANY query text in the SerializedQuery marker (not the exact query)
                 // because the user may have modified the query since it was last serialized
                 const existingSerializedRegex = new RegExp(
-                    `${escapedFlagOpenForCheck}${escapedQueryForCheck}\\s*${escapedFlagCloseForCheck}\\n(?:${escapeRegExp(SERIALIZED_QUERY_START)}|${escapeRegExp(SERIALIZED_QUERY_START_ALT)})[^\\n]*${escapeRegExp(QUERY_FLAG_CLOSE)}\\n([\\s\\S]*?)(?:${escapeRegExp(SERIALIZED_QUERY_END)}|${escapeRegExp(SERIALIZED_QUERY_END_ALT)})`,
+                    `${escapedFlagOpenForCheck}${escapedQueryForCheck}\\s*${escapedFlagCloseForCheck}(?:\\n|$)(?:${escapeRegExp(SERIALIZED_QUERY_START)}|${escapeRegExp(SERIALIZED_QUERY_START_ALT)})[^\\n]*${escapeRegExp(QUERY_FLAG_CLOSE)}(?:\\n|$)([\\s\\S]*?)(?:${escapeRegExp(SERIALIZED_QUERY_END)}|${escapeRegExp(SERIALIZED_QUERY_END_ALT)})`,
                     'm'
                 )
                 const existingMatch = text.match(existingSerializedRegex)
@@ -935,7 +935,7 @@ export class DataviewSerializerPlugin extends Plugin {
                         // because the user may have modified the query since it was last serialized
                         const escapedOriginalDefinition = escapeRegExp(originalQueryDefinition)
                         queryToSerializeRegex = new RegExp(
-                            `(${escapedOriginalDefinition}\\n)(?:${escapedSerializedStart}[^\\n]*${escapedSerializedClose}\\n[\\s\\S]*?${escapedSerializedEnd}\\n)?`,
+                            `(${escapedOriginalDefinition}(?:\\n|$))(?:${escapedSerializedStart}[^\\n]*${escapedSerializedClose}(?:\\n|$)[\\s\\S]*?${escapedSerializedEnd}(?:\\n|$))?`,
                             'gm'
                         )
                     } else {
@@ -951,7 +951,7 @@ export class DataviewSerializerPlugin extends Plugin {
                         // Note: \\s* before the closing flag allows trailing whitespace between the
                         // query and --> (users may have extra spaces before the closing comment)
                         queryToSerializeRegex = new RegExp(
-                            `^(${escapedIndentation}${escapedFlagOpen}${escapedQuery}\\s*${escapedQueryDefClose}\\n)(?:${escapedSerializedStart}[^\\n]*${escapedSerializedClose}\\n[\\s\\S]*?${escapedSerializedEnd}\\n)?`,
+                            `^(${escapedIndentation}${escapedFlagOpen}${escapedQuery}\\s*${escapedQueryDefClose}(?:\\n|$))(?:${escapedSerializedStart}[^\\n]*${escapedSerializedClose}(?:\\n|$)[\\s\\S]*?${escapedSerializedEnd}(?:\\n|$))?`,
                             'gm'
                         )
                     }
@@ -1293,7 +1293,7 @@ export class DataviewSerializerPlugin extends Plugin {
             // Idempotency check: compare new result with existing serialized content
             // Find existing serialized block for this query
             const existingSerializedRegex = new RegExp(
-                `${escapeRegExp(originalQueryDefinition)}\\n(?:${escapeRegExp(SERIALIZED_DATAVIEWJS_START)}|${escapeRegExp(SERIALIZED_DATAVIEWJS_START_ALT)})${escapeRegExp(QUERY_FLAG_CLOSE)}\\n([\\s\\S]*?)(?:${escapeRegExp(SERIALIZED_DATAVIEWJS_END)}|${escapeRegExp(SERIALIZED_DATAVIEWJS_END_ALT)})`,
+                `${escapeRegExp(originalQueryDefinition)}(?:\\n|$)(?:${escapeRegExp(SERIALIZED_DATAVIEWJS_START)}|${escapeRegExp(SERIALIZED_DATAVIEWJS_START_ALT)})${escapeRegExp(QUERY_FLAG_CLOSE)}(?:\\n|$)([\\s\\S]*?)(?:${escapeRegExp(SERIALIZED_DATAVIEWJS_END)}|${escapeRegExp(SERIALIZED_DATAVIEWJS_END_ALT)})`,
                 'm'
             )
             const existingMatch = originalText.match(existingSerializedRegex)
@@ -1313,7 +1313,7 @@ export class DataviewSerializerPlugin extends Plugin {
 
                 // Regex to match the query definition and any existing serialized block
                 const queryToSerializeRegex = new RegExp(
-                    `(${escapedQueryDefinition}\\n)(?:(?:${escapeRegExp(SERIALIZED_DATAVIEWJS_START)}|${escapeRegExp(SERIALIZED_DATAVIEWJS_START_ALT)})${escapeRegExp(QUERY_FLAG_CLOSE)}\\n[\\s\\S]*?(?:${escapeRegExp(SERIALIZED_DATAVIEWJS_END)}|${escapeRegExp(SERIALIZED_DATAVIEWJS_END_ALT)})\\n)?`,
+                    `(${escapedQueryDefinition}(?:\\n|$))(?:(?:${escapeRegExp(SERIALIZED_DATAVIEWJS_START)}|${escapeRegExp(SERIALIZED_DATAVIEWJS_START_ALT)})${escapeRegExp(QUERY_FLAG_CLOSE)}(?:\\n|$)[\\s\\S]*?(?:${escapeRegExp(SERIALIZED_DATAVIEWJS_END)}|${escapeRegExp(SERIALIZED_DATAVIEWJS_END_ALT)})(?:\\n|$))?`,
                     'gm'
                 )
 

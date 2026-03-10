@@ -33,7 +33,7 @@ describe('query regex matching', () => {
         const escapedQueryClose = escapeRegExp(QUERY_FLAG_CLOSE)
 
         return new RegExp(
-            `^(${escapedIndentation}${escapedFlagOpen}${escapedQuery}\\s*${escapedQueryClose}\\n)(?:${escapedSerializedStart}${escapedQuery}${escapedQueryClose}\\n[\\s\\S]*?${escapedSerializedEnd}\\n)?`,
+            `^(${escapedIndentation}${escapedFlagOpen}${escapedQuery}\\s*${escapedQueryClose}(?:\\n|$))(?:${escapedSerializedStart}${escapedQuery}${escapedQueryClose}(?:\\n|$)[\\s\\S]*?${escapedSerializedEnd}(?:\\n|$))?`,
             'gm'
         )
     }
@@ -253,7 +253,7 @@ ${QUERY_FLAG_OPEN}${query2}${QUERY_FLAG_CLOSE}
             const escapedQueryClose = escapeRegExp(QUERY_FLAG_CLOSE)
 
             return new RegExp(
-                `(${escapedOriginalDefinition}\\n)(?:${escapedSerializedStart}${escapedQuery}${escapedQueryClose}\\n[\\s\\S]*?${escapedSerializedEnd}\\n)?`,
+                `(${escapedOriginalDefinition}(?:\\n|$))(?:${escapedSerializedStart}${escapedQuery}${escapedQueryClose}(?:\\n|$)[\\s\\S]*?${escapedSerializedEnd}(?:\\n|$))?`,
                 'gm'
             )
         }
@@ -408,7 +408,7 @@ ${QUERY_FLAG_CLOSE}`
             // This matches ANY query text, allowing us to find and replace the old serialized
             // block even when the query has been modified
             return new RegExp(
-                `^(${escapedIndentation}${escapedFlagOpen}${escapedQuery}\\s*${escapedQueryClose}\\n)(?:${escapedSerializedStart}[^\\n]*${escapedQueryClose}\\n[\\s\\S]*?${escapedSerializedEnd}\\n)?`,
+                `^(${escapedIndentation}${escapedFlagOpen}${escapedQuery}\\s*${escapedQueryClose}(?:\\n|$))(?:${escapedSerializedStart}[^\\n]*${escapedQueryClose}(?:\\n|$)[\\s\\S]*?${escapedSerializedEnd}(?:\\n|$))?`,
                 'gm'
             )
         }
@@ -635,6 +635,63 @@ ${SERIALIZED_QUERY_END}
 
             expect(result).toContain('"$&$$"')
             expect(result).toContain(SERIALIZED_QUERY_START)
+        })
+    })
+
+    /**
+     * Regression tests for: https://github.com/dsebastien/obsidian-dataview-serializer/issues/58
+     * Issue: Queries at EOF without trailing newline were not matched by the regex.
+     */
+    describe('issue #58: query at EOF without trailing newline', () => {
+        it('should match a single-line query at EOF without trailing newline', () => {
+            const query = 'LIST FROM #project'
+            const regex = buildQueryToSerializeRegex(query)
+            // No trailing newline after the closing flag
+            const fileContent = `${QUERY_FLAG_OPEN}${query}${QUERY_FLAG_CLOSE}`
+
+            expect(regex.test(fileContent)).toBe(true)
+        })
+
+        it('should match a single-line query at EOF with content before it', () => {
+            const query = 'LIST FROM #project'
+            const regex = buildQueryToSerializeRegex(query)
+            const fileContent = `# My Note\nSome content\n${QUERY_FLAG_OPEN}${query}${QUERY_FLAG_CLOSE}`
+
+            expect(regex.test(fileContent)).toBe(true)
+        })
+
+        it('should match query with existing serialized block at EOF without trailing newline', () => {
+            const query = 'LIST FROM #project'
+            const regex = buildQueryToSerializeRegex(query)
+            // SerializedQuery END is at EOF with no trailing newline
+            const fileContent = `${QUERY_FLAG_OPEN}${query}${QUERY_FLAG_CLOSE}
+${SERIALIZED_QUERY_START}${query}${QUERY_FLAG_CLOSE}
+- [[Note 1]]
+- [[Note 2]]
+${SERIALIZED_QUERY_END}`
+
+            const matches = fileContent.match(regex)
+            expect(matches).toHaveLength(1)
+            // Should match the entire block including serialized content
+            expect(matches?.[0]).toContain(SERIALIZED_QUERY_END)
+        })
+
+        it('should correctly replace a query at EOF without trailing newline', () => {
+            const query = 'LIST FROM #project'
+            const regex = buildQueryToSerializeRegex(query)
+            const fileContent = `# My Note\n${QUERY_FLAG_OPEN}${query}${QUERY_FLAG_CLOSE}`
+
+            const replacement = `${QUERY_FLAG_OPEN}${query}${QUERY_FLAG_CLOSE}
+${SERIALIZED_QUERY_START}${query}${QUERY_FLAG_CLOSE}
+- [[Note 1]]
+${SERIALIZED_QUERY_END}
+`
+
+            const result = fileContent.replace(regex, () => replacement)
+
+            expect(result).toContain(SERIALIZED_QUERY_START)
+            expect(result).toContain('[[Note 1]]')
+            expect(result).toContain(SERIALIZED_QUERY_END)
         })
     })
 })

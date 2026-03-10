@@ -30,13 +30,13 @@ export const SERIALIZED_QUERY_END_ALT = '<!-- dataview-serializer-result-end -->
 
 // Regex to match serialized query blocks (legacy syntax)
 export const serializedQueriesRegex = new RegExp(
-    `${SERIALIZED_QUERY_START}[^\\n]*${QUERY_FLAG_CLOSE}\\n([\\s\\S]*?)${SERIALIZED_QUERY_END}\\n`,
+    `${SERIALIZED_QUERY_START}[^\\n]*${QUERY_FLAG_CLOSE}(?:\\n|$)([\\s\\S]*?)${SERIALIZED_QUERY_END}(?:\\n|$)`,
     'g'
 )
 
 // Regex to match serialized query blocks (alternative syntax)
 export const serializedQueriesRegexAlt = new RegExp(
-    `${SERIALIZED_QUERY_START_ALT}[^\\n]*${QUERY_FLAG_CLOSE}\\n([\\s\\S]*?)${SERIALIZED_QUERY_END_ALT}\\n`,
+    `${SERIALIZED_QUERY_START_ALT}[^\\n]*${QUERY_FLAG_CLOSE}(?:\\n|$)([\\s\\S]*?)${SERIALIZED_QUERY_END_ALT}(?:\\n|$)`,
     'g'
 )
 

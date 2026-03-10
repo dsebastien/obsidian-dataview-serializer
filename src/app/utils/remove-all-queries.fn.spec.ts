@@ -579,6 +579,82 @@ describe('removeAllQueries', () => {
             expect(result.removedCount).toBe(1)
         })
 
+        test('should remove block query at EOF without trailing newline', () => {
+            // No trailing newline after the query definition
+            const input = '# My Note\n<!-- QueryToSerialize: LIST FROM #foo -->'
+
+            const result = removeAllQueries(input)
+
+            expect(result.newText).toBe('# My Note\n')
+            expect(result.removedCount).toBe(1)
+        })
+
+        test('should remove serialized block at EOF without trailing newline', () => {
+            const input = [
+                '# My Note',
+                '<!-- SerializedQuery: LIST FROM #foo -->',
+                '- [[Note A]]',
+                '<!-- SerializedQuery END -->'
+            ].join('\n')
+
+            const result = removeAllQueries(input)
+
+            expect(result.newText).toBe('# My Note\n')
+            expect(result.removedCount).toBe(0) // result blocks aren't counted, only query definitions
+        })
+
+        test('should remove query with serialized block at EOF without trailing newline', () => {
+            const input = [
+                '# My Note',
+                '<!-- QueryToSerialize: LIST FROM #foo -->',
+                '<!-- SerializedQuery: LIST FROM #foo -->',
+                '- [[Note A]]',
+                '<!-- SerializedQuery END -->'
+            ].join('\n')
+
+            const result = removeAllQueries(input)
+
+            expect(result.newText).toBe('# My Note\n')
+            expect(result.removedCount).toBe(1)
+        })
+
+        test('should remove alternative syntax block at EOF without trailing newline', () => {
+            const input = '# My Note\n<!-- dataview-serializer-query: LIST FROM #project -->'
+
+            const result = removeAllQueries(input)
+
+            expect(result.newText).toBe('# My Note\n')
+            expect(result.removedCount).toBe(1)
+        })
+
+        test('should remove DataviewJS result block at EOF without trailing newline', () => {
+            const input = [
+                '# My Note',
+                '<!-- SerializedDataviewJS -->',
+                '- [[Project A]]',
+                '<!-- SerializedDataviewJS END -->'
+            ].join('\n')
+
+            const result = removeAllQueries(input)
+
+            expect(result.newText).toBe('# My Note\n')
+            expect(result.removedCount).toBe(0)
+        })
+
+        test('should remove DataviewJS query at EOF without trailing newline', () => {
+            const input = [
+                '# My Note',
+                '<!-- DataviewJSToSerialize:',
+                'dv.list(dv.pages("#tag").file.link)',
+                '-->'
+            ].join('\n')
+
+            const result = removeAllQueries(input)
+
+            expect(result.newText).toBe('# My Note\n')
+            expect(result.removedCount).toBe(1)
+        })
+
         test('should handle result block with trailing newline before end marker', () => {
             const input = [
                 '<!-- QueryToSerialize: TABLE FROM #foo -->',
