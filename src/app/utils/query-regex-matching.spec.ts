@@ -587,4 +587,54 @@ ${SERIALIZED_QUERY_END}
             expect(result.split(SERIALIZED_QUERY_START).length).toBe(3) // 2 occurrences = 3 parts
         })
     })
+
+    /**
+     * Regression test for: https://github.com/dsebastien/obsidian-dataview-serializer/issues/59
+     * Queries containing $1, $2, etc. (e.g., from regexreplace) must not be interpreted
+     * as regex backreferences by String.prototype.replace().
+     */
+    describe('dollar sign in query text (issue #59)', () => {
+        it('should preserve $1 in query text when using function-based replacement', () => {
+            const query =
+                'TABLE duration, regexreplace(string(duration), " (\\w)\\w+(, )?", "$1") AS orig FROM #training'
+            const regex = buildQueryToSerializeRegex(query)
+
+            const fileContent = `${QUERY_FLAG_OPEN}${query}${QUERY_FLAG_CLOSE}\n`
+
+            const replacement = `${QUERY_FLAG_OPEN}${query}${QUERY_FLAG_CLOSE}
+${SERIALIZED_QUERY_START}${query}${QUERY_FLAG_CLOSE}
+| File | duration | orig |
+| ---- | -------- | ---- |
+
+${SERIALIZED_QUERY_END}
+`
+
+            // Function-based replacement avoids $1 backreference interpretation
+            const result = fileContent.replace(regex, () => replacement)
+
+            expect(result).toContain('"$1"')
+            expect(result).toContain(SERIALIZED_QUERY_START)
+            expect(result).toContain(SERIALIZED_QUERY_END)
+        })
+
+        it('should preserve $& and $$ in query text when using function-based replacement', () => {
+            const query = 'TABLE regexreplace(string(field), "pattern", "$&$$") FROM #tag'
+            const regex = buildQueryToSerializeRegex(query)
+
+            const fileContent = `${QUERY_FLAG_OPEN}${query}${QUERY_FLAG_CLOSE}\n`
+
+            const replacement = `${QUERY_FLAG_OPEN}${query}${QUERY_FLAG_CLOSE}
+${SERIALIZED_QUERY_START}${query}${QUERY_FLAG_CLOSE}
+| File | result |
+| ---- | ------ |
+
+${SERIALIZED_QUERY_END}
+`
+
+            const result = fileContent.replace(regex, () => replacement)
+
+            expect(result).toContain('"$&$$"')
+            expect(result).toContain(SERIALIZED_QUERY_START)
+        })
+    })
 })

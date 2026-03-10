@@ -1019,7 +1019,7 @@ export class DataviewSerializerPlugin extends Plugin {
                     const textLengthBefore = updatedText.length
                     updatedText = updatedText.replace(
                         queryToSerializeRegex,
-                        queryAndSerializedQuery
+                        () => queryAndSerializedQuery
                     )
                     log(
                         `[DEBUG] After replacement - text length before: ${textLengthBefore}, after: ${updatedText.length}, diff: ${updatedText.length - textLengthBefore}`,
@@ -1332,7 +1332,7 @@ export class DataviewSerializerPlugin extends Plugin {
                     }${serializedEnd}\n`
                 }
 
-                updatedText = updatedText.replace(queryToSerializeRegex, replacement)
+                updatedText = updatedText.replace(queryToSerializeRegex, () => replacement)
             }
         }
 
