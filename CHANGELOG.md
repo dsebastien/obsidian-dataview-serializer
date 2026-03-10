@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented in this file.
 
+## [2.5.1](https://github.com/dsebastien/obsidian-dataview-serializer/compare/2.5.0...2.5.1) (2026-03-10)
+
+### Bug Fixes
+
+* **all:** fixed bug with regex queries ([28669b6](https://github.com/dsebastien/obsidian-dataview-serializer/commit/28669b6124d1b44c50897e555de8f9ea5f09b499)), closes [#59](https://github.com/dsebastien/obsidian-dataview-serializer/issues/59)
+
 ## [2.5.0](https://github.com/dsebastien/obsidian-dataview-serializer/compare/2.4.5...2.5.0) (2026-02-21)
 
 ### Features
@@ -132,5 +138,6 @@ All notable changes to this project will be documented in this file.
 ## [1.0.2](https://github.com/dsebastien/obsidian-dataview-serializer/compare/1.0.1...1.0.2) (2024-05-14)
 ## [1.0.1](https://github.com/dsebastien/obsidian-dataview-serializer/compare/1.0.0...1.0.1) (2024-05-14)
 ## 1.0.0 (2024-05-13)
+
 
 

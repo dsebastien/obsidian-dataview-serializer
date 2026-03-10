@@ -1,10 +1,10 @@
 # Release Notes
 
-## 2.5.1
+## 2.5.1 (2026-03-10)
 
 ### Bug Fixes
 
-* **all:** fixed `$1` in `regexreplace` queries breaking serialization ([#59](https://github.com/dsebastien/obsidian-dataview-serializer/issues/59)). Queries containing dollar-sign patterns like `$1`, `$2`, `$&` are now preserved literally instead of being interpreted as regex backreferences.
+* **all:** fixed bug with regex queries
 
 ## 2.5.0 (2026-02-21)
 
