@@ -1,5 +1,12 @@
 # Release Notes
 
+## 2.6.0 (2026-03-27)
+
+### Features
+
+* **all:** fixed bug with link format setting
+* **all:** updated workflows
+
 ## 2.5.2 (2026-03-10)
 
 ### Bug Fixes

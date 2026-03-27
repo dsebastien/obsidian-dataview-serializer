@@ -2,6 +2,13 @@
 
 All notable changes to this project will be documented in this file.
 
+## [2.6.0](https://github.com/dsebastien/obsidian-dataview-serializer/compare/2.5.2...2.6.0) (2026-03-27)
+
+### Features
+
+* **all:** fixed bug with link format setting ([f1fe8f3](https://github.com/dsebastien/obsidian-dataview-serializer/commit/f1fe8f3382e8c9f656d0a439650fc79576a423a4))
+* **all:** updated workflows ([bcab7c3](https://github.com/dsebastien/obsidian-dataview-serializer/commit/bcab7c3b4901d21d72bcf870e9476977ef96b858))
+
 ## [2.5.2](https://github.com/dsebastien/obsidian-dataview-serializer/compare/2.5.1...2.5.2) (2026-03-10)
 
 ### Bug Fixes
@@ -144,6 +151,7 @@ All notable changes to this project will be documented in this file.
 ## [1.0.2](https://github.com/dsebastien/obsidian-dataview-serializer/compare/1.0.1...1.0.2) (2024-05-14)
 ## [1.0.1](https://github.com/dsebastien/obsidian-dataview-serializer/compare/1.0.0...1.0.1) (2024-05-14)
 ## 1.0.0 (2024-05-13)
+
 
 
 
