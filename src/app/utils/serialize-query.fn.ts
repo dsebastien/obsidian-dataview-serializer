@@ -96,9 +96,10 @@ export const serializeQuery = async (
 ): Promise<QuerySerializationResult> => {
     const allVaultFiles = params.app.vault.getFiles()
 
-    // Resolve the effective link format
+    // Resolve the effective link format and link syntax
     // When 'obsidian', read from Obsidian's vault configuration
     let effectiveLinkFormat: 'shortest' | 'absolute' = 'shortest'
+    let useMarkdownLinks = false
     const configuredFormat = params.linkFormat ?? 'shortest'
 
     if (configuredFormat === 'obsidian') {
@@ -116,6 +117,10 @@ export const serializeQuery = async (
         } else {
             effectiveLinkFormat = 'shortest'
         }
+
+        // Check Obsidian's "Use [[Wikilinks]]" setting (inverse of useMarkdownLinks)
+        // When useMarkdownLinks is true, output [display](path) instead of [[path|display]]
+        useMarkdownLinks = (vaultConfig?.useMarkdownLinks as boolean) === true
     } else {
         effectiveLinkFormat = configuredFormat
     }
@@ -134,6 +139,25 @@ export const serializeQuery = async (
     // Determine if the note name and alias are different
     function isValidAlias(name: string, alias: string): boolean {
         return getNameWithoutExtension(name) !== alias
+    }
+
+    /**
+     * Format a link as either a wikilink or a standard markdown link.
+     * @param linkPath The target path (may be simplified or full)
+     * @param display Optional display text (omit for simple links where display matches path stem)
+     * @param isTable Whether the link is inside a table cell (wikilinks need escaped pipes)
+     */
+    function formatLink(linkPath: string, display: string | undefined, isTable: boolean): string {
+        if (useMarkdownLinks) {
+            const displayText = display ?? getNameWithoutExtension(linkPath)
+            return `[${displayText}](${linkPath})`
+        }
+        // Wikilink format
+        if (display) {
+            const separator = isTable ? '\\|' : '|'
+            return `[[${linkPath}${separator}${display}]]`
+        }
+        return `[[${linkPath}]]`
     }
 
     let serializedQuery = ''
@@ -167,29 +191,33 @@ export const serializeQuery = async (
                 if (isNameUnique(name)) {
                     // The name is unique, so ok to replace the path
                     if (!isValidAlias(name, alias)) {
-                        // Name and alias match. Simplify to just [[alias]]
-                        serializedQuery = serializedQuery.replace(match[0], '[[' + alias + ']]')
+                        // Name and alias match. Simplify to just the alias
+                        // For wikilinks: [[alias]] (no extension)
+                        // For markdown: [alias](name) (keep extension for valid link target)
+                        const linkTarget = useMarkdownLinks ? name : alias
+                        serializedQuery = serializedQuery.replace(
+                            match[0],
+                            formatLink(linkTarget, undefined, true)
+                        )
                     } else {
                         // Name and alias are different. Need to remove the path and keep the alias
-                        if (name.endsWith('.md')) {
-                            // For .md we can keep just the note name without extension
-                            serializedQuery = serializedQuery.replace(
-                                match[0],
-                                '[[' + getNameWithoutExtension(name) + '\\|' + alias + ']]'
-                            )
-                        } else {
-                            // File types not .md need to keep full filename
-                            serializedQuery = serializedQuery.replace(
-                                match[0],
-                                '[[' + name + '\\|' + alias + ']]'
-                            )
-                        }
+                        // For wikilinks: [[nameWithoutExt\|alias]] or [[name\|alias]]
+                        // For markdown: [alias](name)
+                        const linkTarget = useMarkdownLinks
+                            ? name
+                            : name.endsWith('.md')
+                              ? getNameWithoutExtension(name)
+                              : name
+                        serializedQuery = serializedQuery.replace(
+                            match[0],
+                            formatLink(linkTarget, alias, true)
+                        )
                     }
                 } else {
-                    // Name is not unique, keep the full path (with escaped pipe for table)
+                    // Name is not unique, keep the full path
                     serializedQuery = serializedQuery.replace(
                         match[0],
-                        '[[' + filepath + '\\|' + alias + ']]'
+                        formatLink(filepath, alias, true)
                     )
                 }
             }
@@ -205,24 +233,45 @@ export const serializeQuery = async (
                 // match[0]: Full matched string
                 // match[1]: Matched group 1 = filepath
                 // match[2]: Matched group 2 = alias
-                const name = getBasename(match[1]!)
+                const filepath = match[1]!
+                const name = getBasename(filepath)
                 const alias = match[2]!
-                if (isNameUnique(name)) {
-                    // The name is unique, so ok to replace the path
+                if (useMarkdownLinks) {
+                    // Markdown link format: replace the entire wikilink
+                    if (isNameUnique(name)) {
+                        if (!isValidAlias(name, alias)) {
+                            serializedQuery = serializedQuery.replace(
+                                match[0],
+                                formatLink(name, undefined, false)
+                            )
+                        } else {
+                            serializedQuery = serializedQuery.replace(
+                                match[0],
+                                formatLink(name, alias, false)
+                            )
+                        }
+                    } else {
+                        serializedQuery = serializedQuery.replace(
+                            match[0],
+                            formatLink(filepath, alias, false)
+                        )
+                    }
+                } else if (isNameUnique(name)) {
+                    // Wikilink format: modify path within existing brackets
                     if (!isValidAlias(name, alias)) {
                         // Name and alias match. Can replace the lot and leave what is the alias as the link
-                        serializedQuery = serializedQuery.replace(match[1] + '|', '')
+                        serializedQuery = serializedQuery.replace(filepath + '|', '')
                     } else {
                         // Name and alias are different. Need to remove the path and keep the alias
                         if (name.endsWith('.md')) {
                             // For .md we can keep just the note name without extension
                             serializedQuery = serializedQuery.replace(
-                                match[1] + '|',
+                                filepath + '|',
                                 getNameWithoutExtension(name) + '|'
                             )
                         } else {
                             // File types not .md need to keep full filename
-                            serializedQuery = serializedQuery.replace(match[1] + '|', name + '|')
+                            serializedQuery = serializedQuery.replace(filepath + '|', name + '|')
                         }
                     }
                 }

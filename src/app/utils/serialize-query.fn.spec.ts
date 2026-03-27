@@ -313,6 +313,220 @@ describe('serializeQuery', () => {
         })
     })
 
+    describe('useMarkdownLinks (obsidian setting)', () => {
+        const createMarkdownLinksApp = (files: Partial<TFile>[]): App =>
+            ({
+                vault: {
+                    getFiles: () => files as TFile[],
+                    config: { useMarkdownLinks: true, newLinkFormat: 'shortest' }
+                }
+            }) as unknown as App
+
+        it('should output markdown links for unique file names in list queries', async () => {
+            const mockApp = createMarkdownLinksApp([{ name: 'unique-note.md' }])
+            const mockApi = createMockDataviewApi('- [[folder/unique-note.md|unique-note]]\n')
+
+            const result = await serializeQuery({
+                query: 'list',
+                originFile: 'origin.md',
+                dataviewApi: mockApi,
+                app: mockApp,
+                linkFormat: 'obsidian'
+            })
+
+            expect(result.success).toBe(true)
+            expect(result.serializedContent).toBe('- [unique-note](unique-note.md)\n')
+        })
+
+        it('should output markdown links for non-unique file names in list queries', async () => {
+            const mockApp = createMarkdownLinksApp([{ name: 'note.md' }, { name: 'note.md' }])
+            const mockApi = createMockDataviewApi('- [[folder/note.md|note]]\n')
+
+            const result = await serializeQuery({
+                query: 'list',
+                originFile: 'origin.md',
+                dataviewApi: mockApi,
+                app: mockApp,
+                linkFormat: 'obsidian'
+            })
+
+            // Non-unique: keep full path in markdown link
+            expect(result.success).toBe(true)
+            expect(result.serializedContent).toBe('- [note](folder/note.md)\n')
+        })
+
+        it('should preserve custom display name in markdown links for list queries', async () => {
+            const mockApp = createMarkdownLinksApp([{ name: 'Hello1.md' }])
+            const mockApi = createMockDataviewApi('- [[folder/Hello1.md|h1]]\n')
+
+            const result = await serializeQuery({
+                query: 'LIST WITHOUT ID link(file.name, display_name) FROM #test',
+                originFile: 'origin.md',
+                dataviewApi: mockApi,
+                app: mockApp,
+                linkFormat: 'obsidian'
+            })
+
+            expect(result.success).toBe(true)
+            expect(result.serializedContent).toBe('- [h1](Hello1.md)\n')
+        })
+
+        it('should output markdown links in table queries (no pipe escaping needed)', async () => {
+            const mockApp = createMarkdownLinksApp([{ name: 'unique-note.md' }])
+            const mockApi = createMockDataviewApi(
+                '| File |\n| --- |\n| [[folder/unique-note.md\\|unique-note]] |'
+            )
+
+            const result = await serializeQuery({
+                query: 'table',
+                originFile: 'origin.md',
+                dataviewApi: mockApi,
+                app: mockApp,
+                linkFormat: 'obsidian'
+            })
+
+            expect(result.success).toBe(true)
+            expect(result.serializedContent).toBe(
+                '| File |\n| --- |\n| [unique-note](unique-note.md) |'
+            )
+        })
+
+        it('should output markdown links for non-unique file names in table queries', async () => {
+            const mockApp = createMarkdownLinksApp([{ name: 'note.md' }, { name: 'note.md' }])
+            const mockApi = createMockDataviewApi(
+                '| File |\n| --- |\n| [[folder/note.md\\|note]] |'
+            )
+
+            const result = await serializeQuery({
+                query: 'table',
+                originFile: 'origin.md',
+                dataviewApi: mockApi,
+                app: mockApp,
+                linkFormat: 'obsidian'
+            })
+
+            expect(result.success).toBe(true)
+            expect(result.serializedContent).toBe('| File |\n| --- |\n| [note](folder/note.md) |')
+        })
+
+        it('should preserve custom display name in markdown links for table queries', async () => {
+            const mockApp = createMarkdownLinksApp([{ name: 'Hello1.md' }])
+            const mockApi = createMockDataviewApi(
+                '| File |\n| --- |\n| [[folder/Hello1.md\\|h1]] |'
+            )
+
+            const result = await serializeQuery({
+                query: 'TABLE WITHOUT ID link(file.name, display_name) FROM #test',
+                originFile: 'origin.md',
+                dataviewApi: mockApi,
+                app: mockApp,
+                linkFormat: 'obsidian'
+            })
+
+            expect(result.success).toBe(true)
+            expect(result.serializedContent).toBe('| File |\n| --- |\n| [h1](Hello1.md) |')
+        })
+
+        it('should use absolute paths with markdown links when Obsidian uses absolute format', async () => {
+            const mockApp = {
+                vault: {
+                    getFiles: () => [{ name: 'unique-note.md' }] as TFile[],
+                    config: { useMarkdownLinks: true, newLinkFormat: 'absolute' }
+                }
+            } as unknown as App
+
+            const mockApi = createMockDataviewApi('- [[folder/unique-note.md|unique-note]]\n')
+
+            const result = await serializeQuery({
+                query: 'list',
+                originFile: 'origin.md',
+                dataviewApi: mockApi,
+                app: mockApp,
+                linkFormat: 'obsidian'
+            })
+
+            expect(result.success).toBe(true)
+            expect(result.serializedContent).toBe('- [unique-note](folder/unique-note.md)\n')
+        })
+
+        it('should output wikilinks when useMarkdownLinks is false', async () => {
+            const mockApp = {
+                vault: {
+                    getFiles: () => [{ name: 'unique-note.md' }] as TFile[],
+                    config: { useMarkdownLinks: false, newLinkFormat: 'shortest' }
+                }
+            } as unknown as App
+
+            const mockApi = createMockDataviewApi('- [[folder/unique-note.md|unique-note]]\n')
+
+            const result = await serializeQuery({
+                query: 'list',
+                originFile: 'origin.md',
+                dataviewApi: mockApi,
+                app: mockApp,
+                linkFormat: 'obsidian'
+            })
+
+            expect(result.success).toBe(true)
+            expect(result.serializedContent).toBe('- [[unique-note]]\n')
+        })
+
+        it('should not use markdown links when linkFormat is not "obsidian"', async () => {
+            // Even if vault has useMarkdownLinks, non-obsidian linkFormat should not use it
+            const mockApp = {
+                vault: {
+                    getFiles: () => [{ name: 'unique-note.md' }] as TFile[],
+                    config: { useMarkdownLinks: true, newLinkFormat: 'shortest' }
+                }
+            } as unknown as App
+
+            const mockApi = createMockDataviewApi('- [[folder/unique-note.md|unique-note]]\n')
+
+            const result = await serializeQuery({
+                query: 'list',
+                originFile: 'origin.md',
+                dataviewApi: mockApi,
+                app: mockApp,
+                linkFormat: 'shortest'
+            })
+
+            expect(result.success).toBe(true)
+            expect(result.serializedContent).toBe('- [[unique-note]]\n')
+        })
+
+        it('should handle non-.md files with markdown links', async () => {
+            const mockApp = createMarkdownLinksApp([{ name: 'image.png' }])
+            const mockApi = createMockDataviewApi('- [[assets/image.png|My Image]]\n')
+
+            const result = await serializeQuery({
+                query: 'list',
+                originFile: 'origin.md',
+                dataviewApi: mockApi,
+                app: mockApp,
+                linkFormat: 'obsidian'
+            })
+
+            expect(result.success).toBe(true)
+            expect(result.serializedContent).toBe('- [My Image](image.png)\n')
+        })
+
+        it('should handle task queries with markdown links', async () => {
+            const mockApp = createMarkdownLinksApp([{ name: 'project.md' }])
+            const mockApi = createMockDataviewApi('- [ ] Task from [[folder/project.md|project]]\n')
+
+            const result = await serializeQuery({
+                query: 'task WHERE !completed',
+                originFile: 'origin.md',
+                dataviewApi: mockApi,
+                app: mockApp,
+                linkFormat: 'obsidian'
+            })
+
+            expect(result.success).toBe(true)
+            expect(result.serializedContent).toBe('- Task from [project](project.md)\n')
+        })
+    })
+
     describe('task queries', () => {
         it('should strip checkbox markers from task output', async () => {
             const mockApp = createMockApp([])

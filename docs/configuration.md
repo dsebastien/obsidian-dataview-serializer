@@ -19,9 +19,9 @@ In the settings of the plugin, you can configure:
 - **Add trailing newline**: When enabled, an empty line will be added between the serialized content and the END marker. This is useful for static site generators like Jekyll that require blank lines after tables or lists.
 
 - **Link format**: Controls how internal links are formatted in the serialized output. Options:
-  - **Use Obsidian setting**: Respects your vault's "New link format" preference (Settings → Files and links → New link format). If Obsidian is set to "Relative path" or "Absolute path", the plugin will preserve full paths.
-  - **Shortest path when possible** (default): Simplifies links when the filename is unique in the vault. For example, `[[folder/note.md|note]]` becomes `[[note]]` if there's only one file named `note.md`.
-  - **Absolute path**: Always uses the full path to the file. This ensures consistency when syncing vaults across devices using Git or other tools, preventing commit noise from link format differences.
+  - **Use Obsidian setting**: Respects your vault's "New link format" preference (Settings → Files and links → New link format) and your "Use \[\[Wikilinks\]\]" preference. If Obsidian is set to "Relative path" or "Absolute path", the plugin will preserve full paths. If "Use \[\[Wikilinks\]\]" is disabled (i.e., your vault uses standard Markdown links), serialized output will use `[display](path)` format instead of `[[path|display]]`.
+  - **Shortest path when possible** (default): Simplifies links when the filename is unique in the vault. For example, `[[folder/note.md|note]]` becomes `[[note]]` if there's only one file named `note.md`. Always uses wikilink syntax.
+  - **Absolute path**: Always uses the full path to the file, with wikilink syntax. This ensures consistency when syncing vaults across devices using Git or other tools, preventing commit noise from link format differences.
 
 ## Folder Settings
 

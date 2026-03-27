@@ -146,7 +146,7 @@ export class SettingsTab extends PluginSettingTab {
         new Setting(this.containerEl)
             .setName('Link format')
             .setDesc(
-                'Format for internal links in serialized output. "Use Obsidian setting" respects your vault\'s "New link format" preference. "Shortest path" simplifies links when the filename is unique. "Absolute path" always uses the full path, which ensures consistency when syncing vaults across devices.'
+                'Format for internal links in serialized output. "Use Obsidian setting" respects your vault\'s "New link format" and "Use [[Wikilinks]]" preferences. "Shortest path" simplifies links when the filename is unique. "Absolute path" always uses the full path, which ensures consistency when syncing vaults across devices.'
             )
             .addDropdown((dropdown) => {
                 dropdown
