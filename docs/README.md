@@ -1,3 +1,9 @@
+---
+title: Overview
+nav_order: 1
+permalink: /
+---
+
 # Overview
 
 Welcome to the official documentation of the Dataview Serializer plugin for Obsidian.

@@ -1,3 +1,8 @@
+---
+title: Tips & best practices
+nav_order: 90
+---
+
 # Tips
 
 This page contains useful tips and tricks shared by the community.

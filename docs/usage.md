@@ -1,3 +1,8 @@
+---
+title: Usage
+nav_order: 2
+---
+
 # Usage
 
 This plugin automatically serializes configured Dataview queries present in your notes. The queries will be serialized when you save the note (with a minimum of 5 seconds between updates to the same file to avoid update loops).

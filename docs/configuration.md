@@ -1,3 +1,8 @@
+---
+title: Configuration
+nav_order: 3
+---
+
 # Configuration
 
 In the settings of the plugin, you can configure:
