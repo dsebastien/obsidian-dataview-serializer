@@ -34,7 +34,7 @@ function getDataviewApi(app: App): DataviewApi | undefined {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     return (app as any).plugins?.plugins?.dataview?.api as DataviewApi | undefined
 }
-import { add, isBefore } from 'date-fns'
+import { add, isAfter } from 'date-fns'
 import { serializeQuery } from './utils/serialize-query.fn'
 import { findQueries, type QueryWithContext } from './utils/find-queries.fn'
 import { escapeRegExp } from './utils/escape-reg-exp.fn'
@@ -694,6 +694,7 @@ export class DataviewSerializerPlugin extends Plugin {
             this.createEventRef = this.app.vault.on('create', (file) => {
                 this.recentlyUpdatedFiles.add(file)
                 this.scheduleUpdate()
+                log(`Forced update triggered by create: ${file.path}`, 'debug')
                 this.scheduleForcedUpdate()
             })
             this.registerEvent(this.createEventRef)
@@ -701,6 +702,7 @@ export class DataviewSerializerPlugin extends Plugin {
             this.renameEventRef = this.app.vault.on('rename', (file) => {
                 this.recentlyUpdatedFiles.add(file)
                 this.scheduleUpdate()
+                log(`Forced update triggered by rename: ${file.path}`, 'debug')
                 this.scheduleForcedUpdate()
             })
             this.registerEvent(this.renameEventRef)
@@ -717,6 +719,7 @@ export class DataviewSerializerPlugin extends Plugin {
 
                 this.recentlyUpdatedFiles.add(file)
                 this.scheduleUpdate()
+                log(`Forced update triggered by modify: ${file.path}`, 'debug')
                 this.scheduleForcedUpdate()
             })
             this.registerEvent(this.modifyEventRef)
@@ -1064,16 +1067,14 @@ export class DataviewSerializerPlugin extends Plugin {
             )
 
             if (updatedText !== text) {
-                if (targetQuery) {
-                    this.filesToIgnoreFileEvents.add(file.path)
-                    // Safety net: ensure the file is eventually removed from the ignore list
-                    // even if the modify event doesn't fire or an error occurs.
-                    window.setTimeout(() => {
-                        if (this.filesToIgnoreFileEvents.has(file.path)) {
-                            this.filesToIgnoreFileEvents.delete(file.path)
-                        }
-                    }, 2000)
-                }
+                this.filesToIgnoreFileEvents.add(file.path)
+                // Safety net: ensure the file is eventually removed from the ignore list
+                // even if the modify event doesn't fire or an error occurs.
+                window.setTimeout(() => {
+                    if (this.filesToIgnoreFileEvents.has(file.path)) {
+                        this.filesToIgnoreFileEvents.delete(file.path)
+                    }
+                }, 2000)
                 //log('The file content has changed. Saving the modifications', 'info');
                 await this.app.vault.modify(file, updatedText)
             }
@@ -1370,8 +1371,7 @@ export class DataviewSerializerPlugin extends Plugin {
         // Make sure the file was not modified too recently (avoid update loops)
         if (this.nextPossibleUpdates.has(file.path)) {
             const nextPossibleUpdateForFile = this.nextPossibleUpdates.get(file.path)!
-
-            if (isBefore(file.stat.mtime, nextPossibleUpdateForFile)) {
+            if (isAfter(nextPossibleUpdateForFile, new Date())) {
                 log('File has been updated recently. Ignoring', 'debug', file.path)
                 return true
             } else {
