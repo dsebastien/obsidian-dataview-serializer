@@ -1,9 +1,10 @@
----
-title: Release notes
-nav_order: 98
----
-
 # Release Notes
+
+## 2.6.1 (2026-04-28)
+
+### Bug Fixes
+
+* **plugin:** allow forced folder files to re-process after cooldown expires
 
 ## 2.6.0 (2026-03-27)
 

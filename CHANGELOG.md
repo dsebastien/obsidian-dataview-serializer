@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented in this file.
 
+## [2.6.1](https://github.com/dsebastien/obsidian-dataview-serializer/compare/2.6.0...2.6.1) (2026-04-28)
+
+### Bug Fixes
+
+* **plugin:** allow forced folder files to re-process after cooldown expires ([e39ca7d](https://github.com/dsebastien/obsidian-dataview-serializer/commit/e39ca7dd30ffb5929a389877725d6e0e239754e2))
+
 ## [2.6.0](https://github.com/dsebastien/obsidian-dataview-serializer/compare/2.5.2...2.6.0) (2026-03-27)
 
 ### Features
@@ -151,6 +157,7 @@ All notable changes to this project will be documented in this file.
 ## [1.0.2](https://github.com/dsebastien/obsidian-dataview-serializer/compare/1.0.1...1.0.2) (2024-05-14)
 ## [1.0.1](https://github.com/dsebastien/obsidian-dataview-serializer/compare/1.0.0...1.0.1) (2024-05-14)
 ## 1.0.0 (2024-05-13)
+
 
 
 
