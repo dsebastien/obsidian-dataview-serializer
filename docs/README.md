@@ -30,6 +30,22 @@ Currently, this plugin supports:
 
 **Note:** TASK queries have their checkbox markers stripped in the serialized output to prevent feedback loops. The result will be a regular list instead of a task list. See the [Usage documentation](usage.md#task-query-behavior) for details.
 
+### Installation
+
+#### From the Obsidian community catalog (recommended)
+
+1. In Obsidian, go to **Settings → Community plugins**.
+2. Disable **Restricted mode** if you have not already.
+3. Select **Browse**, search for **Dataview Serializer**, install it, and then enable it.
+
+> The [Dataview](https://github.com/blacksmithgu/obsidian-dataview) plugin must also be installed and enabled.
+
+#### Manual installation
+
+1. Download `main.js`, `manifest.json`, and `styles.css` from the latest [GitHub release](https://github.com/dsebastien/obsidian-dataview-serializer/releases).
+2. Copy them into `<YourVault>/.obsidian/plugins/dataview-serializer/` (create the folder if it does not exist).
+3. Reload Obsidian and enable the plugin in **Settings → Community plugins**.
+
 ### About
 
 This plugin is an [open source project](https://github.com/dsebastien/obsidian-dataview-serializer), created by [Sébastien Dubois](https://dsebastien.net/).

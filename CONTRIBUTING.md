@@ -28,6 +28,38 @@ $ bun test
 
 In addition to the classic (bun installation, etc), make sure to define the `OBSIDIAN_VAULT_LOCATION` environment variable. It should point to the root folder of an existing Obsidian vault. When building the DEV version (`bun run dev`), the plugin will be copied to that vault's `.obsidian/plugins` folder. This makes it easy to build and automatically have the up to date plugin for testing in Obsidian. It also avoids having to store the codebase within the Obsidian vault...
 
+## Git hooks (Git 2.54+)
+
+This repo uses [Git's built-in config-based hooks](https://github.blog/open-source/git/highlights-from-git-2-54/) (introduced in **Git 2.54**) instead of Husky + `lint-staged`. The hook definitions live in a tracked `.gitconfig` file at the repo root and are committed to source control.
+
+### Enable the hooks once per clone
+
+After the first `bun install`, run:
+
+```bash
+bun run setup
+```
+
+That script runs `git config --local --replace-all include.path ../.gitconfig` — the path is relative to `.git/`, so `../.gitconfig` resolves to the repo root. Git then reads the tracked `.gitconfig`, picking up:
+
+- **`pre-commit` → `scripts/git-hooks/format-staged.sh`** — runs Prettier over the staged files and re-stages them.
+- **`commit-msg` → `bunx commitlint --edit`** — validates the commit message against `commitlint.config.ts`.
+
+Confirm the hooks are wired up:
+
+```bash
+git hook list pre-commit
+git hook list commit-msg
+```
+
+### Requirements
+
+- Git **≥ 2.54** is required for config-based hooks. Older Git versions silently ignore them, so the hooks won't run (but nothing will break).
+
+### Why not Husky?
+
+Husky + `lint-staged` together pull in ~80 transitive deps and require a `prepare` post-install script to inject shims into `.git/hooks/`. Git 2.54 provides the same functionality natively, the hook config is plain text in version control, and there's no install-time magic.
+
 ## Releasing a new version
 
 - Commit all changes

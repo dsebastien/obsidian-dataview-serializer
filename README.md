@@ -7,6 +7,20 @@ Turning Dataview queries into Markdown also ensures that the generated content a
 
 The [Dataview](https://github.com/blacksmithgu/obsidian-dataview) plugin MUST be installed for this plugin to function correctly.
 
+## Installation
+
+### From the Obsidian community catalog (recommended)
+
+1. In Obsidian, go to **Settings → Community plugins**.
+2. Disable **Restricted mode** if you have not already.
+3. Select **Browse**, search for **Dataview Serializer**, install it, and then enable it.
+
+### Manual installation
+
+1. Download `main.js`, `manifest.json`, and `styles.css` from the latest [GitHub release](https://github.com/dsebastien/obsidian-dataview-serializer/releases).
+2. Copy them into `<YourVault>/.obsidian/plugins/dataview-serializer/` (create the folder if it does not exist).
+3. Reload Obsidian and enable the plugin in **Settings → Community plugins**.
+
 ## Documentation
 
 You can find the documentation [here](https://developassion.gitbook.io/obsidian-dataview-serializer).

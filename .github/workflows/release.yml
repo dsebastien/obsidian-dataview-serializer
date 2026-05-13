@@ -13,6 +13,8 @@ on:
 
 permissions:
     contents: write
+    id-token: write
+    attestations: write
 
 jobs:
     release:
@@ -102,15 +104,6 @@ jobs:
                   git tag -a ${{ steps.version.outputs.tag }} -m "Release ${{ steps.version.outputs.version }}"
                   git push origin ${{ steps.version.outputs.tag }}
 
-            - name: Create release zip
-              run: bun run release:zip
-
-            - name: Get package name
-              id: package
-              run: |
-                  NAME=$(jq -r .name package.json)
-                  echo "name=$NAME" >> $GITHUB_OUTPUT
-
             - name: Extract changelog for release notes
               id: changelog
               run: |
@@ -121,6 +114,14 @@ jobs:
                   echo "$NOTES" >> $GITHUB_OUTPUT
                   echo "EOF" >> $GITHUB_OUTPUT
 
+            - name: Generate artifact attestations
+              uses: actions/attest-build-provenance@v3
+              with:
+                  subject-path: |
+                      dist/main.js
+                      dist/manifest.json
+                      dist/styles.css
+
             - name: Create GitHub Release
               uses: softprops/action-gh-release@v2
               with:
@@ -128,7 +129,6 @@ jobs:
                   name: ${{ steps.version.outputs.version }}
                   body: ${{ steps.changelog.outputs.notes }}
                   files: |
-                      dist/${{ steps.package.outputs.name }}.zip
                       dist/main.js
                       dist/manifest.json
                       dist/styles.css
