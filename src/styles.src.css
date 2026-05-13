@@ -23,10 +23,11 @@
 }
 
 /* Line decorations for serialized results boundaries - faded in source mode */
-.dvs-results-start-line,
-.dvs-results-end-line {
+/* Doubled class names bump specificity to override CodeMirror's line color without using !important */
+.dvs-results-start-line.dvs-results-start-line,
+.dvs-results-end-line.dvs-results-end-line {
     @apply opacity-30 !pl-2 text-xs italic;
-    color: var(--text-faint) !important;
+    color: var(--text-faint);
     white-space: nowrap;
     overflow: hidden;
 

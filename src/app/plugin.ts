@@ -31,7 +31,7 @@ import type { QuerySerializationResult } from './types/query-result.intf'
  * This avoids requiring obsidian-dataview at runtime.
  */
 function getDataviewApi(app: App): DataviewApi | undefined {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Obsidian's `app.plugins` registry is untyped; cast is unavoidable here
     return (app as any).plugins?.plugins?.dataview?.api as DataviewApi | undefined
 }
 import { add, isAfter } from 'date-fns'
@@ -341,7 +341,7 @@ export class DataviewSerializerPlugin extends Plugin {
         // Add command to insert dataview serializer block
         this.addCommand({
             id: 'insert-dataview-serializer-block',
-            name: 'Insert Dataview serializer block',
+            name: 'Insert query block',
             editorCallback: (editor) => {
                 const cursor = editor.getCursor()
                 const line = editor.getLine(cursor.line)
@@ -496,7 +496,7 @@ export class DataviewSerializerPlugin extends Plugin {
         // Add command to remove all Dataview serializer queries from the current file
         this.addCommand({
             id: 'remove-all-queries-in-current-file',
-            name: 'Remove all Dataview serializer queries from current file',
+            name: 'Remove all queries from current file',
             editorCallback: (editor) => {
                 const activeFile = this.app.workspace.getActiveFile()
 
@@ -666,7 +666,7 @@ export class DataviewSerializerPlugin extends Plugin {
         log(`Settings loaded`, 'debug', loadedSettings)
 
         if (needToSaveSettings) {
-            this.saveSettings()
+            await this.saveSettings()
         }
     }
 
@@ -761,7 +761,7 @@ export class DataviewSerializerPlugin extends Plugin {
         }
 
         // Safe from here on
-        const file = _file as TFile
+        const file = _file
         const result: FileProcessingResult = { filePath: file.path, errors: [] }
 
         const shouldBeIgnored = await this.shouldFileBeIgnored(file, force)

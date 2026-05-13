@@ -104,7 +104,7 @@ export const serializeQuery = async (
 
     if (configuredFormat === 'obsidian') {
         // Read Obsidian's "New link format" setting from vault config
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any -- `vault.config` is not exposed in Obsidian's public typings
         const vaultConfig = (params.app.vault as any).config
         const obsidianFormat = vaultConfig?.newLinkFormat as string | undefined
 

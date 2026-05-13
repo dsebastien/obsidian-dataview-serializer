@@ -6,7 +6,7 @@
 import { mock } from 'bun:test'
 
 // Mock the obsidian module
-mock.module('obsidian', () => ({
+void mock.module('obsidian', () => ({
     Notice: class Notice {
         constructor(_message: string, _timeout?: number) {
             // No-op for tests

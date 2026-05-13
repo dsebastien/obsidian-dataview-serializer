@@ -272,28 +272,32 @@ export class SettingsTab extends PluginSettingTab {
             .addButton((cb) => {
                 cb.setIcon('plus')
                 cb.setTooltip('Add folder')
-                cb.onClick(async () => {
+                cb.onClick(() => {
                     if (!searchInput) {
                         return
                     }
                     const newFolder = searchInput.getValue()
 
-                    await setValue([...currentList, newFolder].filter(onlyUniqueArray))
-                    await this.plugin.saveSettings()
-                    searchInput.setValue('')
-                    this.display()
+                    void (async () => {
+                        await setValue([...currentList, newFolder].filter(onlyUniqueArray))
+                        await this.plugin.saveSettings()
+                        searchInput?.setValue('')
+                        this.display()
+                    })()
                 })
             })
 
-        currentList.forEach((ignoreFolder) =>
-            new Setting(this.containerEl).setName(ignoreFolder).addButton((button) =>
-                button.setButtonText('Remove').onClick(async () => {
-                    await setValue(currentList.filter((value) => value !== ignoreFolder))
-                    await this.plugin.saveSettings()
-                    this.display()
+        currentList.forEach((ignoreFolder) => {
+            new Setting(this.containerEl).setName(ignoreFolder).addButton((button) => {
+                button.setButtonText('Remove').onClick(() => {
+                    void (async () => {
+                        await setValue(currentList.filter((value) => value !== ignoreFolder))
+                        await this.plugin.saveSettings()
+                        this.display()
+                    })()
                 })
-            )
-        )
+            })
+        })
     }
 
     renderBuyMeACoffeeBadge(contentEl: HTMLElement | DocumentFragment, width = 175): void {

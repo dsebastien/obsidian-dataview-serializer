@@ -27,7 +27,7 @@
         "bun": ">=1.0.0"
     },
     "main": "main.js",
-    "packageManager": "bun@1.3.2",
+    "packageManager": "bun@1.3.14",
     "config": {
         "commitizen": {
             "path": "node_modules/cz-customizable"
@@ -58,6 +58,8 @@
         "validate": "bun run --parallel tsc test lint"
     },
     "devDependencies": {
+        "@codemirror/state": "^6.5.2",
+        "@codemirror/view": "^6.36.7",
         "@commitlint/cli": "^20.1.0",
         "@commitlint/config-conventional": "^20.1.0",
         "@eslint/js": "^9.36.0",

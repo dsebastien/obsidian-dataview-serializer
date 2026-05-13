@@ -42,6 +42,7 @@ import {
     SERIALIZED_DATAVIEWJS_END_ALT
 } from './constants'
 import type { PluginSettings } from './types/plugin-settings.intf'
+import { log } from '../utils/log'
 
 type QueryType = 'auto' | 'manual' | 'once' | 'eject'
 
@@ -291,34 +292,29 @@ function getQueryTypeInfo(queryType: QueryType): { label: string; icon: string }
  * Create the query type badge element
  */
 function createQueryBadge(queryType: QueryType): HTMLElement {
-    const badge = document.createElement('span')
-    badge.className = `dvs-query-badge dvs-query-badge-${queryType}`
+    const badge = createSpan({ cls: `dvs-query-badge dvs-query-badge-${queryType}` })
 
     const info = getQueryTypeInfo(queryType)
 
-    const iconSpan = document.createElement('span')
-    iconSpan.className = 'dvs-badge-icon'
+    const iconSpan = badge.createSpan({ cls: 'dvs-badge-icon' })
     setIcon(iconSpan, info.icon)
 
-    const labelSpan = document.createElement('span')
-    labelSpan.textContent = info.label
-
-    badge.appendChild(iconSpan)
-    badge.appendChild(labelSpan)
+    badge.createSpan({ text: info.label })
 
     return badge
 }
 
-function createRefreshButton(onClick: () => void): HTMLButtonElement {
-    const btn = document.createElement('button')
-    btn.className = 'dvs-refresh-button'
-    btn.setAttribute('aria-label', 'Refresh Dataview Query')
+function createRefreshButton(onClick: () => void | Promise<void>): HTMLButtonElement {
+    const btn = createEl('button', {
+        cls: 'dvs-refresh-button',
+        attr: { 'aria-label': 'Refresh Dataview Query' }
+    })
     setIcon(btn, 'refresh-cw')
 
     btn.addEventListener('click', (e) => {
         e.preventDefault()
         e.stopPropagation()
-        onClick()
+        void Promise.resolve(onClick())
     })
 
     return btn
@@ -370,8 +366,7 @@ export const refreshButtonExtension = (
                     }
 
                     toDOM(editorView: EditorView): HTMLElement {
-                        const container = document.createElement('span')
-                        container.className = 'dvs-query-widgets'
+                        const container = createSpan({ cls: 'dvs-query-widgets' })
 
                         // Add query type badge
                         const badge = createQueryBadge(this.queryType)
@@ -410,7 +405,7 @@ export const refreshButtonExtension = (
                                         new Notice('Dataview query serialized')
                                     }
                                 } catch (err) {
-                                    console.error('Failed to refresh dataview query', err)
+                                    log('Failed to refresh dataview query', 'error', err)
                                     new Notice('Failed to refresh dataview query')
                                 }
                             })
@@ -434,70 +429,72 @@ export const refreshButtonExtension = (
                     }
 
                     toDOM(editorView: EditorView): HTMLElement {
-                        const container = document.createElement('span')
-                        container.className = 'dvs-inline-query-widgets'
+                        const container = createSpan({ cls: 'dvs-inline-query-widgets' })
 
                         // Add query type badge (smaller for inline)
-                        const badge = document.createElement('span')
-                        badge.className = `dvs-inline-badge dvs-inline-badge-${this.queryType}`
+                        const badge = createSpan({
+                            cls: `dvs-inline-badge dvs-inline-badge-${this.queryType}`
+                        })
 
                         const info = getQueryTypeInfo(this.queryType)
-                        const iconSpan = document.createElement('span')
-                        iconSpan.className = 'dvs-inline-badge-icon'
+                        const iconSpan = badge.createSpan({ cls: 'dvs-inline-badge-icon' })
                         setIcon(iconSpan, info.icon)
-                        badge.appendChild(iconSpan)
 
                         container.appendChild(badge)
 
                         // Add refresh button if enabled (smaller for inline)
                         if (settings.showRefreshButton) {
-                            const btn = document.createElement('button')
-                            btn.className = 'dvs-inline-refresh-button'
-                            btn.setAttribute('aria-label', 'Refresh Inline Query')
+                            const btn = createEl('button', {
+                                cls: 'dvs-inline-refresh-button',
+                                attr: { 'aria-label': 'Refresh Inline Query' }
+                            })
                             setIcon(btn, 'refresh-cw')
 
-                            btn.addEventListener('click', async (e) => {
+                            const expression = this.expression
+                            btn.addEventListener('click', (e) => {
                                 e.preventDefault()
                                 e.stopPropagation()
 
-                                try {
-                                    const leaf = app.workspace
-                                        .getLeavesOfType('markdown')
-                                        .find(
-                                            (leaf) =>
-                                                leaf.view instanceof MarkdownView &&
-                                                leaf.view.contentEl.contains(editorView.dom)
+                                void (async () => {
+                                    try {
+                                        const leaf = app.workspace
+                                            .getLeavesOfType('markdown')
+                                            .find(
+                                                (leaf) =>
+                                                    leaf.view instanceof MarkdownView &&
+                                                    leaf.view.contentEl.contains(editorView.dom)
+                                            )
+
+                                        if (!(leaf?.view instanceof MarkdownView)) return
+                                        const file = leaf.view.file
+                                        if (!file) return
+
+                                        const result = await processFile(
+                                            file,
+                                            true,
+                                            expression,
+                                            true
                                         )
 
-                                    if (!(leaf?.view instanceof MarkdownView)) return
-                                    const file = leaf.view.file
-                                    if (!file) return
-
-                                    const result = await processFile(
-                                        file,
-                                        true,
-                                        this.expression,
-                                        true
-                                    )
-
-                                    // Check for errors
-                                    const firstError = result.errors[0]
-                                    if (firstError) {
-                                        const truncatedExpr =
-                                            firstError.query.length > 50
-                                                ? firstError.query.substring(0, 50) + '...'
-                                                : firstError.query
-                                        new Notice(
-                                            `Inline query failed:\n"${truncatedExpr}"\n${firstError.message}`,
-                                            NOTICE_TIMEOUT * 2
-                                        )
-                                    } else {
-                                        new Notice('Inline query serialized')
+                                        // Check for errors
+                                        const firstError = result.errors[0]
+                                        if (firstError) {
+                                            const truncatedExpr =
+                                                firstError.query.length > 50
+                                                    ? firstError.query.substring(0, 50) + '...'
+                                                    : firstError.query
+                                            new Notice(
+                                                `Inline query failed:\n"${truncatedExpr}"\n${firstError.message}`,
+                                                NOTICE_TIMEOUT * 2
+                                            )
+                                        } else {
+                                            new Notice('Inline query serialized')
+                                        }
+                                    } catch (err) {
+                                        log('Failed to refresh inline query', 'error', err)
+                                        new Notice('Failed to refresh inline query')
                                     }
-                                } catch (err) {
-                                    console.error('Failed to refresh inline query', err)
-                                    new Notice('Failed to refresh inline query')
-                                }
+                                })()
                             })
 
                             container.appendChild(btn)

@@ -50,18 +50,18 @@ interface SerializeDataviewJSParams {
  */
 async function withTimeout<T>(fn: () => Promise<T>, timeoutMs: number): Promise<T> {
     return new Promise((resolve, reject) => {
-        const timeoutId = setTimeout(() => {
+        const timeoutId = activeWindow.setTimeout(() => {
             reject(new Error(`DataviewJS execution timed out after ${timeoutMs}ms`))
         }, timeoutMs)
 
         fn()
             .then((result) => {
-                clearTimeout(timeoutId)
+                activeWindow.clearTimeout(timeoutId)
                 resolve(result)
             })
-            .catch((error) => {
-                clearTimeout(timeoutId)
-                reject(error)
+            .catch((error: unknown) => {
+                activeWindow.clearTimeout(timeoutId)
+                reject(error instanceof Error ? error : new Error(String(error)))
             })
     })
 }

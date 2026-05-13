@@ -9,6 +9,8 @@
         "immer": "11.0.1",
       },
       "devDependencies": {
+        "@codemirror/state": "^6.5.2",
+        "@codemirror/view": "^6.36.7",
         "@commitlint/cli": "^20.1.0",
         "@commitlint/config-conventional": "^20.1.0",
         "@eslint/js": "^9.36.0",

@@ -186,7 +186,7 @@ export function literalToString(value: Literal, _dataviewApi: DataviewApi): stri
         if (value.length === 0) {
             return '-'
         }
-        const items = value.map((item) => literalToString(item as Literal, _dataviewApi))
+        const items = value.map((item) => literalToString(item, _dataviewApi))
         return items.join(', ')
     }
 
@@ -196,9 +196,7 @@ export function literalToString(value: Literal, _dataviewApi: DataviewApi): stri
         if (entries.length === 0) {
             return '-'
         }
-        const pairs = entries.map(
-            ([key, val]) => `${key}: ${literalToString(val as Literal, _dataviewApi)}`
-        )
+        const pairs = entries.map(([key, val]) => `${key}: ${literalToString(val, _dataviewApi)}`)
         return `{ ${pairs.join(', ')} }`
     }
 

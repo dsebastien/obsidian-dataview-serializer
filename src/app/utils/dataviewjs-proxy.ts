@@ -331,7 +331,7 @@ export function createDataviewJSProxy(
             const arr = Array.isArray(values)
                 ? values
                 : ((values as { values?: Literal[] }).values ?? [])
-            const markdown = listToMarkdown(arr as Literal[], dataviewApi)
+            const markdown = listToMarkdown(arr, dataviewApi)
             if (markdown) {
                 capturedOutputs.push({ type: 'list', content: markdown })
             }
@@ -342,7 +342,7 @@ export function createDataviewJSProxy(
             const rowArr = Array.isArray(rows)
                 ? rows
                 : ((rows as { values?: Literal[][] }).values ?? [])
-            const markdown = tableToMarkdown(headers, rowArr as Literal[][], dataviewApi)
+            const markdown = tableToMarkdown(headers, rowArr, dataviewApi)
             if (markdown) {
                 capturedOutputs.push({ type: 'table', content: markdown })
             }

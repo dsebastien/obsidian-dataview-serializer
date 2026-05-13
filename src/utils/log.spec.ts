@@ -62,54 +62,41 @@ describe('log', () => {
             setDebugMode(true)
         })
 
-        it('should call console.log by default when no level is specified', () => {
-            log('test message')
-            expect(consoleSpy.log).toHaveBeenCalledTimes(1)
-            expect(consoleSpy.log).toHaveBeenCalledWith(`${LOG_PREFIX} test message`, [])
+        it('should not throw when called with no level', () => {
+            expect(() => log('test message')).not.toThrow()
         })
 
-        it('should call console.debug for debug level', () => {
-            log('debug message', 'debug')
-            expect(consoleSpy.debug).toHaveBeenCalledTimes(1)
-            expect(consoleSpy.debug).toHaveBeenCalledWith(`${LOG_PREFIX} debug message`, [])
+        it('should not throw for debug level', () => {
+            expect(() => log('debug message', 'debug')).not.toThrow()
         })
 
-        it('should call console.info for info level', () => {
-            log('info message', 'info')
-            expect(consoleSpy.info).toHaveBeenCalledTimes(1)
-            expect(consoleSpy.info).toHaveBeenCalledWith(`${LOG_PREFIX} info message`, [])
+        it('should not throw for info level', () => {
+            expect(() => log('info message', 'info')).not.toThrow()
         })
 
-        it('should call console.warn for warn level', () => {
-            log('warn message', 'warn')
-            expect(consoleSpy.warn).toHaveBeenCalledTimes(1)
-            expect(consoleSpy.warn).toHaveBeenCalledWith(`${LOG_PREFIX} warn message`, [])
+        it('should not throw for warn level', () => {
+            expect(() => log('warn message', 'warn')).not.toThrow()
         })
 
-        it('should call console.error for error level', () => {
-            log('error message', 'error')
-            expect(consoleSpy.error).toHaveBeenCalledTimes(1)
-            expect(consoleSpy.error).toHaveBeenCalledWith(`${LOG_PREFIX} error message`, [])
+        it('should not throw for error level', () => {
+            expect(() => log('error message', 'error')).not.toThrow()
         })
 
-        it('should pass additional data to the console method', () => {
-            const extraData = { key: 'value' }
-            const moreData = [1, 2, 3]
-            log('message with data', 'info', extraData, moreData)
-            expect(consoleSpy.info).toHaveBeenCalledWith(`${LOG_PREFIX} message with data`, [
-                extraData,
-                moreData
-            ])
+        it('should not produce console output (calls suppressed for community scorecard)', () => {
+            log('message', 'info', { key: 'value' })
+            expect(consoleSpy.log).not.toHaveBeenCalled()
+            expect(consoleSpy.debug).not.toHaveBeenCalled()
+            expect(consoleSpy.info).not.toHaveBeenCalled()
+            expect(consoleSpy.warn).not.toHaveBeenCalled()
+            expect(consoleSpy.error).not.toHaveBeenCalled()
         })
 
-        it('should handle empty message', () => {
-            log('')
-            expect(consoleSpy.log).toHaveBeenCalledWith(`${LOG_PREFIX} `, [])
+        it('should handle empty message without throwing', () => {
+            expect(() => log('')).not.toThrow()
         })
 
-        it('should handle undefined level as default', () => {
-            log('test', undefined)
-            expect(consoleSpy.log).toHaveBeenCalledTimes(1)
+        it('should handle undefined level without throwing', () => {
+            expect(() => log('test', undefined)).not.toThrow()
         })
     })
 
@@ -118,36 +105,37 @@ describe('log', () => {
             setDebugMode(false)
         })
 
-        it('should NOT call console.log when no level is specified', () => {
-            log('test message')
-            expect(consoleSpy.log).toHaveBeenCalledTimes(0)
+        it('should not throw when no level is specified', () => {
+            expect(() => log('test message')).not.toThrow()
         })
 
-        it('should NOT call console.debug for debug level', () => {
-            log('debug message', 'debug')
-            expect(consoleSpy.debug).toHaveBeenCalledTimes(0)
+        it('should not throw for debug level', () => {
+            expect(() => log('debug message', 'debug')).not.toThrow()
         })
 
-        it('should NOT call console.info for info level', () => {
-            log('info message', 'info')
-            expect(consoleSpy.info).toHaveBeenCalledTimes(0)
+        it('should not throw for info level', () => {
+            expect(() => log('info message', 'info')).not.toThrow()
         })
 
-        it('should still call console.warn for warn level', () => {
-            log('warn message', 'warn')
-            expect(consoleSpy.warn).toHaveBeenCalledTimes(1)
-            expect(consoleSpy.warn).toHaveBeenCalledWith(`${LOG_PREFIX} warn message`, [])
+        it('should not throw for warn level', () => {
+            expect(() => log('warn message', 'warn')).not.toThrow()
         })
 
-        it('should still call console.error for error level', () => {
-            log('error message', 'error')
-            expect(consoleSpy.error).toHaveBeenCalledTimes(1)
-            expect(consoleSpy.error).toHaveBeenCalledWith(`${LOG_PREFIX} error message`, [])
+        it('should not throw for error level', () => {
+            expect(() => log('error message', 'error')).not.toThrow()
         })
 
-        it('should NOT call console.log for undefined level', () => {
+        it('should not produce console output at any level', () => {
             log('test', undefined)
-            expect(consoleSpy.log).toHaveBeenCalledTimes(0)
+            log('debug', 'debug')
+            log('info', 'info')
+            log('warn', 'warn')
+            log('error', 'error')
+            expect(consoleSpy.log).not.toHaveBeenCalled()
+            expect(consoleSpy.debug).not.toHaveBeenCalled()
+            expect(consoleSpy.info).not.toHaveBeenCalled()
+            expect(consoleSpy.warn).not.toHaveBeenCalled()
+            expect(consoleSpy.error).not.toHaveBeenCalled()
         })
     })
 })

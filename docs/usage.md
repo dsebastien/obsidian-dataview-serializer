@@ -494,7 +494,7 @@ To serialize only the queries in the currently open file, use the command "Scan 
 
 #### Add a new Dataview Serializer query
 
-The plugin includes a command called "Insert Dataview serializer block" that can be used to quickly add a new Dataview Serializer query to the current note.
+The plugin includes a command called "Insert query block" (shown as **Dataview Serializer: Insert query block** in the command palette) that can be used to quickly add a new Dataview Serializer query to the current note.
 
 #### Convert existing Dataview queries
 
@@ -531,7 +531,7 @@ Both commands:
 
 #### Remove all queries from current file
 
-The command "Remove all Dataview serializer queries from current file" strips all plugin query constructs and their serialized output from the current file. This removes:
+The command "Remove all queries from current file" (shown as **Dataview Serializer: Remove all queries from current file** in the command palette) strips all plugin query constructs and their serialized output from the current file. This removes:
 
 - Block queries (query definitions and result blocks)
 - Inline queries
