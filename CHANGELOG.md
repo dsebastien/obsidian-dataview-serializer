@@ -2,6 +2,8 @@
 
 All notable changes to this project will be documented in this file.
 
+## [2.6.2](https://github.com/dsebastien/obsidian-dataview-serializer/compare/2.6.1...2.6.2) (2026-05-13)
+
 ## [2.6.1](https://github.com/dsebastien/obsidian-dataview-serializer/compare/2.6.0...2.6.1) (2026-04-28)
 
 ### Bug Fixes
@@ -157,6 +159,7 @@ All notable changes to this project will be documented in this file.
 ## [1.0.2](https://github.com/dsebastien/obsidian-dataview-serializer/compare/1.0.1...1.0.2) (2024-05-14)
 ## [1.0.1](https://github.com/dsebastien/obsidian-dataview-serializer/compare/1.0.0...1.0.1) (2024-05-14)
 ## 1.0.0 (2024-05-13)
+
 
 
 
