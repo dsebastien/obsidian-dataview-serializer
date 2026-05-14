@@ -32,19 +32,31 @@ Currently, this plugin supports:
 
 ### Installation
 
-#### From the Obsidian community catalog (recommended)
+#### Community plugins (recommended)
 
 1. In Obsidian, go to **Settings → Community plugins**.
-2. Disable **Restricted mode** if you have not already.
-3. Select **Browse**, search for **Dataview Serializer**, install it, and then enable it.
+2. Disable **Restricted mode** if it's enabled.
+3. Select **Browse**, search for **Dataview Serializer**, install it, then enable it.
 
-> The [Dataview](https://github.com/blacksmithgu/obsidian-dataview) plugin must also be installed and enabled.
+You can also browse the catalog on the [Obsidian Community](https://community.obsidian.md/) website.
 
 #### Manual installation
 
-1. Download `main.js`, `manifest.json`, and `styles.css` from the latest [GitHub release](https://github.com/dsebastien/obsidian-dataview-serializer/releases).
-2. Copy them into `<YourVault>/.obsidian/plugins/dataview-serializer/` (create the folder if it does not exist).
-3. Reload Obsidian and enable the plugin in **Settings → Community plugins**.
+If the plugin isn't listed in the community catalog yet (or you want a specific version):
+
+1. Download `main.js`, `manifest.json`, and `styles.css` from the [latest release](https://github.com/dsebastien/obsidian-dataview-serializer/releases).
+2. Copy them into `<Vault>/.obsidian/plugins/dataview-serializer/`.
+3. Reload Obsidian and enable **Dataview Serializer** in **Settings → Community plugins**.
+
+#### BRAT (bleeding edge)
+
+[BRAT](https://github.com/TfTHacker/obsidian42-brat) (Beta Reviewers Auto-update Tool) installs plugins straight from a GitHub repo and keeps them updated automatically. Use this if you want the latest commits — **things might break**.
+
+1. Install **Obsidian42 - BRAT** from **Settings → Community plugins → Browse** and enable it.
+2. Run **BRAT: Add a beta plugin for testing** from the command palette.
+3. Paste `https://github.com/dsebastien/obsidian-dataview-serializer`.
+4. Select the latest version and confirm.
+5. Enable **Dataview Serializer** in **Settings → Community plugins**.
 
 ### About
 
