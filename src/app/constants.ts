@@ -6,6 +6,16 @@ export const NOTICE_TIMEOUT = 5000
 export const DEFAULT_CANVAS_FILE_NAME = 'Canvas.md'
 export const MARKDOWN_FILE_EXTENSION = 'md'
 
+/**
+ * Frontmatter property key that, when truthy, makes the plugin skip the note entirely.
+ * Underscores keep the key compatible with Dataview field-access syntax (`file.dataview_serializer_ignore`).
+ * Example:
+ *   ---
+ *   dataview_serializer_ignore: true
+ *   ---
+ */
+export const IGNORE_FRONTMATTER_KEY = 'dataview_serializer_ignore'
+
 // Legacy syntax (original)
 export const QUERY_FLAG_OPEN = `<!-- QueryToSerialize: `
 export const QUERY_FLAG_MANUAL_OPEN = `<!-- QueryToSerializeManual: `

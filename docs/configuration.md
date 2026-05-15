@@ -48,3 +48,15 @@ By adding the folder containing your index files to "Folders to force update", t
 - Now whenever you add the `#project` tag to any note, your `Projects.md` index will automatically update
 
 **Note:** The force update uses a 10-second debounce delay to avoid overwhelming the system with updates when many files change rapidly.
+
+## Per-note ignore flag
+
+Individual notes can opt out of serialization by setting the `dataview_serializer_ignore` property in their frontmatter:
+
+```yaml
+---
+dataview_serializer_ignore: true
+---
+```
+
+When this property is truthy, the plugin skips the note entirely: no queries inside it will be serialized, even when running the "Scan and serialize" commands manually. See [Ignoring a specific note](usage.md#ignoring-a-specific-note) for accepted values.

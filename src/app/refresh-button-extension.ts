@@ -3,6 +3,7 @@ import type { DecorationSet } from '@codemirror/view'
 import { RangeSetBuilder } from '@codemirror/state'
 import { App, MarkdownView, Notice, setIcon, TFile } from 'obsidian'
 import {
+    IGNORE_FRONTMATTER_KEY,
     NOTICE_TIMEOUT,
     QUERY_FLAG_CLOSE,
     QUERY_FLAG_MANUAL_OPEN,
@@ -334,7 +335,8 @@ export const refreshButtonExtension = (
         force?: boolean,
         targetQuery?: string,
         isManualTrigger?: boolean
-    ) => Promise<FileProcessingResult>
+    ) => Promise<FileProcessingResult>,
+    isFileIgnoredByFrontmatter: (file: TFile) => boolean
 ) =>
     ViewPlugin.fromClass(
         class {
@@ -387,6 +389,14 @@ export const refreshButtonExtension = (
                                     if (!(leaf?.view instanceof MarkdownView)) return
                                     const file = leaf.view.file
                                     if (!file) return
+
+                                    if (isFileIgnoredByFrontmatter(file)) {
+                                        new Notice(
+                                            `Skipped: "${file.name}" is opted out of serialization via the "${IGNORE_FRONTMATTER_KEY}" frontmatter property.`,
+                                            NOTICE_TIMEOUT
+                                        )
+                                        return
+                                    }
 
                                     const result = await processFile(file, true, this.query, true)
 
@@ -468,6 +478,14 @@ export const refreshButtonExtension = (
                                         if (!(leaf?.view instanceof MarkdownView)) return
                                         const file = leaf.view.file
                                         if (!file) return
+
+                                        if (isFileIgnoredByFrontmatter(file)) {
+                                            new Notice(
+                                                `Skipped: "${file.name}" is opted out of serialization via the "${IGNORE_FRONTMATTER_KEY}" frontmatter property.`,
+                                                NOTICE_TIMEOUT
+                                            )
+                                            return
+                                        }
 
                                         const result = await processFile(
                                             file,

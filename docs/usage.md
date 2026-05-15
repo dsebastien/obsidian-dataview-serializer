@@ -13,6 +13,19 @@ The following files are automatically ignored by the plugin:
 - Excalidraw files
 - Canvas.md files
 - Files in folders configured as "Folders to ignore"
+- Files whose frontmatter contains `dataview_serializer_ignore: true` (see [Ignoring a specific note](#ignoring-a-specific-note))
+
+## Ignoring a specific note
+
+To make the plugin skip a single note entirely (no queries in it will be serialized, even via manual commands), add the `dataview_serializer_ignore` property to its frontmatter:
+
+```yaml
+---
+dataview_serializer_ignore: true
+---
+```
+
+Any truthy value works (`true`, `yes`, `y`, `1`, `on`, or any non-empty string that isn't `false`/`no`/`n`/`0`/`off`). To re-enable processing, set the value to `false` or remove the property.
 
 The queries need to be wrapped in a very specific structure for the plugin to recognize them. There are three query types available, each with different update behavior:
 

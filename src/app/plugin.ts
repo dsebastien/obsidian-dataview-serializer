@@ -6,8 +6,10 @@ import { log, setDebugMode } from '../utils/log'
 import { produce } from 'immer'
 import type { Draft } from 'immer'
 import { isExcalidrawFile } from './utils/is-excalidraw-file.fn'
+import { isIgnoredByFrontmatter } from './utils/is-ignored-by-frontmatter.fn'
 import {
     DEFAULT_CANVAS_FILE_NAME,
+    IGNORE_FRONTMATTER_KEY,
     MARKDOWN_FILE_EXTENSION,
     MINIMUM_MS_BETWEEN_EVENTS,
     MINIMUM_SECONDS_BETWEEN_UPDATES,
@@ -324,6 +326,14 @@ export class DataviewSerializerPlugin extends Plugin {
                     return
                 }
 
+                if (this.isFileIgnoredByFrontmatter(activeFile)) {
+                    new Notice(
+                        `Skipped: "${activeFile.name}" is opted out of serialization via the "${IGNORE_FRONTMATTER_KEY}" frontmatter property.`,
+                        NOTICE_TIMEOUT
+                    )
+                    return
+                }
+
                 log(`Scanning and serializing Dataview queries in: ${activeFile.path}`, 'debug')
                 const result = await this.processFile(activeFile, true, undefined, true)
 
@@ -526,7 +536,12 @@ export class DataviewSerializerPlugin extends Plugin {
         })
 
         this.registerEditorExtension(
-            refreshButtonExtension(this.app, () => this.settings, this.processFile.bind(this))
+            refreshButtonExtension(
+                this.app,
+                () => this.settings,
+                this.processFile.bind(this),
+                this.isFileIgnoredByFrontmatter.bind(this)
+            )
         )
     }
 
@@ -1340,6 +1355,17 @@ export class DataviewSerializerPlugin extends Plugin {
         return updatedText
     }
 
+    /**
+     * Check whether the given file is opted out of serialization via its frontmatter.
+     * Synchronous because it reads from Obsidian's already-parsed metadata cache.
+     */
+    isFileIgnoredByFrontmatter(file: TFile): boolean {
+        const frontmatter = this.app.metadataCache.getFileCache(file)?.frontmatter as
+            | Record<string, unknown>
+            | undefined
+        return isIgnoredByFrontmatter(frontmatter)
+    }
+
     async shouldFileBeIgnored(file: TFile, force = false): Promise<boolean> {
         if (!file.path) {
             return true
@@ -1361,6 +1387,12 @@ export class DataviewSerializerPlugin extends Plugin {
         }
 
         if (isExcalidrawFile(file)) {
+            return true
+        }
+
+        // Respect the per-note ignore frontmatter flag, even on manual/forced runs.
+        if (this.isFileIgnoredByFrontmatter(file)) {
+            log(`Ignoring file [${file.path}] due to frontmatter flag`, 'debug')
             return true
         }
 
