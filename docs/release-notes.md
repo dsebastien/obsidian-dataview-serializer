@@ -1,10 +1,10 @@
 # Release Notes
 
-## Unreleased
+## 2.7.0 (2026-05-15)
 
 ### Features
 
-* **plugin:** ignore notes whose frontmatter contains `dataview_serializer_ignore: true` (any truthy value works). Manual commands also honor the flag and show a notification when they hit an ignored note.
+* **all:** added a way to force ignore dataview serializer queries in a note
 
 ## 2.6.4 (2026-05-14)
 

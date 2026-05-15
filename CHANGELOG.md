@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented in this file.
 
+## [2.7.0](https://github.com/dsebastien/obsidian-dataview-serializer/compare/2.6.4...2.7.0) (2026-05-15)
+
+### Features
+
+* **all:** added a way to force ignore dataview serializer queries in a note ([561df86](https://github.com/dsebastien/obsidian-dataview-serializer/commit/561df8681d688980112280599c6731832b3fa8c5))
+
 ## [2.6.4](https://github.com/dsebastien/obsidian-dataview-serializer/compare/2.6.3...2.6.4) (2026-05-14)
 
 ## [2.6.3](https://github.com/dsebastien/obsidian-dataview-serializer/compare/2.6.2...2.6.3) (2026-05-13)
@@ -163,6 +169,7 @@ All notable changes to this project will be documented in this file.
 ## [1.0.2](https://github.com/dsebastien/obsidian-dataview-serializer/compare/1.0.1...1.0.2) (2024-05-14)
 ## [1.0.1](https://github.com/dsebastien/obsidian-dataview-serializer/compare/1.0.0...1.0.1) (2024-05-14)
 ## 1.0.0 (2024-05-13)
+
 
 
 
