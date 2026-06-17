@@ -7,6 +7,12 @@ nav_order: 3
 
 In the settings of the plugin, you can configure:
 
+## Device Settings
+
+- **Disable on this device**: When enabled, the plugin is fully disabled on the current device only. It performs no automatic or manual serialization, registers no file-event listeners, hides the per-query refresh buttons, and its commands do nothing (they show a brief notice instead). This is useful when you want the plugin active on your desktop but completely inactive on, for example, your phone or tablet.
+
+  Unlike every other setting, this one is **stored locally on the device** and is **never synced** to your other devices (it is not written to the plugin's `data.json`). Flip it on wherever you want the plugin to stay inert; your other devices are unaffected. The change takes effect immediately — no reload required.
+
 ## General Settings
 
 - **Disable automatic updates**: When enabled, the plugin will not automatically serialize queries when files are created, modified, or renamed. You can still manually serialize queries using the command palette. This is useful if you prefer full control over when queries are updated.

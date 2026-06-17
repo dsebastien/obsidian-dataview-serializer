@@ -16,6 +16,16 @@ export const MARKDOWN_FILE_EXTENSION = 'md'
  */
 export const IGNORE_FRONTMATTER_KEY = 'dataview_serializer_ignore'
 
+/**
+ * Key used to persist the per-device "disable on this device" flag.
+ *
+ * Stored via `app.saveLocalStorage`/`app.loadLocalStorage`, which write to the
+ * vault-scoped browser `localStorage`. This is intentionally NOT part of the
+ * synced plugin settings (`data.json`): the flag MUST stay local to the device
+ * it is toggled on and MUST NEVER be synchronized to other devices.
+ */
+export const DEVICE_DISABLED_STORAGE_KEY = 'dataview-serializer:disabled-on-device'
+
 // Legacy syntax (original)
 export const QUERY_FLAG_OPEN = `<!-- QueryToSerialize: `
 export const QUERY_FLAG_MANUAL_OPEN = `<!-- QueryToSerializeManual: `

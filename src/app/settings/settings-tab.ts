@@ -22,6 +22,8 @@ export class SettingsTab extends PluginSettingTab {
 
         containerEl.empty()
 
+        this.renderDeviceDisabledBanner()
+        this.renderDeviceDisableToggle()
         this.renderAutomaticUpdatesToggle()
         this.renderRefreshButtonToggle()
         this.renderDataviewJSToggle()
@@ -33,6 +35,43 @@ export class SettingsTab extends PluginSettingTab {
         this.renderFoldersToIgnore()
         this.renderFoldersToForceUpdate()
         this.renderSupportSection(containerEl)
+    }
+
+    /**
+     * Show a prominent banner at the top of the tab when the plugin is disabled
+     * on the current device, so it's obvious why nothing is happening here.
+     */
+    renderDeviceDisabledBanner(): void {
+        if (!this.plugin.isDisabledOnDevice()) {
+            return
+        }
+
+        const banner = this.containerEl.createDiv({ cls: 'dvs-device-disabled-banner' })
+        banner.createEl('strong', { text: 'Disabled on this device.' })
+        banner.createSpan({
+            text: ' The plugin is inert here: no automatic serialization, file events, refresh buttons, or commands. This choice is device-local and is not synced to your other devices.'
+        })
+    }
+
+    /**
+     * Device-local toggle to fully disable the plugin on this device only.
+     *
+     * Stored in device-local storage (never synced), so it does not affect other
+     * devices. Applied immediately — no reload required.
+     */
+    renderDeviceDisableToggle(): void {
+        new Setting(this.containerEl)
+            .setName('Disable on this device')
+            .setDesc(
+                'When enabled, the plugin is fully disabled on this device only: it performs no automatic or manual serialization and its commands do nothing. This setting is stored locally and is never synced to your other devices.'
+            )
+            .addToggle((toggle) => {
+                toggle.setValue(this.plugin.isDisabledOnDevice()).onChange((value) => {
+                    this.plugin.setDisabledOnDevice(value)
+                    // Re-render so the banner and dependent state reflect the change.
+                    this.display()
+                })
+            })
     }
 
     renderAutomaticUpdatesToggle(): void {

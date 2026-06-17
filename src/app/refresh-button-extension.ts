@@ -336,7 +336,8 @@ export const refreshButtonExtension = (
         targetQuery?: string,
         isManualTrigger?: boolean
     ) => Promise<FileProcessingResult>,
-    isFileIgnoredByFrontmatter: (file: TFile) => boolean
+    isFileIgnoredByFrontmatter: (file: TFile) => boolean,
+    isDeviceDisabled: () => boolean
 ) =>
     ViewPlugin.fromClass(
         class {
@@ -353,6 +354,12 @@ export const refreshButtonExtension = (
             }
 
             buildDecorations(view: EditorView): DecorationSet {
+                // Render no badges or refresh buttons when the plugin is disabled
+                // on this device.
+                if (isDeviceDisabled()) {
+                    return Decoration.none
+                }
+
                 const settings = getSettings()
                 const decorations: Array<{ from: number; to: number; decoration: Decoration }> = []
 
