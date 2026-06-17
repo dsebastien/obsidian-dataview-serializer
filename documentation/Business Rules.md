@@ -17,3 +17,9 @@ Truthy means: boolean `true`, non-zero numbers, or any non-empty string that is 
 The exact key is defined by `IGNORE_FRONTMATTER_KEY` in `src/app/constants.ts`. Underscores are used (not dashes) to keep the key compatible with Dataview field-access syntax (`file.dataview_serializer_ignore`).
 
 Conversion and removal commands (`convert-dataview-query-at-cursor`, `convert-all-dataview-queries-in-file`, `remove-all-queries-in-current-file`, `insert-dataview-serializer-block`) are NOT subject to this rule: they only manipulate marker syntax, they do not run Dataview queries.
+
+## Device-local disable flag
+
+The per-device "Disable on this device" flag MUST be stored only in device-local storage via `app.loadLocalStorage`/`app.saveLocalStorage` (key `DEVICE_DISABLED_STORAGE_KEY` in `src/app/constants.ts`). It MUST NEVER be a member of `PluginSettings`, written to `data.json`, or otherwise synced — its entire purpose is to stay local to the device it is toggled on.
+
+When the flag is set on a device, the plugin MUST be fully inert there: no file-event listeners registered, `processFile` short-circuits immediately (covering schedulers and any programmatic caller), all commands no-op with a notice, and the per-query refresh buttons render nothing. The flag is orthogonal to the synced `disableAutomaticUpdates` setting; when the device flag is cleared, event handlers are re-registered only if `disableAutomaticUpdates` is false.

@@ -61,6 +61,7 @@ import {
     type DataviewJSQueryWithContext
 } from './utils/find-dataviewjs-queries.fn'
 import { serializeDataviewJSQuery } from './utils/serialize-dataviewjs-query.fn'
+import { isDisabledOnDevice, setDisabledOnDevice } from './utils/device-disabled'
 
 /**
  * Maximum number of error notifications to show during batch operations
@@ -259,8 +260,9 @@ export class DataviewSerializerPlugin extends Plugin {
 
         await this.loadSettings()
 
-        // Only set up automatic event handlers if the user hasn't disabled them
-        if (!this.settings.disableAutomaticUpdates) {
+        // Only set up automatic event handlers if the user hasn't disabled them,
+        // and the plugin isn't disabled on this device.
+        if (!this.settings.disableAutomaticUpdates && !this.isDisabledOnDevice()) {
             this.setupEventHandlers()
         }
 
@@ -272,6 +274,9 @@ export class DataviewSerializerPlugin extends Plugin {
             id: 'serialize-all-dataview-queries',
             name: 'Scan and serialize all Dataview queries',
             callback: async () => {
+                if (this.blockedByDeviceDisable()) {
+                    return
+                }
                 log('Scanning and serializing all Dataview queries', 'debug')
                 const allVaultFiles = this.app.vault.getMarkdownFiles()
                 const allErrors: Array<{
@@ -314,6 +319,9 @@ export class DataviewSerializerPlugin extends Plugin {
             id: 'serialize-current-file-dataview-queries',
             name: 'Scan and serialize Dataview queries in current file',
             callback: async () => {
+                if (this.blockedByDeviceDisable()) {
+                    return
+                }
                 const activeFile = this.app.workspace.getActiveFile()
 
                 if (!activeFile) {
@@ -353,6 +361,9 @@ export class DataviewSerializerPlugin extends Plugin {
             id: 'insert-dataview-serializer-block',
             name: 'Insert query block',
             editorCallback: (editor) => {
+                if (this.blockedByDeviceDisable()) {
+                    return
+                }
                 const cursor = editor.getCursor()
                 const line = editor.getLine(cursor.line)
                 const indentation = line.match(/^(\s*)/)?.[1] || ''
@@ -386,6 +397,9 @@ export class DataviewSerializerPlugin extends Plugin {
             id: 'convert-dataview-query-at-cursor',
             name: 'Convert Dataview query at cursor to serialized format',
             editorCallback: async (editor) => {
+                if (this.blockedByDeviceDisable()) {
+                    return
+                }
                 const activeFile = this.app.workspace.getActiveFile()
 
                 if (!activeFile) {
@@ -465,6 +479,9 @@ export class DataviewSerializerPlugin extends Plugin {
             id: 'convert-all-dataview-queries-in-file',
             name: 'Convert all Dataview queries in current file to serialized format',
             editorCallback: async (editor) => {
+                if (this.blockedByDeviceDisable()) {
+                    return
+                }
                 const activeFile = this.app.workspace.getActiveFile()
 
                 if (!activeFile) {
@@ -508,6 +525,9 @@ export class DataviewSerializerPlugin extends Plugin {
             id: 'remove-all-queries-in-current-file',
             name: 'Remove all queries from current file',
             editorCallback: (editor) => {
+                if (this.blockedByDeviceDisable()) {
+                    return
+                }
                 const activeFile = this.app.workspace.getActiveFile()
 
                 if (!activeFile) {
@@ -540,7 +560,8 @@ export class DataviewSerializerPlugin extends Plugin {
                 this.app,
                 () => this.settings,
                 this.processFile.bind(this),
-                this.isFileIgnoredByFrontmatter.bind(this)
+                this.isFileIgnoredByFrontmatter.bind(this),
+                () => this.isDisabledOnDevice()
             )
         )
     }
@@ -695,6 +716,50 @@ export class DataviewSerializerPlugin extends Plugin {
     }
 
     /**
+     * Whether the plugin has been disabled on the current device.
+     *
+     * This flag is stored in device-local storage (never synced), so it reflects
+     * only the choice made on this device. When true the plugin is fully inert
+     * here: no automatic processing, no file mutations, commands no-op, and the
+     * per-query refresh buttons are hidden.
+     */
+    isDisabledOnDevice(): boolean {
+        return isDisabledOnDevice(this.app)
+    }
+
+    /**
+     * Guard used at the start of every command callback.
+     *
+     * When the plugin is disabled on this device, shows a notice and returns
+     * true so the caller can bail out without doing any work.
+     */
+    private blockedByDeviceDisable(): boolean {
+        if (this.isDisabledOnDevice()) {
+            new Notice('Dataview Serializer is disabled on this device', NOTICE_TIMEOUT)
+            return true
+        }
+        return false
+    }
+
+    /**
+     * Persist the per-device disable flag and apply it immediately.
+     *
+     * Disabling unregisters the file-event handlers; enabling re-registers them
+     * unless the synced "Disable automatic updates" setting is on. No reload is
+     * required: commands, `processFile`, and the refresh button all read the
+     * flag live.
+     */
+    setDisabledOnDevice(disabled: boolean): void {
+        setDisabledOnDevice(this.app, disabled)
+
+        if (disabled) {
+            this.unregisterEventHandlers()
+        } else if (!this.settings.disableAutomaticUpdates) {
+            this.setupEventHandlers()
+        }
+    }
+
+    /**
      * Add the event handlers
      */
     setupEventHandlers() {
@@ -770,6 +835,12 @@ export class DataviewSerializerPlugin extends Plugin {
         isManualTrigger = false
     ): Promise<FileProcessingResult> {
         const emptyResult: FileProcessingResult = { filePath: '', errors: [] }
+
+        // Fully inert when disabled on this device, regardless of how we got here
+        // (file events, schedulers, or any programmatic caller).
+        if (this.isDisabledOnDevice()) {
+            return emptyResult
+        }
 
         if (!(_file instanceof TFile)) {
             return emptyResult

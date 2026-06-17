@@ -1,5 +1,15 @@
 # Release Notes
 
+## Unreleased
+
+### Features
+
+* **settings:** added a device-local "Disable on this device" toggle that fully disables the plugin on a single device without syncing the choice to your other devices
+
+### Notes
+
+* **compatibility:** minimum required Obsidian version is now 1.8.7 (needed for device-local storage)
+
 ## 2.7.0 (2026-05-15)
 
 ### Features

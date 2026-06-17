@@ -11,6 +11,18 @@
     @apply mt-3;
 }
 
+/* Banner shown at the top of the settings tab when the plugin is disabled on this device */
+.dvs-device-disabled-banner {
+    @apply mb-4 p-3 rounded border;
+    background-color: color-mix(in srgb, var(--color-orange) 12%, transparent);
+    border-color: color-mix(in srgb, var(--color-orange) 35%, transparent);
+    color: var(--text-normal);
+}
+
+.dvs-device-disabled-banner strong {
+    color: var(--color-orange);
+}
+
 /* ============================================
    Query Marker Visual Decorations
    ============================================ */
