@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented in this file.
 
+## [2.8.0](https://github.com/dsebastien/obsidian-dataview-serializer/compare/2.7.0...2.8.0) (2026-07-17)
+
+### Features
+
+* **plugin:** add device-local "disable on this device" toggle ([a3376f8](https://github.com/dsebastien/obsidian-dataview-serializer/commit/a3376f803d44b75d6e1dc19be37b7b6d1262a142))
+
 ## [2.7.0](https://github.com/dsebastien/obsidian-dataview-serializer/compare/2.6.4...2.7.0) (2026-05-15)
 
 ### Features
@@ -169,6 +175,7 @@ All notable changes to this project will be documented in this file.
 ## [1.0.2](https://github.com/dsebastien/obsidian-dataview-serializer/compare/1.0.1...1.0.2) (2024-05-14)
 ## [1.0.1](https://github.com/dsebastien/obsidian-dataview-serializer/compare/1.0.0...1.0.1) (2024-05-14)
 ## 1.0.0 (2024-05-13)
+
 
 
 
