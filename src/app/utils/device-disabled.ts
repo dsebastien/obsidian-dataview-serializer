@@ -9,7 +9,7 @@ import { DEVICE_DISABLED_STORAGE_KEY } from '../constants'
  */
 export interface DeviceLocalStore {
     loadLocalStorage(key: string): unknown
-    saveLocalStorage(key: string, data: unknown | null): void
+    saveLocalStorage(key: string, data: unknown): void
 }
 
 /**

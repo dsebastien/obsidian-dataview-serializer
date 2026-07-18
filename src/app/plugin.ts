@@ -29,12 +29,26 @@ import type { DataviewApi } from 'obsidian-dataview/lib/api/plugin-api'
 import type { QuerySerializationResult } from './types/query-result.intf'
 
 /**
+ * Structural view of Obsidian's undocumented `app.plugins` registry. Only the
+ * path needed to reach the Dataview API is declared; the registry is not part of
+ * Obsidian's public typings.
+ */
+interface AppWithPluginsRegistry {
+    plugins?: {
+        plugins?: {
+            dataview?: {
+                api?: DataviewApi
+            }
+        }
+    }
+}
+
+/**
  * Get the Dataview API from the app object.
  * This avoids requiring obsidian-dataview at runtime.
  */
 function getDataviewApi(app: App): DataviewApi | undefined {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Obsidian's `app.plugins` registry is untyped; cast is unavoidable here
-    return (app as any).plugins?.plugins?.dataview?.api as DataviewApi | undefined
+    return (app as App & AppWithPluginsRegistry).plugins?.plugins?.dataview?.api
 }
 import { add, isAfter } from 'date-fns'
 import { serializeQuery } from './utils/serialize-query.fn'
@@ -1431,9 +1445,7 @@ export class DataviewSerializerPlugin extends Plugin {
      * Synchronous because it reads from Obsidian's already-parsed metadata cache.
      */
     isFileIgnoredByFrontmatter(file: TFile): boolean {
-        const frontmatter = this.app.metadataCache.getFileCache(file)?.frontmatter as
-            | Record<string, unknown>
-            | undefined
+        const frontmatter = this.app.metadataCache.getFileCache(file)?.frontmatter
         return isIgnoredByFrontmatter(frontmatter)
     }
 

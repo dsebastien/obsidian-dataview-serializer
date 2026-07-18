@@ -10,6 +10,18 @@ import type { LinkFormat } from '../types/plugin-settings.intf'
 import { isTaskQuery } from './is-task-query.fn'
 
 /**
+ * Structural view of the undocumented `Vault.config` object. Obsidian does not
+ * expose these fields in its public typings, so we declare only the two link
+ * preferences we read here.
+ */
+interface VaultWithConfig {
+    config?: {
+        newLinkFormat?: string
+        useMarkdownLinks?: boolean
+    }
+}
+
+/**
  * Pre-compiled regex for wiki links in table cells.
  * Dataview escapes pipes as \| within wiki links in tables.
  * Captures: [[path\|alias]] or [[path|alias]]
@@ -103,10 +115,11 @@ export const serializeQuery = async (
     const configuredFormat = params.linkFormat ?? 'shortest'
 
     if (configuredFormat === 'obsidian') {
-        // Read Obsidian's "New link format" setting from vault config
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any -- `vault.config` is not exposed in Obsidian's public typings
-        const vaultConfig = (params.app.vault as any).config
-        const obsidianFormat = vaultConfig?.newLinkFormat as string | undefined
+        // Read Obsidian's "New link format" setting from vault config.
+        // `vault.config` is not exposed in Obsidian's public typings, so we
+        // describe just the fields we read via a local structural type.
+        const vaultConfig = (params.app.vault as VaultWithConfig).config
+        const obsidianFormat = vaultConfig?.newLinkFormat
 
         // Map Obsidian's settings to our format:
         // - 'shortest' -> 'shortest'
@@ -120,7 +133,7 @@ export const serializeQuery = async (
 
         // Check Obsidian's "Use [[Wikilinks]]" setting (inverse of useMarkdownLinks)
         // When useMarkdownLinks is true, output [display](path) instead of [[path|display]]
-        useMarkdownLinks = (vaultConfig?.useMarkdownLinks as boolean) === true
+        useMarkdownLinks = vaultConfig?.useMarkdownLinks === true
     } else {
         effectiveLinkFormat = configuredFormat
     }
