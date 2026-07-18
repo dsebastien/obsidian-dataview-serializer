@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented in this file.
 
+## [2.8.1](https://github.com/dsebastien/obsidian-dataview-serializer/compare/2.8.0...2.8.1) (2026-07-18)
+
+### Bug Fixes
+
+* **plugin:** remove disallowed no-explicit-any casts flagged by catalog review ([9116666](https://github.com/dsebastien/obsidian-dataview-serializer/commit/9116666a62a2b7b8728a0bb7679405cf73550bd4))
+
 ## [2.8.0](https://github.com/dsebastien/obsidian-dataview-serializer/compare/2.7.0...2.8.0) (2026-07-17)
 
 ### Features
@@ -175,6 +181,7 @@ All notable changes to this project will be documented in this file.
 ## [1.0.2](https://github.com/dsebastien/obsidian-dataview-serializer/compare/1.0.1...1.0.2) (2024-05-14)
 ## [1.0.1](https://github.com/dsebastien/obsidian-dataview-serializer/compare/1.0.0...1.0.1) (2024-05-14)
 ## 1.0.0 (2024-05-13)
+
 
 
 

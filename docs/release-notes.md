@@ -1,5 +1,11 @@
 # Release Notes
 
+## 2.8.1 (2026-07-18)
+
+### Bug Fixes
+
+* **plugin:** remove disallowed no-explicit-any casts flagged by catalog review
+
 ## 2.8.0 (2026-07-17)
 
 ### Features
