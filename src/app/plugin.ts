@@ -1,3 +1,4 @@
+import { registerWhatsNewDialog } from './whats-new'
 import { App, debounce, Notice, Plugin, TAbstractFile, TFile } from 'obsidian'
 import type { EventRef } from 'obsidian'
 import { DEFAULT_SETTINGS, type PluginSettings } from './types/plugin-settings.intf'
@@ -247,6 +248,8 @@ export class DataviewSerializerPlugin extends Plugin {
      * Executed as soon as the plugin loads
      */
     override async onload() {
+        // Must run before anything can call saveData (fresh-install detection)
+        registerWhatsNewDialog(this)
         log('Initializing', 'debug')
 
         // Wait for layout to be ready before checking for Dataview
