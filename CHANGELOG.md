@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented in this file.
 
+## [2.9.0](https://github.com/dsebastien/obsidian-dataview-serializer/compare/2.8.1...2.9.0) (2026-07-27)
+
+### Features
+
+* **plugin:** show a what's new dialog once after plugin updates ([562ca9b](https://github.com/dsebastien/obsidian-dataview-serializer/commit/562ca9b8851345b44267f4d89f61a0e70b55032b))
+
 ## [2.8.1](https://github.com/dsebastien/obsidian-dataview-serializer/compare/2.8.0...2.8.1) (2026-07-18)
 
 ### Bug Fixes
@@ -181,6 +187,7 @@ All notable changes to this project will be documented in this file.
 ## [1.0.2](https://github.com/dsebastien/obsidian-dataview-serializer/compare/1.0.1...1.0.2) (2024-05-14)
 ## [1.0.1](https://github.com/dsebastien/obsidian-dataview-serializer/compare/1.0.0...1.0.1) (2024-05-14)
 ## 1.0.0 (2024-05-13)
+
 
 
 
