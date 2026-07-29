@@ -44,6 +44,7 @@ import {
 } from './constants'
 import type { PluginSettings } from './types/plugin-settings.intf'
 import { log } from '../utils/log'
+import { getBlockquotePrefix, stripBlockquoteMarkers } from './utils/blockquote.fn'
 
 type QueryType = 'auto' | 'manual' | 'once' | 'eject'
 
@@ -608,13 +609,23 @@ export const refreshButtonExtension = (
                                 }
 
                                 if (openFlagIdx !== -1 && closeFlagIdx !== -1) {
-                                    // Extract and normalize the query
+                                    // Extract and normalize the query.
+                                    // Inside a callout/blockquote the continuation lines
+                                    // repeat the markers; they must not end up in the query
+                                    // used to identify it (see findQueries).
+                                    // Reference: https://github.com/dsebastien/obsidian-dataview-serializer/issues/64
+                                    const isInBlockquote =
+                                        getBlockquotePrefix(multiLineState.queryLines[0] ?? '') !==
+                                        ''
                                     const queryContent = fullText.substring(
                                         openFlagIdx + flagLength,
                                         closeFlagIdx
                                     )
                                     const normalizedQuery = queryContent
                                         .split('\n')
+                                        .map((l) =>
+                                            isInBlockquote ? stripBlockquoteMarkers(l) : l
+                                        )
                                         .map((l) => l.trim())
                                         .join(' ')
                                         .replace(/\s+/g, ' ')
@@ -746,10 +757,24 @@ export const refreshButtonExtension = (
                                 }
 
                                 if (openFlagIdx !== -1 && closeFlagIdx !== -1) {
-                                    // Extract the JS code (keep it as-is for identification)
-                                    const jsCode = fullText
-                                        .substring(openFlagIdx + flagLength, closeFlagIdx)
-                                        .trim()
+                                    // Extract the JS code (keep it as-is for identification).
+                                    // Inside a callout/blockquote the markers are stripped, to
+                                    // match what findDataviewJSQueries produces.
+                                    // Reference: https://github.com/dsebastien/obsidian-dataview-serializer/issues/64
+                                    const rawJsCode = fullText.substring(
+                                        openFlagIdx + flagLength,
+                                        closeFlagIdx
+                                    )
+                                    const jsCode = (
+                                        getBlockquotePrefix(
+                                            dvjsMultiLineState.queryLines[0] ?? ''
+                                        ) !== ''
+                                            ? rawJsCode
+                                                  .split('\n')
+                                                  .map((l) => stripBlockquoteMarkers(l))
+                                                  .join('\n')
+                                            : rawJsCode
+                                    ).trim()
 
                                     // Add widget at the end of the closing line
                                     const endPos =

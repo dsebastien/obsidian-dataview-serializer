@@ -11,6 +11,7 @@ import type { DataviewApi } from 'obsidian-dataview/lib/api/plugin-api'
 import { createDataviewJSProxy } from './dataviewjs-proxy'
 import { log } from '../../utils/log'
 import { DATAVIEWJS_TIMEOUT_MS } from '../constants'
+import { applyIndentation } from './blockquote.fn'
 
 /**
  * Result of serializing a DataviewJS query
@@ -113,14 +114,9 @@ export async function serializeDataviewJSQuery(
         // Get the captured markdown
         let serializedContent = getMarkdown()
 
-        // Apply indentation if provided
-        if (indentation && serializedContent) {
-            const lines = serializedContent.split('\n')
-            const indentedLines = lines.map((line) => {
-                return indentation + line
-            })
-            serializedContent = indentedLines.join('\n')
-        }
+        // Apply indentation if provided.
+        // Inside a blockquote/callout this also keeps otherwise-empty lines quoted.
+        serializedContent = applyIndentation(serializedContent, indentation ?? '')
 
         return {
             success: true,

@@ -23,3 +23,11 @@ Conversion and removal commands (`convert-dataview-query-at-cursor`, `convert-al
 The per-device "Disable on this device" flag MUST be stored only in device-local storage via `app.loadLocalStorage`/`app.saveLocalStorage` (key `DEVICE_DISABLED_STORAGE_KEY` in `src/app/constants.ts`). It MUST NEVER be a member of `PluginSettings`, written to `data.json`, or otherwise synced — its entire purpose is to stay local to the device it is toggled on.
 
 When the flag is set on a device, the plugin MUST be fully inert there: no file-event listeners registered, `processFile` short-circuits immediately (covering schedulers and any programmatic caller), all commands no-op with a notice, and the per-query refresh buttons render nothing. The flag is orthogonal to the synced `disableAutomaticUpdates` setting; when the device flag is cleared, event handlers are re-registered only if `disableAutomaticUpdates` is false.
+
+## Blockquote and callout integrity
+
+When a query's indentation contains a blockquote marker, everything the plugin writes for that query MUST carry the same prefix: the result start and end markers, the serialized content, and the blank separator lines (written as a bare `>`, without trailing whitespace). A single unprefixed line terminates the blockquote and breaks the enclosing callout, which is the bug this rule exists to prevent.
+
+Conversely, when the indentation contains no `>`, output and matching MUST stay byte-for-byte identical to what previous versions produced — plain whitespace indentation is applied to the content only, never to the markers. `getBlockquotePrefix` returning an empty string is the switch between the two behaviors.
+
+See `documentation/Blockquotes and callouts.md` and [#64](https://github.com/dsebastien/obsidian-dataview-serializer/issues/64).

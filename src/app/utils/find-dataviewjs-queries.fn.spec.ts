@@ -76,6 +76,41 @@ dv.list(sorted.file.link);
             expect(queries).toHaveLength(1)
             expect(queries[0]?.indentation).toBe('    ')
         })
+
+        /**
+         * Reference: https://github.com/dsebastien/obsidian-dataview-serializer/issues/64
+         */
+        test('should strip the blockquote markers from quoted code', () => {
+            const text = [
+                '> [!tip]- Results',
+                '> <!-- DataviewJSToSerialize:',
+                '> const pages = dv.pages("#project")',
+                '> dv.list(pages.file.link)',
+                '> -->'
+            ].join('\n')
+
+            const queries = findDataviewJSQueries(text)
+
+            expect(queries).toHaveLength(1)
+            expect(queries[0]?.indentation).toBe('> ')
+            // The markers must not leak into the executed JavaScript
+            expect(queries[0]?.jsCode).toBe(
+                'const pages = dv.pages("#project")\ndv.list(pages.file.link)'
+            )
+        })
+
+        test('should strip nested blockquote markers from quoted code', () => {
+            const text = [
+                '> > <!-- DataviewJSToSerialize:',
+                '> > dv.list([1, 2, 3])',
+                '> > -->'
+            ].join('\n')
+
+            const queries = findDataviewJSQueries(text)
+
+            expect(queries).toHaveLength(1)
+            expect(queries[0]?.jsCode).toBe('dv.list([1, 2, 3])')
+        })
     })
 
     describe('alternative syntax', () => {

@@ -10,6 +10,7 @@ import {
     QUERY_FLAG_ONCE_AND_EJECT_OPEN_ALT
 } from '../constants'
 import { isSupportedQueryType } from './is-supported-query-type.fn'
+import { getBlockquotePrefix, stripBlockquoteMarkers } from './blockquote.fn'
 
 /**
  * Update mode for a query
@@ -196,9 +197,18 @@ function createInitialMultiLineState(): MultiLineState {
  * Extract query content from accumulated lines
  * @param accumulatedLines The lines that make up the query
  * @param flagOpen The opening flag
+ * @param indentation The indentation of the opening line
  * @returns The extracted query text (trimmed and normalized)
  */
-function extractMultiLineQuery(accumulatedLines: string[], flagOpen: string): string {
+function extractMultiLineQuery(
+    accumulatedLines: string[],
+    flagOpen: string,
+    indentation: string
+): string {
+    // Inside a callout/blockquote, every continuation line repeats the blockquote
+    // markers; they are part of the document structure, not of the query.
+    // Reference: https://github.com/dsebastien/obsidian-dataview-serializer/issues/64
+    const isInBlockquote = getBlockquotePrefix(indentation) !== ''
     const fullText = accumulatedLines.join('\n')
 
     // Find the position after the opening flag
@@ -228,7 +238,7 @@ function extractMultiLineQuery(accumulatedLines: string[], flagOpen: string): st
     // Normalize whitespace: replace newlines and multiple spaces with single spaces, then trim
     return queryContent
         .split('\n')
-        .map((line) => line.trim())
+        .map((line) => (isInBlockquote ? stripBlockquoteMarkers(line).trim() : line.trim()))
         .join(' ')
         .replace(/\s+/g, ' ')
         .trim()
@@ -263,7 +273,8 @@ export const findQueries = (text: string): QueryWithContext[] => {
                 // Multi-line query complete
                 const foundQuery = extractMultiLineQuery(
                     multiLineState.accumulatedLines,
-                    multiLineState.flagOpen
+                    multiLineState.flagOpen,
+                    multiLineState.indentation
                 )
 
                 // Determine which closing flag variant is present

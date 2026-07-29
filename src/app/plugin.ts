@@ -55,7 +55,15 @@ function getDataviewApi(app: App): DataviewApi | undefined {
 import { add, isAfter } from 'date-fns'
 import { serializeQuery } from './utils/serialize-query.fn'
 import { findQueries, type QueryWithContext } from './utils/find-queries.fn'
-import { escapeRegExp } from './utils/escape-reg-exp.fn'
+import { getBlockquotePrefix, stripLinePrefix } from './utils/blockquote.fn'
+import { buildSerializedBlock } from './utils/build-serialized-block.fn'
+import {
+    buildAlreadySerializedRegex,
+    buildBlockQueryReplacementRegex,
+    buildDataviewJSReplacementRegex,
+    matchExistingDataviewJSBlock,
+    matchExistingSerializedBlock
+} from './utils/serialized-block-regexes.fn'
 import { isTableQuery } from './utils/is-table-query.fn'
 import { shouldSkipQuery } from './utils/should-skip-query.fn'
 import { refreshButtonExtension } from './refresh-button-extension'
@@ -923,6 +931,11 @@ export class DataviewSerializerPlugin extends Plugin {
                 const flagOpen = queryWithContext.flagOpen
                 const flagClose = queryWithContext.flagClose
                 const syntaxVariant = queryWithContext.syntaxVariant
+                const indentation = queryWithContext.indentation
+                // Inside a callout/blockquote, the result markers must repeat the
+                // blockquote prefix, otherwise the callout is broken apart.
+                // Reference: https://github.com/dsebastien/obsidian-dataview-serializer/issues/64
+                const blockquotePrefix = getBlockquotePrefix(indentation)
 
                 // Use appropriate result markers based on syntax variant
                 const serializedStart =
@@ -948,14 +961,13 @@ export class DataviewSerializerPlugin extends Plugin {
                 // Look for a serialized block that immediately follows THIS query definition
                 // We match ANY query text in the SerializedQuery marker (not the exact query)
                 // because the user may have modified the query since it was last serialized
-                const escapedFlagOpenForCheck = escapeRegExp(flagOpen)
-                const escapedQueryForCheck = escapeRegExp(foundQuery)
-                const escapedFlagCloseForCheck = escapeRegExp(flagClose)
-                const alreadySerializedRegex = new RegExp(
-                    `${escapedFlagOpenForCheck}${escapedQueryForCheck}\\s*${escapedFlagCloseForCheck}(?:\\n|$)(?:${escapeRegExp(SERIALIZED_QUERY_START)}|${escapeRegExp(SERIALIZED_QUERY_START_ALT)})[^\\n]*${escapeRegExp(QUERY_FLAG_CLOSE)}`,
-                    'm'
-                )
-                const isAlreadySerialized = !!text.match(alreadySerializedRegex)
+                const regexParams = {
+                    query: foundQuery,
+                    flagOpen,
+                    flagClose,
+                    indentation
+                }
+                const isAlreadySerialized = !!text.match(buildAlreadySerializedRegex(regexParams))
                 log(`[DEBUG] isAlreadySerialized: ${isAlreadySerialized}`, 'debug')
 
                 // Skip queries based on update mode during automatic updates
@@ -964,7 +976,6 @@ export class DataviewSerializerPlugin extends Plugin {
                     continue
                 }
 
-                const indentation = queryWithContext.indentation
                 log(`Processing query: [${foundQuery}] in file [${file.path}]`, 'debug')
                 // Reference: https://github.com/IdreesInc/Waypoint/blob/master/main.ts
                 const serializationResult: QuerySerializationResult = await serializeQuery({
@@ -999,24 +1010,32 @@ export class DataviewSerializerPlugin extends Plugin {
                 // Look for a serialized block that immediately follows THIS query definition
                 // We match ANY query text in the SerializedQuery marker (not the exact query)
                 // because the user may have modified the query since it was last serialized
-                const existingSerializedRegex = new RegExp(
-                    `${escapedFlagOpenForCheck}${escapedQueryForCheck}\\s*${escapedFlagCloseForCheck}(?:\\n|$)(?:${escapeRegExp(SERIALIZED_QUERY_START)}|${escapeRegExp(SERIALIZED_QUERY_START_ALT)})[^\\n]*${escapeRegExp(QUERY_FLAG_CLOSE)}(?:\\n|$)([\\s\\S]*?)(?:${escapeRegExp(SERIALIZED_QUERY_END)}|${escapeRegExp(SERIALIZED_QUERY_END_ALT)})`,
-                    'm'
-                )
-                const existingMatch = text.match(existingSerializedRegex)
-                log(`[DEBUG] Idempotency check - existingMatch found: ${!!existingMatch}`, 'debug')
-                if (existingMatch) {
-                    // Extract the content between the markers (group 1)
-                    // For tables, there's an extra newline at the start
-                    const existingContent = existingMatch[1]?.trim() ?? ''
-                    const newContent = serializedQuery.trim()
+                const existingBlock = matchExistingSerializedBlock(text, regexParams)
+                log(`[DEBUG] Idempotency check - existingMatch found: ${!!existingBlock}`, 'debug')
+                if (existingBlock) {
+                    // Inside a blockquote, the prefix carried by every line (including the
+                    // blank ones) is stripped before comparing, so that structural markers
+                    // never make identical results look different.
+                    const existingContent = stripLinePrefix(
+                        existingBlock.content,
+                        blockquotePrefix
+                    ).trim()
+                    const newContent = stripLinePrefix(serializedQuery, blockquotePrefix).trim()
+
+                    // A block written before the blockquote fix carries unquoted markers,
+                    // which breaks the callout. Its content may well be up to date, so the
+                    // structure has to be checked too, otherwise it is never repaired.
+                    // Reference: https://github.com/dsebastien/obsidian-dataview-serializer/issues/64
+                    const markersAreUpToDate =
+                        existingBlock.startPrefix === blockquotePrefix &&
+                        existingBlock.endPrefix === blockquotePrefix
 
                     log(
-                        `[DEBUG] Idempotency - existing length: ${existingContent.length}, new length: ${newContent.length}, match: ${existingContent === newContent}`,
+                        `[DEBUG] Idempotency - existing length: ${existingContent.length}, new length: ${newContent.length}, match: ${existingContent === newContent}, markers up to date: ${markersAreUpToDate}`,
                         'debug'
                     )
 
-                    if (existingContent === newContent) {
+                    if (markersAreUpToDate && existingContent === newContent) {
                         log(
                             `Skipping query in [${file.path}] - content unchanged: "${foundQuery}"`,
                             'debug'
@@ -1026,54 +1045,17 @@ export class DataviewSerializerPlugin extends Plugin {
                 }
 
                 if ('' !== serializedQuery) {
-                    const escapedQuery = escapeRegExp(foundQuery)
-                    const escapedIndentation = escapeRegExp(indentation)
-                    const escapedFlagOpen = escapeRegExp(flagOpen)
-
-                    // Match the Query Definition Line, optionally followed by an existing Serialized Block
-                    // Use syntax-specific markers for replacement, but match both legacy and alternative for existing content
-                    const escapedSerializedStart = `(?:${escapeRegExp(SERIALIZED_QUERY_START)}|${escapeRegExp(SERIALIZED_QUERY_START_ALT)})`
-                    const escapedSerializedEnd = `(?:${escapeRegExp(SERIALIZED_QUERY_END)}|${escapeRegExp(SERIALIZED_QUERY_END_ALT)})`
-                    // Use flagClose for the query definition (preserves user's format)
-                    const escapedQueryDefClose = escapeRegExp(flagClose)
-                    // Always use QUERY_FLAG_CLOSE for SerializedQuery markers (plugin-generated, standard format)
-                    const escapedSerializedClose = escapeRegExp(QUERY_FLAG_CLOSE)
-
-                    let queryToSerializeRegex: RegExp
-
-                    // Check if this is a multi-line query
+                    // Match the query definition, optionally followed by an existing
+                    // serialized block, so both can be replaced in one go
                     const originalQueryDefinition = queryWithContext.originalQueryDefinition
                     log(
                         `[DEBUG] Is multi-line query: ${!!originalQueryDefinition}, indentation: "${indentation}"`,
                         'debug'
                     )
-                    if (originalQueryDefinition) {
-                        // Multi-line query: match the original multi-line definition
-                        // Note: originalQueryDefinition already includes the closing flag
-                        // We match ANY query text in the SerializedQuery marker (using [^\\n]*)
-                        // because the user may have modified the query since it was last serialized
-                        const escapedOriginalDefinition = escapeRegExp(originalQueryDefinition)
-                        queryToSerializeRegex = new RegExp(
-                            `(${escapedOriginalDefinition}(?:\\n|$))(?:${escapedSerializedStart}[^\\n]*${escapedSerializedClose}(?:\\n|$)[\\s\\S]*?${escapedSerializedEnd}(?:\\n|$))?`,
-                            'gm'
-                        )
-                    } else {
-                        // Single-line query (existing behavior)
-                        // Regex breakdown:
-                        // Group 1: The Query Definition line (preserved for normal modes)
-                        // Non-capturing Group: The optional existing serialized block (replaced)
-                        // Note: We match the exact query in the QueryToSerialize line to prevent
-                        // similar queries from matching each other (e.g., "LIST FROM #project"
-                        // should not match "LIST FROM #project and #done")
-                        // Note: We match ANY query text in the SerializedQuery marker (using [^\\n]*)
-                        // because the user may have modified the query since it was last serialized
-                        // Note: \\s* before the closing flag allows trailing whitespace between the
-                        // query and --> (users may have extra spaces before the closing comment)
-                        queryToSerializeRegex = new RegExp(
-                            `^(${escapedIndentation}${escapedFlagOpen}${escapedQuery}\\s*${escapedQueryDefClose}(?:\\n|$))(?:${escapedSerializedStart}[^\\n]*${escapedSerializedClose}(?:\\n|$)[\\s\\S]*?${escapedSerializedEnd}(?:\\n|$))?`,
-                            'gm'
-                        )
-                    }
+                    const queryToSerializeRegex = buildBlockQueryReplacementRegex({
+                        ...regexParams,
+                        originalQueryDefinition
+                    })
 
                     log(`[DEBUG] Replacement regex: ${queryToSerializeRegex.source}`, 'debug')
 
@@ -1092,43 +1074,41 @@ export class DataviewSerializerPlugin extends Plugin {
 
                     let queryAndSerializedQuery = ''
 
-                    // Determine if we need a trailing newline before the END marker
+                    // Determine if we need a trailing newline before the END marker.
                     // This is needed for indented content (to maintain structure) or
-                    // when the setting is enabled (for static site generators like Jekyll)
+                    // when the setting is enabled (for static site generators like Jekyll).
+                    // Blockquotes are excluded: the quoted blank line that already ends the
+                    // content keeps the structure, so adding another one only inserts empty
+                    // space inside the callout.
+                    // Reference: https://github.com/dsebastien/obsidian-dataview-serializer/issues/64
                     const needsTrailingNewline =
-                        indentation.length > 0 || this.settings.addTrailingNewline
+                        (indentation.length > 0 && blockquotePrefix === '') ||
+                        this.settings.addTrailingNewline
 
                     if (updateMode === 'once-and-eject') {
                         // For 'once-and-eject', remove all tags and leave only the serialized content
                         // Add a trailing newline to maintain proper document structure
                         queryAndSerializedQuery = `${serializedQuery}\n`
-                    } else if (originalQueryDefinition) {
-                        // Multi-line query: preserve the original multi-line format
-                        // The SerializedQuery marker uses the normalized query for matching
-                        // Use syntax-appropriate result markers
-                        if (isTableQuery(foundQuery)) {
-                            queryAndSerializedQuery = `${originalQueryDefinition}\n${serializedStart}${foundQuery}${QUERY_FLAG_CLOSE}\n\n${serializedQuery}\n${
-                                needsTrailingNewline ? '\n' : ''
-                            }${serializedEnd}\n`
-                        } else {
-                            queryAndSerializedQuery = `${originalQueryDefinition}\n${serializedStart}${foundQuery}${QUERY_FLAG_CLOSE}\n${serializedQuery}\n${
-                                needsTrailingNewline ? '\n' : ''
-                            }${serializedEnd}\n`
-                        }
-                    } else if (isTableQuery(foundQuery)) {
-                        // Single-line table query
-                        // Use flagClose for the query definition (preserves user's format)
-                        // Use syntax-appropriate result markers
-                        queryAndSerializedQuery = `${indentation}${flagOpen}${foundQuery}${flagClose}\n${serializedStart}${foundQuery}${QUERY_FLAG_CLOSE}\n\n${serializedQuery}\n${
-                            needsTrailingNewline ? '\n' : ''
-                        }${serializedEnd}\n`
                     } else {
-                        // Single-line list query
-                        // Use flagClose for the query definition (preserves user's format)
-                        // Use syntax-appropriate result markers
-                        queryAndSerializedQuery = `${indentation}${flagOpen}${foundQuery}${flagClose}\n${serializedStart}${foundQuery}${QUERY_FLAG_CLOSE}\n${serializedQuery}\n${
-                            needsTrailingNewline ? '\n' : ''
-                        }${serializedEnd}\n`
+                        // Multi-line queries keep their original multi-line definition;
+                        // single-line queries are rebuilt from their parts (flagClose is
+                        // reused so the user's format is preserved).
+                        // The SerializedQuery marker always uses the normalized query.
+                        // Use syntax-appropriate result markers.
+                        const queryDefinition =
+                            originalQueryDefinition ??
+                            `${indentation}${flagOpen}${foundQuery}${flagClose}`
+
+                        queryAndSerializedQuery = buildSerializedBlock({
+                            queryDefinition,
+                            startMarker: `${serializedStart}${foundQuery}${QUERY_FLAG_CLOSE}`,
+                            endMarker: serializedEnd,
+                            content: serializedQuery,
+                            indentation,
+                            // Tables need a blank line after the marker to render
+                            blankLineBeforeContent: isTableQuery(foundQuery),
+                            blankLineBeforeEnd: needsTrailingNewline
+                        })
                     }
                     log(
                         `[DEBUG] Replacement string length: ${queryAndSerializedQuery.length}, first 200 chars: "${queryAndSerializedQuery.substring(0, 200)}"`,
@@ -1359,6 +1339,11 @@ export class DataviewSerializerPlugin extends Plugin {
                     ? SERIALIZED_DATAVIEWJS_END_ALT
                     : SERIALIZED_DATAVIEWJS_END
 
+            // Inside a callout/blockquote, the result markers must repeat the blockquote
+            // prefix, otherwise the callout is broken apart.
+            // Reference: https://github.com/dsebastien/obsidian-dataview-serializer/issues/64
+            const blockquotePrefix = getBlockquotePrefix(indentation)
+
             // Check if query is already serialized (for 'once' mode check)
             // Check if there's already a result block after this query definition
             const queryDefIndex = originalText.indexOf(originalQueryDefinition)
@@ -1366,10 +1351,15 @@ export class DataviewSerializerPlugin extends Plugin {
                 queryDefIndex !== -1
                     ? originalText.substring(queryDefIndex + originalQueryDefinition.length)
                     : ''
+            // Drop the blockquote prefix so a quoted result block is still recognized
+            const textAfterQueryStart = stripLinePrefix(
+                textAfterQuery.trimStart(),
+                blockquotePrefix
+            ).trimStart()
             const isAlreadySerialized =
-                textAfterQuery.trimStart().startsWith(serializedStart.trim()) ||
-                textAfterQuery.trimStart().startsWith(SERIALIZED_DATAVIEWJS_START.trim()) ||
-                textAfterQuery.trimStart().startsWith(SERIALIZED_DATAVIEWJS_START_ALT.trim())
+                textAfterQueryStart.startsWith(serializedStart.trim()) ||
+                textAfterQueryStart.startsWith(SERIALIZED_DATAVIEWJS_START.trim()) ||
+                textAfterQueryStart.startsWith(SERIALIZED_DATAVIEWJS_START_ALT.trim())
 
             log(
                 `[DEBUG] DataviewJS: isAlreadySerialized: ${isAlreadySerialized}, mode: ${updateMode}`,
@@ -1409,16 +1399,24 @@ export class DataviewSerializerPlugin extends Plugin {
 
             // Idempotency check: compare new result with existing serialized content
             // Find existing serialized block for this query
-            const existingSerializedRegex = new RegExp(
-                `${escapeRegExp(originalQueryDefinition)}(?:\\n|$)(?:${escapeRegExp(SERIALIZED_DATAVIEWJS_START)}|${escapeRegExp(SERIALIZED_DATAVIEWJS_START_ALT)})${escapeRegExp(QUERY_FLAG_CLOSE)}(?:\\n|$)([\\s\\S]*?)(?:${escapeRegExp(SERIALIZED_DATAVIEWJS_END)}|${escapeRegExp(SERIALIZED_DATAVIEWJS_END_ALT)})`,
-                'm'
-            )
-            const existingMatch = originalText.match(existingSerializedRegex)
-            if (existingMatch) {
-                const existingContent = existingMatch[1]?.trim() ?? ''
-                const newContent = serializedContent.trim()
+            const dataviewJSRegexParams = { originalQueryDefinition, indentation }
+            const existingBlock = matchExistingDataviewJSBlock(originalText, dataviewJSRegexParams)
+            if (existingBlock) {
+                // Strip the blockquote prefix before comparing so structural markers
+                // never make identical results look different
+                const existingContent = stripLinePrefix(
+                    existingBlock.content,
+                    blockquotePrefix
+                ).trim()
+                const newContent = stripLinePrefix(serializedContent, blockquotePrefix).trim()
 
-                if (existingContent === newContent) {
+                // Blocks written before the blockquote fix carry unquoted markers and must
+                // be rewritten even when their content is unchanged
+                const markersAreUpToDate =
+                    existingBlock.startPrefix === blockquotePrefix &&
+                    existingBlock.endPrefix === blockquotePrefix
+
+                if (markersAreUpToDate && existingContent === newContent) {
                     log(`Skipping DataviewJS query in [${filePath}] - content unchanged`, 'debug')
                     continue
                 }
@@ -1426,17 +1424,15 @@ export class DataviewSerializerPlugin extends Plugin {
 
             // Build the replacement
             if (serializedContent !== '' || updateMode === 'once-and-eject') {
-                const escapedQueryDefinition = escapeRegExp(originalQueryDefinition)
-
                 // Regex to match the query definition and any existing serialized block
-                const queryToSerializeRegex = new RegExp(
-                    `(${escapedQueryDefinition}(?:\\n|$))(?:(?:${escapeRegExp(SERIALIZED_DATAVIEWJS_START)}|${escapeRegExp(SERIALIZED_DATAVIEWJS_START_ALT)})${escapeRegExp(QUERY_FLAG_CLOSE)}(?:\\n|$)[\\s\\S]*?(?:${escapeRegExp(SERIALIZED_DATAVIEWJS_END)}|${escapeRegExp(SERIALIZED_DATAVIEWJS_END_ALT)})(?:\\n|$))?`,
-                    'gm'
-                )
+                const queryToSerializeRegex = buildDataviewJSReplacementRegex(dataviewJSRegexParams)
 
-                // Determine if we need a trailing newline before the END marker
+                // Determine if we need a trailing newline before the END marker.
+                // Blockquotes are excluded: the quoted blank line ending the content already
+                // keeps the structure (see the block-query path).
                 const needsTrailingNewline =
-                    indentation.length > 0 || this.settings.addTrailingNewline
+                    (indentation.length > 0 && blockquotePrefix === '') ||
+                    this.settings.addTrailingNewline
 
                 let replacement: string
                 if (updateMode === 'once-and-eject') {
@@ -1444,9 +1440,15 @@ export class DataviewSerializerPlugin extends Plugin {
                     replacement = `${serializedContent}\n`
                 } else {
                     // Build the full serialized block
-                    replacement = `${originalQueryDefinition}\n${serializedStart}${QUERY_FLAG_CLOSE}\n${serializedContent}\n${
-                        needsTrailingNewline ? '\n' : ''
-                    }${serializedEnd}\n`
+                    replacement = buildSerializedBlock({
+                        queryDefinition: originalQueryDefinition,
+                        startMarker: `${serializedStart}${QUERY_FLAG_CLOSE}`,
+                        endMarker: serializedEnd,
+                        content: serializedContent,
+                        indentation,
+                        blankLineBeforeContent: false,
+                        blankLineBeforeEnd: needsTrailingNewline
+                    })
                 }
 
                 updatedText = updatedText.replace(queryToSerializeRegex, () => replacement)

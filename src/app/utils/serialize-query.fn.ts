@@ -8,6 +8,7 @@ import { App, Notice, TFile } from 'obsidian'
 import type { QuerySerializationResult } from '../types/query-result.intf'
 import type { LinkFormat } from '../types/plugin-settings.intf'
 import { isTaskQuery } from './is-task-query.fn'
+import { applyIndentation } from './blockquote.fn'
 
 /**
  * Structural view of the undocumented `Vault.config` object. Obsidian does not
@@ -304,14 +305,9 @@ export const serializeQuery = async (
         }
     }
 
-    // Apply indentation if provided
-    if (params.indentation && serializedQuery) {
-        const lines = serializedQuery.split('\n')
-        const indentedLines = lines.map((line) => {
-            return params.indentation + line
-        })
-        serializedQuery = indentedLines.join('\n')
-    }
+    // Apply indentation if provided.
+    // Inside a blockquote/callout this also keeps otherwise-empty lines quoted.
+    serializedQuery = applyIndentation(serializedQuery, params.indentation ?? '')
 
     return {
         success: true,

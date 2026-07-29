@@ -160,6 +160,60 @@ You can use different query types in the same file:
 <!-- QueryToSerializeOnceAndEject: TABLE file.name, file.ctime FROM "Templates" LIMIT 3 -->
 ```
 
+## Queries Inside Callouts and Blockquotes
+
+Queries can live inside a callout or a blockquote. Write the query as usual, keeping the `>` prefix of the surrounding block:
+
+```markdown
+> [!tip]- My Query Results
+> <!-- QueryToSerialize: TABLE file.name FROM "SomeFolder" SORT file.name ASC -->
+```
+
+The serialized result inherits the same prefix, so the callout stays intact:
+
+```markdown
+> [!tip]- My Query Results
+> <!-- QueryToSerialize: TABLE file.name FROM "SomeFolder" SORT file.name ASC -->
+> <!-- SerializedQuery: TABLE file.name FROM "SomeFolder" SORT file.name ASC -->
+>
+> | File |
+> | ---- |
+> | Note A |
+> | Note B |
+>
+> <!-- SerializedQuery END -->
+```
+
+Everything the plugin writes — the result markers **and** the blank separator lines — carries the prefix, so nothing can break out of the block.
+
+### What works
+
+- **Collapsible callouts**: `[!tip]-` and `[!tip]+` behave normally. The result is part of the callout, so it is hidden when collapsed and shown when expanded.
+- **All query types**: block queries (`LIST`, `TABLE`, `TASK`) and DataviewJS queries, in both syntax variants. Inline queries were never affected, since they stay on a single line.
+- **Nested blockquotes**: `> >` and deeper. The exact prefix of the query line is reused, so nesting is preserved.
+- **Refresh buttons**: the per-query badge and refresh button work the same inside a callout.
+
+### Multi-line queries
+
+Repeat the prefix on every line. The `>` markers are stripped before the query runs, so they never end up in the query itself:
+
+```markdown
+> [!tip]- My Query Results
+> <!-- QueryToSerialize:
+> TABLE file.name
+> FROM "SomeFolder"
+> -->
+```
+
+The same applies to DataviewJS: the markers are removed before the JavaScript is executed.
+
+### Notes
+
+- **Blank lines inside the block are written as a bare `>`.** An empty line would end the blockquote, so the marker has to be repeated.
+- **Existing notes are repaired automatically.** Versions before this fix wrote the result markers without the `>` prefix, which broke the callout apart. The next serialization rewrites them, even if the query result itself has not changed.
+- **In Live Preview, the raw comments appear when your cursor is inside the block.** That is standard Obsidian behavior for the block being edited, and it applies to the query line too. In Reading mode the comments are invisible.
+- **Removing queries works too.** "Remove all queries in current file" removes quoted query definitions and their result blocks, leaving the callout itself in place.
+
 ## Alternative Syntax
 
 In addition to the original syntax documented above, the plugin supports an alternative, more descriptive syntax using the `dataview-serializer-` prefix. This alternative syntax is designed to be more discoverable for newcomers who might encounter these queries in shared vaults.

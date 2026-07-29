@@ -674,4 +674,71 @@ describe('removeAllQueries', () => {
             expect(result.removedCount).toBe(1)
         })
     })
+
+    /**
+     * Reference: https://github.com/dsebastien/obsidian-dataview-serializer/issues/64
+     */
+    describe('queries inside blockquotes and callouts', () => {
+        test('should remove a quoted block query and its result block', () => {
+            const input = [
+                '> [!tip]- Results',
+                '> <!-- QueryToSerialize: LIST FROM #project -->',
+                '> <!-- SerializedQuery: LIST FROM #project -->',
+                '> - [[A]]',
+                '>',
+                '> <!-- SerializedQuery END -->',
+                '',
+                'After.'
+            ].join('\n')
+
+            const result = removeAllQueries(input)
+
+            expect(result.newText).toBe('> [!tip]- Results\n\nAfter.')
+            expect(result.removedCount).toBe(1)
+        })
+
+        test('should remove a quoted alternative-syntax query', () => {
+            const input = [
+                '> <!-- dataview-serializer-query: LIST FROM #project -->',
+                '> <!-- dataview-serializer-result: LIST FROM #project -->',
+                '> - [[A]]',
+                '> <!-- dataview-serializer-result-end -->'
+            ].join('\n')
+
+            const result = removeAllQueries(input)
+
+            expect(result.newText).toBe('')
+            expect(result.removedCount).toBe(1)
+        })
+
+        test('should remove a quoted DataviewJS query', () => {
+            const input = [
+                '> <!-- DataviewJSToSerialize:',
+                '> dv.list([1, 2])',
+                '> -->',
+                '> <!-- SerializedDataviewJS -->',
+                '> - 1',
+                '> <!-- SerializedDataviewJS END -->'
+            ].join('\n')
+
+            const result = removeAllQueries(input)
+
+            expect(result.newText).toBe('')
+            expect(result.removedCount).toBe(1)
+        })
+
+        test('should remove nested blockquote queries', () => {
+            const input = [
+                '> > <!-- QueryToSerialize: LIST FROM #project -->',
+                '> > <!-- SerializedQuery: LIST FROM #project -->',
+                '> > - [[A]]',
+                '> > <!-- SerializedQuery END -->'
+            ].join('\n')
+
+            const result = removeAllQueries(input)
+
+            expect(result.newText).toBe('')
+            expect(result.removedCount).toBe(1)
+        })
+    })
 })

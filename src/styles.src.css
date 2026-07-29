@@ -31,16 +31,33 @@
 .dvs-query-line {
     background-color: var(--background-primary-alt);
     border-left: 3px solid var(--text-accent);
-    @apply rounded-r !pl-2;
+    @apply rounded-r;
+}
+
+/* Only tighten the padding outside blockquotes: inside a callout CodeMirror owns
+   the indentation, and overriding it pushes the `>` prefix outside the highlight.
+   Reference: https://github.com/dsebastien/obsidian-dataview-serializer/issues/64 */
+.dvs-query-line:not(.HyperMD-quote) {
+    @apply !pl-2;
 }
 
 /* Line decorations for serialized results boundaries - faded in source mode */
 /* Doubled class names bump specificity to override CodeMirror's line color without using !important */
 .dvs-results-start-line.dvs-results-start-line,
 .dvs-results-end-line.dvs-results-end-line {
-    @apply opacity-30 !pl-2 text-xs italic;
+    @apply opacity-30 text-xs italic;
     color: var(--text-faint);
     white-space: nowrap;
+}
+
+/* Pull the marker to the left and clip it - but only outside blockquotes.
+   Inside a callout/blockquote (.HyperMD-quote) CodeMirror owns the indentation:
+   overriding it pushes the `>` prefix out of the line box, where `overflow: hidden`
+   clips it, and the block then looks like it escapes the callout in source mode.
+   Reference: https://github.com/dsebastien/obsidian-dataview-serializer/issues/64 */
+.dvs-results-start-line.dvs-results-start-line:not(.HyperMD-quote),
+.dvs-results-end-line.dvs-results-end-line:not(.HyperMD-quote) {
+    @apply !pl-2;
     overflow: hidden;
 
     /* To improve later

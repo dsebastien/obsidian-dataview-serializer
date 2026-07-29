@@ -28,13 +28,13 @@ export function removeAllQueries(text: string): RemoveAllQueriesResult {
 
     // Legacy: <!-- SerializedQuery: <query> -->\n...\n<!-- SerializedQuery END -->[\n]
     result = result.replace(
-        /[ \t]*<!-- SerializedQuery: [^\n]* -->(?:\n|$)[\s\S]*?<!-- SerializedQuery END -->(?:\n|$)/g,
+        /[ \t]*(?:>[ \t]*)*<!-- SerializedQuery: [^\n]* -->(?:\n|$)[\s\S]*?<!-- SerializedQuery END -->(?:\n|$)/g,
         ''
     )
 
     // Alt: <!-- dataview-serializer-result: <query> -->\n...\n<!-- dataview-serializer-result-end -->[\n]
     result = result.replace(
-        /[ \t]*<!-- dataview-serializer-result: [^\n]* -->(?:\n|$)[\s\S]*?<!-- dataview-serializer-result-end -->(?:\n|$)/g,
+        /[ \t]*(?:>[ \t]*)*<!-- dataview-serializer-result: [^\n]* -->(?:\n|$)[\s\S]*?<!-- dataview-serializer-result-end -->(?:\n|$)/g,
         ''
     )
 
@@ -43,7 +43,7 @@ export function removeAllQueries(text: string): RemoveAllQueriesResult {
 
     // Legacy: <!-- QueryToSerialize[Manual|Once|OnceAndEject]: ... -->
     result = result.replace(
-        /^[ \t]*<!-- QueryToSerialize(?:Manual|Once(?:AndEject)?)?:[\s\S]*?-->(?:\n|$)/gm,
+        /^[ \t]*(?:>[ \t]*)*<!-- QueryToSerialize(?:Manual|Once(?:AndEject)?)?:[\s\S]*?-->(?:\n|$)/gm,
         () => {
             removedCount++
             return ''
@@ -52,7 +52,7 @@ export function removeAllQueries(text: string): RemoveAllQueriesResult {
 
     // Alt: <!-- dataview-serializer-query[-manual|-once|-once-and-eject]: ... -->
     result = result.replace(
-        /^[ \t]*<!-- dataview-serializer-query(?:-manual|-once(?:-and-eject)?)?:[\s\S]*?-->(?:\n|$)/gm,
+        /^[ \t]*(?:>[ \t]*)*<!-- dataview-serializer-query(?:-manual|-once(?:-and-eject)?)?:[\s\S]*?-->(?:\n|$)/gm,
         () => {
             removedCount++
             return ''
@@ -83,13 +83,13 @@ export function removeAllQueries(text: string): RemoveAllQueriesResult {
 
     // Legacy: <!-- SerializedDataviewJS -->\n...\n<!-- SerializedDataviewJS END -->[\n]
     result = result.replace(
-        /[ \t]*<!-- SerializedDataviewJS -->(?:\n|$)[\s\S]*?<!-- SerializedDataviewJS END -->(?:\n|$)/g,
+        /[ \t]*(?:>[ \t]*)*<!-- SerializedDataviewJS -->(?:\n|$)[\s\S]*?<!-- SerializedDataviewJS END -->(?:\n|$)/g,
         ''
     )
 
     // Alt: <!-- dataview-serializer-js-result -->\n...\n<!-- dataview-serializer-js-result-end -->[\n]
     result = result.replace(
-        /[ \t]*<!-- dataview-serializer-js-result -->(?:\n|$)[\s\S]*?<!-- dataview-serializer-js-result-end -->(?:\n|$)/g,
+        /[ \t]*(?:>[ \t]*)*<!-- dataview-serializer-js-result -->(?:\n|$)[\s\S]*?<!-- dataview-serializer-js-result-end -->(?:\n|$)/g,
         ''
     )
 
@@ -97,7 +97,7 @@ export function removeAllQueries(text: string): RemoveAllQueriesResult {
 
     // Legacy: <!-- DataviewJSToSerialize[Manual|Once|OnceAndEject]: ... -->
     result = result.replace(
-        /^[ \t]*<!-- DataviewJSToSerialize(?:Manual|Once(?:AndEject)?)?:[\s\S]*?-->(?:\n|$)/gm,
+        /^[ \t]*(?:>[ \t]*)*<!-- DataviewJSToSerialize(?:Manual|Once(?:AndEject)?)?:[\s\S]*?-->(?:\n|$)/gm,
         () => {
             removedCount++
             return ''
@@ -106,7 +106,7 @@ export function removeAllQueries(text: string): RemoveAllQueriesResult {
 
     // Alt: <!-- dataview-serializer-js[-manual|-once|-once-and-eject]: ... -->
     result = result.replace(
-        /^[ \t]*<!-- dataview-serializer-js(?:-manual|-once(?:-and-eject)?)?:[\s\S]*?-->(?:\n|$)/gm,
+        /^[ \t]*(?:>[ \t]*)*<!-- dataview-serializer-js(?:-manual|-once(?:-and-eject)?)?:[\s\S]*?-->(?:\n|$)/gm,
         () => {
             removedCount++
             return ''
