@@ -55,6 +55,57 @@ By adding the folder containing your index files to "Folders to force update", t
 
 **Note:** The force update uses a 10-second debounce delay to avoid overwhelming the system with updates when many files change rapidly.
 
+### Date placeholders in "Folders to force update"
+
+Paths in "Folders to force update" can contain date placeholders. They are resolved against the current date **every time** the force update runs, so a path like `Daily/{{year}}/{{month}}` always points at the current month's folder — no manual maintenance when the month rolls over.
+
+This is mainly useful with Periodic Notes / Calendar style vaults: instead of force-updating an entire year of daily notes, you force-update only the notes that are still "current".
+
+**Available placeholders** (case-insensitive, shown for 2026-07-23):
+
+| Placeholder | Resolves to | Example |
+|---|---|---|
+| `{{year}}` | Year | `2026` |
+| `{{quarter}}` | Quarter | `Q3` |
+| `{{month}}` | Month number | `07` |
+| `{{monthName}}` | Short month name | `Jul` |
+| `{{week}}` | ISO week number (padded) | `30` |
+| `{{date}}` | Full date | `2026-07-23` |
+| `{{day}}` | Day of the month | `23` |
+
+**Offsets** — add `+n` or `-n` to shift the date by the placeholder's own unit. Useful to keep the previous period in scope for a while:
+
+| Pattern | Resolves to |
+|---|---|
+| `{{month-1}}` | Previous month → `06` |
+| `{{week+1}}` | Next ISO week → `31` |
+| `{{date-7}}` | Seven days ago → `2026-07-16` |
+| `{{year-1}}` | Previous year → `2025` |
+
+**Custom formats** — add a colon followed by a [date-fns format string](https://date-fns.org/docs/format) to override the default rendering. Literal text must be single-quoted:
+
+| Pattern | Resolves to |
+|---|---|
+| `{{date:MM-MMM}}` | `07-Jul` |
+| `{{month:MMMM}}` | `July` |
+| `{{month-1:MMMM}}` | `June` |
+| `{{week:RRRR-'CW'II}}` | `2026-CW30` |
+
+**Examples:**
+
+| Configured path | Effect |
+|---|---|
+| `Daily/{{year}}/{{month}}-{{monthName}}` | Only the current month's folder (`Daily/2026/07-Jul`) |
+| `Daily/{{year}}/{{month-1}}-{{monthName-1}}` | Only the previous month's folder (add it alongside the one above for overlap) |
+| `Daily/{{year}}/{{month}}-{{monthName}}/{{date}}` | Only today's daily note |
+| `Weekly/{{week:RRRR-'CW'II}}` | Only the current week's note |
+
+Notes:
+
+- Matching is a path prefix match, exactly as for static paths. `Daily/2026/07` therefore also matches `Daily/2026/07-Jul/…`.
+- Unknown placeholders (typos) and invalid date formats are left as-is, so nothing is force-updated instead of silently matching the wrong folder. The settings tab shows what each configured entry currently resolves to.
+- Placeholders are supported in "Folders to force update" only — "Folders to scan" and "Folders to ignore" take static paths.
+
 ## Per-note ignore flag
 
 Individual notes can opt out of serialization by setting the `dataview_serializer_ignore` property in their frontmatter:

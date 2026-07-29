@@ -5,6 +5,10 @@ import type { Draft } from 'immer'
 import type { LinkFormat, PluginSettings } from '../types/plugin-settings.intf'
 import { onlyUniqueArray } from '../utils/only-unique-array.fn'
 import { FolderSuggest } from '../utils/folder-suggest'
+import {
+    containsPathPlaceholders,
+    resolvePathPlaceholders
+} from '../utils/resolve-path-placeholders.fn'
 import type { ArgsSearchAndRemove } from './args-search-and-remove.intf'
 import { setDebugMode } from '../../utils/log'
 import { BUY_ME_A_COFFEE_BADGE_DATA_URL } from '../assets/buy-me-a-coffee'
@@ -293,12 +297,67 @@ export class SettingsTab extends PluginSettingTab {
                 )
             },
             name: 'Folders to force update',
-            description:
-                'Folders containing files that should be updated when ANY file in the vault changes. Useful for index files with queries that aggregate data from elsewhere.'
+            description: this.buildFoldersToForceUpdateDescription(),
+            supportsPlaceholders: true
         })
     }
 
-    doSearchAndRemoveList({ currentList, setValue, description, name }: ArgsSearchAndRemove) {
+    /**
+     * Description of the "Folders to force update" setting, including the date
+     * placeholder syntax and a couple of examples resolved against today's date.
+     */
+    buildFoldersToForceUpdateDescription(): DocumentFragment {
+        const fragment = new DocumentFragment()
+
+        fragment.createSpan({
+            text: 'Folders containing files that should be updated when ANY file in the vault changes. Useful for index files with queries that aggregate data from elsewhere.'
+        })
+
+        fragment.createEl('br')
+        fragment.createEl('br')
+
+        fragment.createSpan({
+            text: 'Paths support date placeholders, resolved every time the force update runs: '
+        })
+        fragment.createEl('code', { text: '{{year}}' })
+        fragment.createSpan({ text: ', ' })
+        fragment.createEl('code', { text: '{{quarter}}' })
+        fragment.createSpan({ text: ', ' })
+        fragment.createEl('code', { text: '{{month}}' })
+        fragment.createSpan({ text: ', ' })
+        fragment.createEl('code', { text: '{{monthName}}' })
+        fragment.createSpan({ text: ', ' })
+        fragment.createEl('code', { text: '{{week}}' })
+        fragment.createSpan({ text: ', ' })
+        fragment.createEl('code', { text: '{{date}}' })
+        fragment.createSpan({ text: ', ' })
+        fragment.createEl('code', { text: '{{day}}' })
+        fragment.createSpan({
+            text: '. Add an offset in the placeholder unit to cover neighbouring periods ('
+        })
+        fragment.createEl('code', { text: '{{month-1}}' })
+        fragment.createSpan({ text: '), or a custom date format after a colon (' })
+        fragment.createEl('code', { text: '{{date:MM-MMM}}' })
+        fragment.createSpan({ text: ').' })
+
+        fragment.createEl('br')
+
+        const example = 'Daily/{{year}}/{{month}}-{{monthName}}'
+        fragment.createSpan({ text: 'Example: ' })
+        fragment.createEl('code', { text: example })
+        fragment.createSpan({ text: ' → ' })
+        fragment.createEl('code', { text: resolvePathPlaceholders(example) })
+
+        return fragment
+    }
+
+    doSearchAndRemoveList({
+        currentList,
+        setValue,
+        description,
+        name,
+        supportsPlaceholders = false
+    }: ArgsSearchAndRemove) {
         let searchInput: SearchComponent | undefined
         new Setting(this.containerEl)
             .setName(name)
@@ -306,7 +365,11 @@ export class SettingsTab extends PluginSettingTab {
             .addSearch((cb) => {
                 searchInput = cb
                 new FolderSuggest(cb.inputEl, this.app)
-                cb.setPlaceholder('Example: folder1/folder2')
+                cb.setPlaceholder(
+                    supportsPlaceholders
+                        ? 'Example: Daily/{{year}}/{{month}}'
+                        : 'Example: folder1/folder2'
+                )
             })
             .addButton((cb) => {
                 cb.setIcon('plus')
@@ -327,7 +390,13 @@ export class SettingsTab extends PluginSettingTab {
             })
 
         currentList.forEach((ignoreFolder) => {
-            new Setting(this.containerEl).setName(ignoreFolder).addButton((button) => {
+            const setting = new Setting(this.containerEl).setName(ignoreFolder)
+
+            if (supportsPlaceholders && containsPathPlaceholders(ignoreFolder)) {
+                setting.setDesc(`Currently resolves to: ${resolvePathPlaceholders(ignoreFolder)}`)
+            }
+
+            setting.addButton((button) => {
                 button.setButtonText('Remove').onClick(() => {
                     void (async () => {
                         await setValue(currentList.filter((value) => value !== ignoreFolder))

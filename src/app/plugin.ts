@@ -8,6 +8,7 @@ import { produce } from 'immer'
 import type { Draft } from 'immer'
 import { isExcalidrawFile } from './utils/is-excalidraw-file.fn'
 import { isIgnoredByFrontmatter } from './utils/is-ignored-by-frontmatter.fn'
+import { resolvePathPlaceholders } from './utils/resolve-path-placeholders.fn'
 import {
     DEFAULT_CANVAS_FILE_NAME,
     IGNORE_FRONTMATTER_KEY,
@@ -200,6 +201,10 @@ export class DataviewSerializerPlugin extends Plugin {
      * These files are updated on any modification, useful for scenarios
      * where there's an index file that holds queries that could be impacted
      * by file updates elsewhere.
+     *
+     * Configured folders may contain date placeholders (e.g. `Daily/{{year}}/{{month}}`).
+     * These are resolved on every run, against the current date, so that the set of
+     * force-updated folders follows the calendar without any manual maintenance.
      */
     async processForceUpdateFiles(): Promise<void> {
         // Skip if no folders are configured for forced updates
@@ -210,8 +215,16 @@ export class DataviewSerializerPlugin extends Plugin {
             return
         }
 
+        const resolvedFolders = this.settings.foldersToForceUpdate
+            .map((folder) => resolvePathPlaceholders(folder))
+            .filter((folder) => folder.length > 0)
+
+        if (resolvedFolders.length === 0) {
+            return
+        }
+
         const filesToUpdate = this.app.vault.getMarkdownFiles().filter((file) => {
-            return this.settings.foldersToForceUpdate.some((folder) => file.path.startsWith(folder))
+            return resolvedFolders.some((folder) => file.path.startsWith(folder))
         })
 
         const allErrors: Array<{ filePath: string; error: { message: string; query: string } }> = []

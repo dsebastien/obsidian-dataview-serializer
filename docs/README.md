@@ -19,7 +19,7 @@ Turning Dataview queries into Markdown also ensures that the generated content a
 - **Inline expressions**: Support for inline Dataview expressions like `=this.name`, `=this.file.ctime`, `=embed(this.portrait)`
 - **Per-query update control**: Control when individual queries update using different query types (auto, manual-only, or write-once)
 - **Inline refresh button**: Refresh individual queries directly from the editor
-- **Force update folders**: Configure specific folders (like index files) to update when any file in your vault changes
+- **Force update folders**: Configure specific folders (like index files) to update when any file in your vault changes, with optional date placeholders (e.g. `Daily/{{year}}/{{month}}`) for periodic notes
 - **Idempotency protection**: Prevents unnecessary file modifications and infinite update loops
 - **Manual mode**: Option to disable automatic updates and only serialize queries on demand
 - **Command palette integration**: Commands to serialize all queries, current file queries, or insert new query blocks
