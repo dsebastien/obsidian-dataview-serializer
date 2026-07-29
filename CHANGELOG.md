@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented in this file.
 
+## [2.10.0](https://github.com/dsebastien/obsidian-dataview-serializer/compare/2.9.0...2.10.0) (2026-07-29)
+
+### Features
+
+* **plugin:** support date placeholders in folders to force update ([3a80538](https://github.com/dsebastien/obsidian-dataview-serializer/commit/3a805384f93edee9ce9ecc46e799de3273db34e4)), closes [#65](https://github.com/dsebastien/obsidian-dataview-serializer/issues/65)
+
 ## [2.9.0](https://github.com/dsebastien/obsidian-dataview-serializer/compare/2.8.1...2.9.0) (2026-07-27)
 
 ### Features
@@ -187,6 +193,7 @@ All notable changes to this project will be documented in this file.
 ## [1.0.2](https://github.com/dsebastien/obsidian-dataview-serializer/compare/1.0.1...1.0.2) (2024-05-14)
 ## [1.0.1](https://github.com/dsebastien/obsidian-dataview-serializer/compare/1.0.0...1.0.1) (2024-05-14)
 ## 1.0.0 (2024-05-13)
+
 
 
 

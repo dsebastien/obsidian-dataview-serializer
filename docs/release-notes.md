@@ -1,5 +1,11 @@
 # Release Notes
 
+## 2.10.0 (2026-07-29)
+
+### Features
+
+* **plugin:** support date placeholders in folders to force update
+
 ## 2.9.0 (2026-07-27)
 
 ### Features
