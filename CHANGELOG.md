@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented in this file.
 
+## [2.12.0](https://github.com/dsebastien/obsidian-dataview-serializer/compare/2.11.0...2.12.0) (2026-07-29)
+
+### Features
+
+* **plugin:** add Knowii community to the what's new dialog and harden it ([3d81b94](https://github.com/dsebastien/obsidian-dataview-serializer/commit/3d81b947ccb9a99154f263f4e1762155c8dd8e77))
+
 ## [2.11.0](https://github.com/dsebastien/obsidian-dataview-serializer/compare/2.10.0...2.11.0) (2026-07-29)
 
 ### Features
@@ -199,6 +205,7 @@ All notable changes to this project will be documented in this file.
 ## [1.0.2](https://github.com/dsebastien/obsidian-dataview-serializer/compare/1.0.1...1.0.2) (2024-05-14)
 ## [1.0.1](https://github.com/dsebastien/obsidian-dataview-serializer/compare/1.0.0...1.0.1) (2024-05-14)
 ## 1.0.0 (2024-05-13)
+
 
 
 
