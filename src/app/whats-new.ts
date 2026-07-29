@@ -3,7 +3,7 @@ import type { Plugin } from 'obsidian'
 // building, so the dialog always carries the notes of the version it ships in.
 import changelog from '../../CHANGELOG.md' with { type: 'text' }
 import { compareSemver, extractReleaseNotes } from './utils/release-notes'
-import { WhatsNewModal, WHATS_NEW_MARKER_CLASS } from './ui/whats-new-modal'
+import { WhatsNewModal, isAnyWhatsNewDialogOpen } from './ui/whats-new-modal'
 
 const STORAGE_KEY_SUFFIX = ':whats-new-last-seen-version'
 
@@ -74,7 +74,7 @@ async function maybeShowWhatsNew(
     // At most one what's-new dialog at a time across every plugin shipping
     // this feature: a bulk "Update all" would otherwise stack one modal per
     // plugin. Skipped plugins recorded the version above, so they stay silent.
-    if (activeDocument.querySelector(`.modal.${WHATS_NEW_MARKER_CLASS}`)) {
+    if (isAnyWhatsNewDialogOpen()) {
         return null
     }
 

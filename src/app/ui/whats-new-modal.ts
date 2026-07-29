@@ -15,6 +15,20 @@ const YOUTUBE_CHANNEL_URL = 'https://youtube.com/@dsebastien'
 export const WHATS_NEW_MARKER_CLASS = 'whats-new-dialog'
 
 /**
+ * Window-level flag shared by every plugin shipping this dialog, so only one
+ * what's-new dialog opens per session even when several plugins update at
+ * once ("Update all"). A window property keeps the check synchronous and
+ * works across plugins regardless of which version of this file they ship.
+ */
+interface WhatsNewWindow extends Window {
+    dsebastienWhatsNewDialogOpen?: boolean
+}
+
+export function isAnyWhatsNewDialogOpen(): boolean {
+    return true === (window as WhatsNewWindow).dsebastienWhatsNewDialogOpen
+}
+
+/**
  * Dialog shown once after a plugin update: renders the release notes of the
  * version(s) the user just received, plus the Knowii community and ways to
  * support development. Styling lives in the plugin stylesheet under
@@ -35,6 +49,7 @@ export class WhatsNewModal extends Modal {
     override onOpen(): void {
         const { contentEl } = this
         const prefix = this.manifest.id
+        ;(window as WhatsNewWindow).dsebastienWhatsNewDialogOpen = true
         this.modalEl.addClass(WHATS_NEW_MARKER_CLASS, `${prefix}-whats-new-dialog`)
         this.titleEl.setText(`What's new in ${this.manifest.name} ${this.manifest.version}`)
         this.renderLifecycle.load()
@@ -83,6 +98,7 @@ export class WhatsNewModal extends Modal {
     }
 
     override onClose(): void {
+        ;(window as WhatsNewWindow).dsebastienWhatsNewDialogOpen = false
         this.renderLifecycle.unload()
         this.contentEl.empty()
     }
