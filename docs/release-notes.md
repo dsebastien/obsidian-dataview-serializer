@@ -1,5 +1,15 @@
 # Release Notes
 
+## 2.14.0 (2026-07-29)
+
+### Features
+
+* **plugin:** surface support CTAs everywhere users can see them
+
+### Bug Fixes
+
+* **plugin:** keep serialized output inside callouts and blockquotes
+
 ## 2.13.0 (2026-07-29)
 
 ### Features

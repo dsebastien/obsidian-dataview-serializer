@@ -2,6 +2,16 @@
 
 All notable changes to this project will be documented in this file.
 
+## [2.14.0](https://github.com/dsebastien/obsidian-dataview-serializer/compare/2.13.0...2.14.0) (2026-07-29)
+
+### Features
+
+* **plugin:** surface support CTAs everywhere users can see them ([c37f233](https://github.com/dsebastien/obsidian-dataview-serializer/commit/c37f233c136b69147e73e1eef834e1da6ac63cb1))
+
+### Bug Fixes
+
+* **plugin:** keep serialized output inside callouts and blockquotes ([408c469](https://github.com/dsebastien/obsidian-dataview-serializer/commit/408c4697b6fde53a8d3f4426550685614427fc1e)), closes [#64](https://github.com/dsebastien/obsidian-dataview-serializer/issues/64)
+
 ## [2.13.0](https://github.com/dsebastien/obsidian-dataview-serializer/compare/2.12.0...2.13.0) (2026-07-29)
 
 ### Features
@@ -211,6 +221,7 @@ All notable changes to this project will be documented in this file.
 ## [1.0.2](https://github.com/dsebastien/obsidian-dataview-serializer/compare/1.0.1...1.0.2) (2024-05-14)
 ## [1.0.1](https://github.com/dsebastien/obsidian-dataview-serializer/compare/1.0.0...1.0.1) (2024-05-14)
 ## 1.0.0 (2024-05-13)
+
 
 
 
