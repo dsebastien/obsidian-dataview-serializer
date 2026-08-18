@@ -24,6 +24,15 @@ void mock.module('obsidian', () => ({
     TFolder: class TFolder {},
     AbstractInputSuggest: class AbstractInputSuggest {},
     SearchComponent: class SearchComponent {},
+    // Pulled in transitively by the plugin entry point and the What's new view.
+    // Only their identity matters here; nothing calls into them under test.
+    ItemView: class ItemView {},
+    WorkspaceLeaf: class WorkspaceLeaf {},
+    MarkdownRenderer: class MarkdownRenderer {
+        static render(): Promise<void> {
+            return Promise.resolve()
+        }
+    },
     debounce: (fn: (...args: unknown[]) => unknown) => fn,
     setIcon: () => {}
 }))

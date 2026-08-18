@@ -170,6 +170,22 @@ const RAW_INLINE_QUERY_REGEX = /`=([^`]+)`/g
  * @param text The document text to search for inline queries
  * @returns Array of inline queries with their context information
  */
+/**
+ * Cheap test for the possible presence of an inline query.
+ *
+ * Every inline open marker starts with one of these two prefixes, so two
+ * substring scans stand in for the eight global regexes (and the result objects
+ * they build) that a full parse costs. Deliberately an over-approximation: it
+ * answers "worth parsing?", not "is there a valid query?", so callers must still
+ * parse before acting.
+ *
+ * @param text The document text
+ * @returns true when the text may contain an inline query
+ */
+export function hasInlineQueryMarker(text: string): boolean {
+    return text.includes('<!-- IQ') || text.includes('<!-- dataview-serializer-iq')
+}
+
 export function findInlineQueries(text: string): InlineQueryWithContext[] {
     const results: InlineQueryWithContext[] = []
 

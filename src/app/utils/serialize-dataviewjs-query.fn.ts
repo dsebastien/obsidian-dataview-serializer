@@ -45,13 +45,24 @@ interface SerializeDataviewJSParams {
 /**
  * Execute JavaScript code with a timeout.
  *
+ * The timeout bounds how long the caller waits, not how long the user's code
+ * runs: JavaScript cannot pre-empt code executing on its own thread. Timing out
+ * therefore also signals `onTimeout`, so the caller can make the abandoned
+ * execution fail the next time it touches anything the caller controls.
+ *
  * @param fn The async function to execute
  * @param timeoutMs The timeout in milliseconds
+ * @param onTimeout Invoked when the timeout fires, before the promise rejects
  * @returns The result of the function or throws on timeout
  */
-async function withTimeout<T>(fn: () => Promise<T>, timeoutMs: number): Promise<T> {
+async function withTimeout<T>(
+    fn: () => Promise<T>,
+    timeoutMs: number,
+    onTimeout?: () => void
+): Promise<T> {
     return new Promise((resolve, reject) => {
         const timeoutId = window.setTimeout(() => {
+            onTimeout?.()
             reject(new Error(`DataviewJS execution timed out after ${timeoutMs}ms`))
         }, timeoutMs)
 
@@ -64,6 +75,37 @@ async function withTimeout<T>(fn: () => Promise<T>, timeoutMs: number): Promise<
                 window.clearTimeout(timeoutId)
                 reject(error instanceof Error ? error : new Error(String(error)))
             })
+    })
+}
+
+/**
+ * Wrap the `dv` proxy so that it stops answering once execution is abandoned.
+ *
+ * After a timeout the user's code keeps running — nothing can stop it — but
+ * every DataviewJS query exists to call `dv`, so failing the next such call
+ * unwinds the vast majority of runaway loops instead of letting them spin (and
+ * keep appending to the captured output) for the rest of the session.
+ *
+ * A loop that never touches `dv` still cannot be interrupted; that would need a
+ * worker, which cannot reach the Dataview API.
+ *
+ * @param dv The proxy to guard
+ * @param isAbandoned Tells whether execution has been abandoned
+ * @param timeoutMs The timeout, for the error message
+ * @returns The guarded proxy
+ */
+function guardAgainstAbandonedExecution(
+    dv: Record<string, unknown>,
+    isAbandoned: () => boolean,
+    timeoutMs: number
+): Record<string, unknown> {
+    return new Proxy(dv, {
+        get(target, property, receiver): unknown {
+            if (isAbandoned()) {
+                throw new Error(`DataviewJS execution timed out after ${timeoutMs}ms`)
+            }
+            return Reflect.get(target, property, receiver)
+        }
     })
 }
 
@@ -106,10 +148,20 @@ export async function serializeDataviewJSQuery(
             dv: Record<string, unknown>
         ) => Promise<void>
 
-        // Execute the code with timeout
-        await withTimeout(async () => {
-            await executeCode(dv)
-        }, DATAVIEWJS_TIMEOUT_MS)
+        // Execute the code with timeout. Once the timeout fires the execution is
+        // abandoned, and the guarded proxy makes its next `dv` access throw.
+        let abandoned = false
+        const guardedDv = guardAgainstAbandonedExecution(dv, () => abandoned, DATAVIEWJS_TIMEOUT_MS)
+
+        await withTimeout(
+            async () => {
+                await executeCode(guardedDv)
+            },
+            DATAVIEWJS_TIMEOUT_MS,
+            () => {
+                abandoned = true
+            }
+        )
 
         // Get the captured markdown
         let serializedContent = getMarkdown()

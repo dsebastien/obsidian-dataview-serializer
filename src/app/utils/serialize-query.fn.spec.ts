@@ -1049,4 +1049,151 @@ describe('serializeQuery', () => {
             expect(result3.serializedContent).toBe('- [[file]]\n')
         })
     })
+
+    describe('vault name index usage', () => {
+        it('should use an injected index instead of walking the vault', async () => {
+            const getFiles = mock(() => [] as TFile[])
+            const app = { vault: { getFiles } } as unknown as App
+            const getVaultNameIndex = mock(() => new Map([['unique-note.md', 1]]))
+
+            const result = await serializeQuery({
+                query: 'list',
+                originFile: 'origin.md',
+                dataviewApi: createMockDataviewApi('- [[folder/unique-note.md|unique-note]]\n'),
+                app,
+                getVaultNameIndex
+            })
+
+            expect(result.serializedContent).toBe('- [[unique-note]]\n')
+            expect(getVaultNameIndex).toHaveBeenCalledTimes(1)
+            expect(getFiles).not.toHaveBeenCalled()
+        })
+
+        it('should ask for the index at most once regardless of link count', async () => {
+            const getVaultNameIndex = mock(
+                () =>
+                    new Map([
+                        ['a.md', 1],
+                        ['b.md', 1],
+                        ['c.md', 1]
+                    ])
+            )
+
+            await serializeQuery({
+                query: 'list',
+                originFile: 'origin.md',
+                dataviewApi: createMockDataviewApi(
+                    '- [[x/a.md|a]]\n- [[y/b.md|b]]\n- [[z/c.md|c]]\n'
+                ),
+                app: createMockApp([]),
+                getVaultNameIndex
+            })
+
+            expect(getVaultNameIndex).toHaveBeenCalledTimes(1)
+        })
+
+        it('should never build the index when the link format is absolute', async () => {
+            const getFiles = mock(() => [] as TFile[])
+            const getVaultNameIndex = mock(() => new Map<string, number>())
+
+            await serializeQuery({
+                query: 'list',
+                originFile: 'origin.md',
+                dataviewApi: createMockDataviewApi('- [[folder/unique-note.md|unique-note]]\n'),
+                app: { vault: { getFiles } } as unknown as App,
+                linkFormat: 'absolute',
+                getVaultNameIndex
+            })
+
+            expect(getVaultNameIndex).not.toHaveBeenCalled()
+            expect(getFiles).not.toHaveBeenCalled()
+        })
+
+        it('should never walk the vault when the result contains no links', async () => {
+            const getFiles = mock(() => [] as TFile[])
+
+            await serializeQuery({
+                query: 'list',
+                originFile: 'origin.md',
+                dataviewApi: createMockDataviewApi('- plain item\n- another item\n'),
+                app: { vault: { getFiles } } as unknown as App
+            })
+
+            expect(getFiles).not.toHaveBeenCalled()
+        })
+
+        it('should fall back to walking the vault when no index is provided', async () => {
+            const getFiles = mock(() => [{ name: 'unique-note.md' }] as TFile[])
+
+            const result = await serializeQuery({
+                query: 'list',
+                originFile: 'origin.md',
+                dataviewApi: createMockDataviewApi('- [[folder/unique-note.md|unique-note]]\n'),
+                app: { vault: { getFiles } } as unknown as App
+            })
+
+            expect(result.serializedContent).toBe('- [[unique-note]]\n')
+            expect(getFiles).toHaveBeenCalledTimes(1)
+        })
+    })
+
+    describe('link rewriting is positional', () => {
+        it('should not corrupt an earlier link whose path contains a later link name', async () => {
+            // 'Meeting Note.md' is ambiguous so its link must stay untouched, while
+            // 'Note.md' is unique and gets shortened. Replacing the first textual
+            // occurrence of 'Note.md|' instead of this match would rewrite the
+            // earlier link into '[[a/Meeting Meeting Note]]'.
+            const mockApp = createMockApp([
+                { name: 'Meeting Note.md' },
+                { name: 'Meeting Note.md' },
+                { name: 'Note.md' }
+            ])
+            const mockApi = createMockDataviewApi(
+                '- [[a/Meeting Note.md|Meeting Note]]\n- [[Note.md|Note]]\n'
+            )
+
+            const result = await serializeQuery({
+                query: 'list',
+                originFile: 'origin.md',
+                dataviewApi: mockApi,
+                app: mockApp
+            })
+
+            expect(result.serializedContent).toBe(
+                '- [[a/Meeting Note.md|Meeting Note]]\n- [[Note]]\n'
+            )
+        })
+
+        it('should rewrite every occurrence of a repeated link independently', async () => {
+            const mockApp = createMockApp([{ name: 'note.md' }])
+            const mockApi = createMockDataviewApi(
+                '- [[folder/note.md|note]]\n- [[folder/note.md|note]]\n'
+            )
+
+            const result = await serializeQuery({
+                query: 'list',
+                originFile: 'origin.md',
+                dataviewApi: mockApi,
+                app: mockApp
+            })
+
+            expect(result.serializedContent).toBe('- [[note]]\n- [[note]]\n')
+        })
+
+        it('should preserve the text surrounding rewritten links', async () => {
+            const mockApp = createMockApp([{ name: 'note.md' }])
+            const mockApi = createMockDataviewApi(
+                'before [[folder/note.md|note]] middle [[folder/note.md|note]] after'
+            )
+
+            const result = await serializeQuery({
+                query: 'list',
+                originFile: 'origin.md',
+                dataviewApi: mockApi,
+                app: mockApp
+            })
+
+            expect(result.serializedContent).toBe('before [[note]] middle [[note]] after')
+        })
+    })
 })

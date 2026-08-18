@@ -1,6 +1,27 @@
-import { AbstractInputSuggest, App, TAbstractFile, TFolder } from 'obsidian'
+import { AbstractInputSuggest, App, TFolder } from 'obsidian'
+
+/**
+ * Upper bound on the number of folders offered at once. A vault can hold
+ * thousands of folders, and a dropdown that long is neither usable nor cheap to
+ * render; the user narrows it by typing.
+ */
+const MAX_SUGGESTIONS = 50
+
+interface IndexedFolder {
+    folder: TFolder
+    lowerCasePath: string
+}
 
 export class FolderSuggest extends AbstractInputSuggest<TFolder> {
+    /**
+     * Vault folders with their lower-cased path, built on first use.
+     *
+     * `getSuggestions` runs on every keystroke, so neither the vault walk nor
+     * the per-folder `toLowerCase()` belongs there: only the needle changes
+     * between calls, not the haystack.
+     */
+    private indexedFolders: IndexedFolder[] | undefined
+
     constructor(
         private inputEl: HTMLInputElement,
         app: App
@@ -8,25 +29,34 @@ export class FolderSuggest extends AbstractInputSuggest<TFolder> {
         super(app, inputEl)
     }
 
+    private getIndexedFolders(): IndexedFolder[] {
+        if (!this.indexedFolders) {
+            this.indexedFolders = this.app.vault
+                .getAllLoadedFiles()
+                .filter((file): file is TFolder => file instanceof TFolder)
+                .map((folder) => ({ folder, lowerCasePath: folder.path.toLowerCase() }))
+        }
+        return this.indexedFolders
+    }
+
     /**
-     * Return all vault folders
+     * Return the vault folders matching the current input
      * @param inputStr
      */
     getSuggestions(inputStr: string): TFolder[] {
-        const abstractFiles = this.app.vault.getAllLoadedFiles()
-        const folders: TFolder[] = []
         const lowerCaseInputStr = inputStr.toLowerCase()
+        const matches: TFolder[] = []
 
-        abstractFiles.forEach((folder: TAbstractFile) => {
-            if (
-                folder instanceof TFolder &&
-                folder.path.toLowerCase().contains(lowerCaseInputStr)
-            ) {
-                folders.push(folder)
+        for (const { folder, lowerCasePath } of this.getIndexedFolders()) {
+            if (lowerCasePath.contains(lowerCaseInputStr)) {
+                matches.push(folder)
+                if (matches.length >= MAX_SUGGESTIONS) {
+                    break
+                }
             }
-        })
+        }
 
-        return folders
+        return matches
     }
 
     renderSuggestion(folder: TFolder, el: HTMLElement): void {

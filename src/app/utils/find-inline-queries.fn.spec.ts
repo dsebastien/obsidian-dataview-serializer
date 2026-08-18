@@ -1,6 +1,7 @@
 import { describe, expect, test } from 'bun:test'
 import {
     findInlineQueries,
+    hasInlineQueryMarker,
     findRawInlineQueries,
     isInlineQueryAlreadySerialized,
     buildSerializedInlineQuery,
@@ -438,5 +439,44 @@ Age: <!-- dataview-serializer-iq: =this.age -->30<!-- /dataview-serializer-iq --
             expect(r3[0]?.expression).toBe('=this.legacy')
             expect(r4[0]?.expression).toBe('=this.alt')
         })
+    })
+})
+
+describe('hasInlineQueryMarker', () => {
+    test('returns false for text without any inline query', () => {
+        expect(hasInlineQueryMarker('')).toBe(false)
+        expect(hasInlineQueryMarker('Just some prose.')).toBe(false)
+        expect(hasInlineQueryMarker('<!-- QueryToSerialize: LIST -->')).toBe(false)
+    })
+
+    test('detects every legacy inline open marker', () => {
+        expect(hasInlineQueryMarker('<!-- IQ: =this.field -->v<!-- /IQ -->')).toBe(true)
+        expect(hasInlineQueryMarker('<!-- IQManual: =this.field -->v<!-- /IQ -->')).toBe(true)
+        expect(hasInlineQueryMarker('<!-- IQOnce: =this.field -->v<!-- /IQ -->')).toBe(true)
+        expect(hasInlineQueryMarker('<!-- IQOnceAndEject: =this.field -->v<!-- /IQ -->')).toBe(true)
+    })
+
+    test('detects every alternative inline open marker', () => {
+        expect(hasInlineQueryMarker('<!-- dataview-serializer-iq: =this.f -->v')).toBe(true)
+        expect(hasInlineQueryMarker('<!-- dataview-serializer-iq-manual: =this.f -->v')).toBe(true)
+        expect(hasInlineQueryMarker('<!-- dataview-serializer-iq-once: =this.f -->v')).toBe(true)
+        expect(
+            hasInlineQueryMarker('<!-- dataview-serializer-iq-once-and-eject: =this.f -->v')
+        ).toBe(true)
+    })
+
+    test('agrees with findInlineQueries whenever a query is actually found', () => {
+        const texts = [
+            '<!-- IQ: =this.field -->value<!-- /IQ -->',
+            'prefix <!-- IQOnce: =this.a -->x<!-- /IQ --> suffix',
+            '<!-- dataview-serializer-iq: =this.b -->y<!-- /dataview-serializer-iq -->',
+            'nothing to see here'
+        ]
+
+        for (const text of texts) {
+            if (findInlineQueries(text).length > 0) {
+                expect(hasInlineQueryMarker(text)).toBe(true)
+            }
+        }
     })
 })

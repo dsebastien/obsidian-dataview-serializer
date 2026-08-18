@@ -4,11 +4,13 @@
  */
 import type { DataviewApi } from 'obsidian-dataview/lib/api/plugin-api'
 import { log } from '../../utils/log'
-import { App, Notice, TFile } from 'obsidian'
+import { App, Notice } from 'obsidian'
 import type { QuerySerializationResult } from '../types/query-result.intf'
 import type { LinkFormat } from '../types/plugin-settings.intf'
 import { isTaskQuery } from './is-task-query.fn'
 import { applyIndentation } from './blockquote.fn'
+import { buildVaultNameIndex, isNameUniqueInIndex } from './vault-name-index.fn'
+import type { VaultNameIndex } from './vault-name-index.fn'
 
 /**
  * Structural view of the undocumented `Vault.config` object. Obsidian does not
@@ -102,13 +104,19 @@ interface SerializeQueryParams {
      * - 'absolute': Always use full path for consistency across devices
      */
     linkFormat?: LinkFormat
+    /**
+     * Provider for the vault file-name index, so that a single processing pass
+     * can share one index across all of its queries. Called at most once, and
+     * only when a link actually needs a uniqueness check — serializations that
+     * never shorten a link (absolute link format, link-free results) therefore
+     * never walk the vault. Defaults to indexing `params.app`'s vault.
+     */
+    getVaultNameIndex?: () => VaultNameIndex
 }
 
 export const serializeQuery = async (
     params: SerializeQueryParams
 ): Promise<QuerySerializationResult> => {
-    const allVaultFiles = params.app.vault.getFiles()
-
     // Resolve the effective link format and link syntax
     // When 'obsidian', read from Obsidian's vault configuration
     let effectiveLinkFormat: 'shortest' | 'absolute' = 'shortest'
@@ -139,6 +147,18 @@ export const serializeQuery = async (
         effectiveLinkFormat = configuredFormat
     }
 
+    // The vault file-name index is only consulted when links may be shortened.
+    // Building it walks the whole vault, so it is shared when the caller supplies
+    // one and otherwise built at most once per serialization, on first use.
+    let vaultNameIndex: VaultNameIndex | undefined
+
+    function getVaultNameIndex(): VaultNameIndex {
+        vaultNameIndex ??= params.getVaultNameIndex
+            ? params.getVaultNameIndex()
+            : buildVaultNameIndex(params.app)
+        return vaultNameIndex
+    }
+
     // Check if the name is unique. If it is, we will be able to replace the long path with just the note name. Aids
     // readability.
     // When effectiveLinkFormat is 'absolute', always return false to keep full paths.
@@ -146,8 +166,7 @@ export const serializeQuery = async (
         if (effectiveLinkFormat === 'absolute') {
             return false
         }
-        const occurrences = allVaultFiles.filter((x: TFile) => x.name == name)
-        return occurrences.length <= 1
+        return isNameUniqueInIndex(getVaultNameIndex(), name)
     }
 
     // Determine if the note name and alias are different
@@ -174,6 +193,50 @@ export const serializeQuery = async (
         return `[[${linkPath}]]`
     }
 
+    /**
+     * Rewrite every wiki link in the output in a single pass.
+     *
+     * Replacing matches one at a time with `String.replace` re-scans the output
+     * from index 0 and re-allocates it for every link, which is quadratic in the
+     * number of links. Rebuilding from the match offsets is linear, and each
+     * match is rewritten at its own position rather than at the first textually
+     * identical one.
+     *
+     * @param input The serialized query output
+     * @param regex The (global) link regex to apply
+     * @param buildReplacement Produces the replacement for a single match
+     * @returns The output with every link rewritten
+     */
+    function rewriteLinks(
+        input: string,
+        regex: RegExp,
+        buildReplacement: (match: RegExpMatchArray) => string
+    ): string {
+        // Reset lastIndex for reuse of pre-compiled regex
+        regex.lastIndex = 0
+        const matches = [...input.matchAll(regex)]
+        if (matches.length === 0) {
+            return input
+        }
+
+        const segments: string[] = []
+        let cursor = 0
+
+        for (const match of matches) {
+            const matchedText = match[0]
+            const start = match.index
+            if (start === undefined) {
+                continue
+            }
+            segments.push(input.slice(cursor, start))
+            segments.push(buildReplacement(match))
+            cursor = start + matchedText.length
+        }
+        segments.push(input.slice(cursor))
+
+        return segments.join('')
+    }
+
     let serializedQuery = ''
     try {
         serializedQuery = await params.dataviewApi.tryQueryMarkdown(params.query, params.originFile)
@@ -189,12 +252,8 @@ export const serializeQuery = async (
         if (params.query.toLocaleLowerCase().contains('table')) {
             serializedQuery = serializedQuery.replaceAll('\\\\', '\\').replaceAll('\n<', '<')
 
-            // Reset lastIndex for reuse of pre-compiled regex
-            TABLE_LINK_REGEX.lastIndex = 0
-
             // Returned links are delivered as the full path to the .md (or other filetype) file, aliased to the note name
-            const matchedLinks = [...serializedQuery.matchAll(TABLE_LINK_REGEX)]
-            for (const match of matchedLinks) {
+            serializedQuery = rewriteLinks(serializedQuery, TABLE_LINK_REGEX, (match) => {
                 // Matched array
                 // match[0]: Full matched string (e.g., [[folder/note.md\|alias]])
                 // match[1]: Matched group 1 = filepath (without trailing backslash)
@@ -202,47 +261,34 @@ export const serializeQuery = async (
                 const filepath = match[1]!
                 const name = getBasename(filepath)
                 const alias = match[2]!
-                if (isNameUnique(name)) {
-                    // The name is unique, so ok to replace the path
-                    if (!isValidAlias(name, alias)) {
-                        // Name and alias match. Simplify to just the alias
-                        // For wikilinks: [[alias]] (no extension)
-                        // For markdown: [alias](name) (keep extension for valid link target)
-                        const linkTarget = useMarkdownLinks ? name : alias
-                        serializedQuery = serializedQuery.replace(
-                            match[0],
-                            formatLink(linkTarget, undefined, true)
-                        )
-                    } else {
-                        // Name and alias are different. Need to remove the path and keep the alias
-                        // For wikilinks: [[nameWithoutExt\|alias]] or [[name\|alias]]
-                        // For markdown: [alias](name)
-                        const linkTarget = useMarkdownLinks
-                            ? name
-                            : name.endsWith('.md')
-                              ? getNameWithoutExtension(name)
-                              : name
-                        serializedQuery = serializedQuery.replace(
-                            match[0],
-                            formatLink(linkTarget, alias, true)
-                        )
-                    }
-                } else {
+
+                if (!isNameUnique(name)) {
                     // Name is not unique, keep the full path
-                    serializedQuery = serializedQuery.replace(
-                        match[0],
-                        formatLink(filepath, alias, true)
-                    )
+                    return formatLink(filepath, alias, true)
                 }
-            }
+
+                // The name is unique, so ok to replace the path
+                if (!isValidAlias(name, alias)) {
+                    // Name and alias match. Simplify to just the alias
+                    // For wikilinks: [[alias]] (no extension)
+                    // For markdown: [alias](name) (keep extension for valid link target)
+                    return formatLink(useMarkdownLinks ? name : alias, undefined, true)
+                }
+
+                // Name and alias are different. Need to remove the path and keep the alias
+                // For wikilinks: [[nameWithoutExt\|alias]] or [[name\|alias]]
+                // For markdown: [alias](name)
+                const linkTarget = useMarkdownLinks
+                    ? name
+                    : name.endsWith('.md')
+                      ? getNameWithoutExtension(name)
+                      : name
+                return formatLink(linkTarget, alias, true)
+            })
         } else {
             // Not a table. Assuming for now a list as that's all we're processing.
-            // Reset lastIndex for reuse of pre-compiled regex
-            LIST_LINK_REGEX.lastIndex = 0
-
             // Returned links are delivered as the full path to the .md (or other filetype) file, aliased to the note name
-            const matchedLinks = [...serializedQuery.matchAll(LIST_LINK_REGEX)]
-            for (const match of matchedLinks) {
+            serializedQuery = rewriteLinks(serializedQuery, LIST_LINK_REGEX, (match) => {
                 // Matched array
                 // match[0]: Full matched string
                 // match[1]: Matched group 1 = filepath
@@ -250,46 +296,37 @@ export const serializeQuery = async (
                 const filepath = match[1]!
                 const name = getBasename(filepath)
                 const alias = match[2]!
+
                 if (useMarkdownLinks) {
                     // Markdown link format: replace the entire wikilink
-                    if (isNameUnique(name)) {
-                        if (!isValidAlias(name, alias)) {
-                            serializedQuery = serializedQuery.replace(
-                                match[0],
-                                formatLink(name, undefined, false)
-                            )
-                        } else {
-                            serializedQuery = serializedQuery.replace(
-                                match[0],
-                                formatLink(name, alias, false)
-                            )
-                        }
-                    } else {
-                        serializedQuery = serializedQuery.replace(
-                            match[0],
-                            formatLink(filepath, alias, false)
-                        )
+                    if (!isNameUnique(name)) {
+                        return formatLink(filepath, alias, false)
                     }
-                } else if (isNameUnique(name)) {
-                    // Wikilink format: modify path within existing brackets
-                    if (!isValidAlias(name, alias)) {
-                        // Name and alias match. Can replace the lot and leave what is the alias as the link
-                        serializedQuery = serializedQuery.replace(filepath + '|', '')
-                    } else {
-                        // Name and alias are different. Need to remove the path and keep the alias
-                        if (name.endsWith('.md')) {
-                            // For .md we can keep just the note name without extension
-                            serializedQuery = serializedQuery.replace(
-                                filepath + '|',
-                                getNameWithoutExtension(name) + '|'
-                            )
-                        } else {
-                            // File types not .md need to keep full filename
-                            serializedQuery = serializedQuery.replace(filepath + '|', name + '|')
-                        }
-                    }
+                    return isValidAlias(name, alias)
+                        ? formatLink(name, alias, false)
+                        : formatLink(name, undefined, false)
                 }
-            }
+
+                // Wikilink format: modify the path within the existing brackets
+                if (!isNameUnique(name)) {
+                    // Name is not unique, keep the link untouched
+                    return match[0]
+                }
+
+                if (!isValidAlias(name, alias)) {
+                    // Name and alias match. Can replace the lot and leave what is the alias as the link
+                    return formatLink(alias, undefined, false)
+                }
+
+                // Name and alias are different. Need to remove the path and keep the alias.
+                // For .md we can keep just the note name without extension; other file
+                // types need to keep the full filename.
+                return formatLink(
+                    name.endsWith('.md') ? getNameWithoutExtension(name) : name,
+                    alias,
+                    false
+                )
+            })
         }
     } catch (err: unknown) {
         const errorMessage = err instanceof Error ? err.message : String(err)

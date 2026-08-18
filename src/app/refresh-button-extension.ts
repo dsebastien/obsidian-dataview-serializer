@@ -48,16 +48,28 @@ import { getBlockquotePrefix, stripBlockquoteMarkers } from './utils/blockquote.
 
 type QueryType = 'auto' | 'manual' | 'once' | 'eject'
 
-interface QueryFlagInfo {
+export interface QueryFlagInfo {
     flagOpen: string
     openIdx: number
     queryType: QueryType
 }
 
 /**
+ * Every marker this module looks for is an HTML comment, so one scan for the
+ * comment opener stands in for the dozens of prefix scans below. Decorations are
+ * rebuilt for every visible line on every edit, and ordinary prose lines are the
+ * overwhelming majority, so they must stay cheap.
+ */
+const COMMENT_OPENER = '<!--'
+
+/**
  * Detect which query flag is present in a line and return the flag info
  */
-function detectQueryFlagInLine(text: string): QueryFlagInfo | null {
+export function detectQueryFlagInLine(text: string): QueryFlagInfo | null {
+    if (!text.includes(COMMENT_OPENER)) {
+        return null
+    }
+
     // Check in order of specificity (longer prefixes first)
     // Alternative syntax first (longer prefixes)
     const ejectAltIdx = text.indexOf(QUERY_FLAG_ONCE_AND_EJECT_OPEN_ALT)
@@ -104,7 +116,7 @@ function detectQueryFlagInLine(text: string): QueryFlagInfo | null {
 /**
  * Interface for inline query flag info
  */
-interface InlineQueryFlagInfo {
+export interface InlineQueryFlagInfo {
     flagOpen: string
     openIdx: number
     queryType: QueryType
@@ -116,7 +128,11 @@ interface InlineQueryFlagInfo {
  * Detect inline query flags in a line and return all found inline queries.
  * Inline queries can appear multiple times on the same line.
  */
-function detectInlineQueriesInLine(text: string): InlineQueryFlagInfo[] {
+export function detectInlineQueriesInLine(text: string): InlineQueryFlagInfo[] {
+    if (!text.includes(COMMENT_OPENER)) {
+        return []
+    }
+
     const results: InlineQueryFlagInfo[] = []
 
     // All inline query flags in order of specificity (longer prefixes first)
@@ -202,7 +218,11 @@ function detectInlineQueriesInLine(text: string): InlineQueryFlagInfo[] {
 /**
  * Detect which DataviewJS flag is present in a line and return the flag info
  */
-function detectDataviewJSFlagInLine(text: string): QueryFlagInfo | null {
+export function detectDataviewJSFlagInLine(text: string): QueryFlagInfo | null {
+    if (!text.includes(COMMENT_OPENER)) {
+        return null
+    }
+
     // Check in order of specificity (longer prefixes first)
     // Alternative syntax first (longer prefixes)
     const ejectAltIdx = text.indexOf(DATAVIEWJS_FLAG_ONCE_AND_EJECT_OPEN_ALT)
@@ -339,8 +359,194 @@ export const refreshButtonExtension = (
     ) => Promise<FileProcessingResult>,
     isFileIgnoredByFrontmatter: (file: TFile) => boolean,
     isDeviceDisabled: () => boolean
-) =>
-    ViewPlugin.fromClass(
+) => {
+    /**
+     * Widget for query badges and refresh button
+     */
+    class QueryWidgetGroup extends WidgetType {
+        constructor(
+            private query: string,
+            private queryType: QueryType
+        ) {
+            super()
+        }
+
+        /**
+         * Two badges/buttons for the same query are interchangeable, so CodeMirror
+         * can keep the existing DOM. Without this, every keystroke tears down and
+         * rebuilds every icon and listener in the note.
+         */
+        override eq(other: WidgetType): boolean {
+            return (
+                other instanceof QueryWidgetGroup &&
+                other.query === this.query &&
+                other.queryType === this.queryType
+            )
+        }
+
+        toDOM(editorView: EditorView): HTMLElement {
+            const container = createSpan({ cls: 'dvs-query-widgets' })
+
+            // Add query type badge
+            const badge = createQueryBadge(this.queryType)
+            container.appendChild(badge)
+
+            // Add refresh button if enabled
+            if (getSettings().showRefreshButton) {
+                const btn = createRefreshButton(async () => {
+                    try {
+                        const leaf = app.workspace
+                            .getLeavesOfType('markdown')
+                            .find(
+                                (leaf) =>
+                                    leaf.view instanceof MarkdownView &&
+                                    leaf.view.contentEl.contains(editorView.dom)
+                            )
+
+                        if (!(leaf?.view instanceof MarkdownView)) return
+                        const file = leaf.view.file
+                        if (!file) return
+
+                        if (isFileIgnoredByFrontmatter(file)) {
+                            new Notice(
+                                `Skipped: "${file.name}" is opted out of serialization via the "${IGNORE_FRONTMATTER_KEY}" frontmatter property.`,
+                                NOTICE_TIMEOUT
+                            )
+                            return
+                        }
+
+                        const result = await processFile(file, true, this.query, true)
+
+                        // Check for errors
+                        const firstError = result.errors[0]
+                        if (firstError) {
+                            const truncatedQuery =
+                                firstError.query.length > 50
+                                    ? firstError.query.substring(0, 50) + '...'
+                                    : firstError.query
+                            new Notice(
+                                `Query failed:\n"${truncatedQuery}"\n${firstError.message}`,
+                                NOTICE_TIMEOUT * 2
+                            )
+                        } else {
+                            new Notice('Dataview query serialized')
+                        }
+                    } catch (err) {
+                        log('Failed to refresh dataview query', 'error', err)
+                        new Notice('Failed to refresh dataview query')
+                    }
+                })
+
+                container.appendChild(btn)
+            }
+
+            return container
+        }
+    }
+
+    /**
+     * Widget for inline query badges and refresh button
+     */
+    class InlineQueryWidgetGroup extends WidgetType {
+        constructor(
+            private expression: string,
+            private queryType: QueryType
+        ) {
+            super()
+        }
+
+        /**
+         * Two badges/buttons for the same inline expression are interchangeable,
+         * so CodeMirror can keep the existing DOM.
+         */
+        override eq(other: WidgetType): boolean {
+            return (
+                other instanceof InlineQueryWidgetGroup &&
+                other.expression === this.expression &&
+                other.queryType === this.queryType
+            )
+        }
+
+        toDOM(editorView: EditorView): HTMLElement {
+            const container = createSpan({ cls: 'dvs-inline-query-widgets' })
+
+            // Add query type badge (smaller for inline)
+            const badge = createSpan({
+                cls: `dvs-inline-badge dvs-inline-badge-${this.queryType}`
+            })
+
+            const info = getQueryTypeInfo(this.queryType)
+            const iconSpan = badge.createSpan({ cls: 'dvs-inline-badge-icon' })
+            setIcon(iconSpan, info.icon)
+
+            container.appendChild(badge)
+
+            // Add refresh button if enabled (smaller for inline)
+            if (getSettings().showRefreshButton) {
+                const btn = createEl('button', {
+                    cls: 'dvs-inline-refresh-button',
+                    attr: { 'aria-label': 'Refresh Inline Query' }
+                })
+                setIcon(btn, 'refresh-cw')
+
+                const expression = this.expression
+                btn.addEventListener('click', (e) => {
+                    e.preventDefault()
+                    e.stopPropagation()
+
+                    void (async () => {
+                        try {
+                            const leaf = app.workspace
+                                .getLeavesOfType('markdown')
+                                .find(
+                                    (leaf) =>
+                                        leaf.view instanceof MarkdownView &&
+                                        leaf.view.contentEl.contains(editorView.dom)
+                                )
+
+                            if (!(leaf?.view instanceof MarkdownView)) return
+                            const file = leaf.view.file
+                            if (!file) return
+
+                            if (isFileIgnoredByFrontmatter(file)) {
+                                new Notice(
+                                    `Skipped: "${file.name}" is opted out of serialization via the "${IGNORE_FRONTMATTER_KEY}" frontmatter property.`,
+                                    NOTICE_TIMEOUT
+                                )
+                                return
+                            }
+
+                            const result = await processFile(file, true, expression, true)
+
+                            // Check for errors
+                            const firstError = result.errors[0]
+                            if (firstError) {
+                                const truncatedExpr =
+                                    firstError.query.length > 50
+                                        ? firstError.query.substring(0, 50) + '...'
+                                        : firstError.query
+                                new Notice(
+                                    `Inline query failed:\n"${truncatedExpr}"\n${firstError.message}`,
+                                    NOTICE_TIMEOUT * 2
+                                )
+                            } else {
+                                new Notice('Inline query serialized')
+                            }
+                        } catch (err) {
+                            log('Failed to refresh inline query', 'error', err)
+                            new Notice('Failed to refresh inline query')
+                        }
+                    })()
+                })
+
+                container.appendChild(btn)
+            }
+
+            return container
+        }
+    }
+
+    return ViewPlugin.fromClass(
         class {
             decorations: DecorationSet
 
@@ -363,172 +569,6 @@ export const refreshButtonExtension = (
 
                 const settings = getSettings()
                 const decorations: Array<{ from: number; to: number; decoration: Decoration }> = []
-
-                /**
-                 * Widget for query badges and refresh button
-                 */
-                class QueryWidgetGroup extends WidgetType {
-                    constructor(
-                        private query: string,
-                        private queryType: QueryType
-                    ) {
-                        super()
-                    }
-
-                    toDOM(editorView: EditorView): HTMLElement {
-                        const container = createSpan({ cls: 'dvs-query-widgets' })
-
-                        // Add query type badge
-                        const badge = createQueryBadge(this.queryType)
-                        container.appendChild(badge)
-
-                        // Add refresh button if enabled
-                        if (settings.showRefreshButton) {
-                            const btn = createRefreshButton(async () => {
-                                try {
-                                    const leaf = app.workspace
-                                        .getLeavesOfType('markdown')
-                                        .find(
-                                            (leaf) =>
-                                                leaf.view instanceof MarkdownView &&
-                                                leaf.view.contentEl.contains(editorView.dom)
-                                        )
-
-                                    if (!(leaf?.view instanceof MarkdownView)) return
-                                    const file = leaf.view.file
-                                    if (!file) return
-
-                                    if (isFileIgnoredByFrontmatter(file)) {
-                                        new Notice(
-                                            `Skipped: "${file.name}" is opted out of serialization via the "${IGNORE_FRONTMATTER_KEY}" frontmatter property.`,
-                                            NOTICE_TIMEOUT
-                                        )
-                                        return
-                                    }
-
-                                    const result = await processFile(file, true, this.query, true)
-
-                                    // Check for errors
-                                    const firstError = result.errors[0]
-                                    if (firstError) {
-                                        const truncatedQuery =
-                                            firstError.query.length > 50
-                                                ? firstError.query.substring(0, 50) + '...'
-                                                : firstError.query
-                                        new Notice(
-                                            `Query failed:\n"${truncatedQuery}"\n${firstError.message}`,
-                                            NOTICE_TIMEOUT * 2
-                                        )
-                                    } else {
-                                        new Notice('Dataview query serialized')
-                                    }
-                                } catch (err) {
-                                    log('Failed to refresh dataview query', 'error', err)
-                                    new Notice('Failed to refresh dataview query')
-                                }
-                            })
-
-                            container.appendChild(btn)
-                        }
-
-                        return container
-                    }
-                }
-
-                /**
-                 * Widget for inline query badges and refresh button
-                 */
-                class InlineQueryWidgetGroup extends WidgetType {
-                    constructor(
-                        private expression: string,
-                        private queryType: QueryType
-                    ) {
-                        super()
-                    }
-
-                    toDOM(editorView: EditorView): HTMLElement {
-                        const container = createSpan({ cls: 'dvs-inline-query-widgets' })
-
-                        // Add query type badge (smaller for inline)
-                        const badge = createSpan({
-                            cls: `dvs-inline-badge dvs-inline-badge-${this.queryType}`
-                        })
-
-                        const info = getQueryTypeInfo(this.queryType)
-                        const iconSpan = badge.createSpan({ cls: 'dvs-inline-badge-icon' })
-                        setIcon(iconSpan, info.icon)
-
-                        container.appendChild(badge)
-
-                        // Add refresh button if enabled (smaller for inline)
-                        if (settings.showRefreshButton) {
-                            const btn = createEl('button', {
-                                cls: 'dvs-inline-refresh-button',
-                                attr: { 'aria-label': 'Refresh Inline Query' }
-                            })
-                            setIcon(btn, 'refresh-cw')
-
-                            const expression = this.expression
-                            btn.addEventListener('click', (e) => {
-                                e.preventDefault()
-                                e.stopPropagation()
-
-                                void (async () => {
-                                    try {
-                                        const leaf = app.workspace
-                                            .getLeavesOfType('markdown')
-                                            .find(
-                                                (leaf) =>
-                                                    leaf.view instanceof MarkdownView &&
-                                                    leaf.view.contentEl.contains(editorView.dom)
-                                            )
-
-                                        if (!(leaf?.view instanceof MarkdownView)) return
-                                        const file = leaf.view.file
-                                        if (!file) return
-
-                                        if (isFileIgnoredByFrontmatter(file)) {
-                                            new Notice(
-                                                `Skipped: "${file.name}" is opted out of serialization via the "${IGNORE_FRONTMATTER_KEY}" frontmatter property.`,
-                                                NOTICE_TIMEOUT
-                                            )
-                                            return
-                                        }
-
-                                        const result = await processFile(
-                                            file,
-                                            true,
-                                            expression,
-                                            true
-                                        )
-
-                                        // Check for errors
-                                        const firstError = result.errors[0]
-                                        if (firstError) {
-                                            const truncatedExpr =
-                                                firstError.query.length > 50
-                                                    ? firstError.query.substring(0, 50) + '...'
-                                                    : firstError.query
-                                            new Notice(
-                                                `Inline query failed:\n"${truncatedExpr}"\n${firstError.message}`,
-                                                NOTICE_TIMEOUT * 2
-                                            )
-                                        } else {
-                                            new Notice('Inline query serialized')
-                                        }
-                                    } catch (err) {
-                                        log('Failed to refresh inline query', 'error', err)
-                                        new Notice('Failed to refresh inline query')
-                                    }
-                                })()
-                            })
-
-                            container.appendChild(btn)
-                        }
-
-                        return container
-                    }
-                }
 
                 // State for tracking multi-line query parsing in decorations
                 interface MultiLineDecorationState {
@@ -953,3 +993,4 @@ export const refreshButtonExtension = (
             decorations: (v) => v.decorations
         }
     )
+}

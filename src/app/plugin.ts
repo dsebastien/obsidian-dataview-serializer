@@ -3,7 +3,7 @@ import { App, debounce, Notice, Plugin, TAbstractFile, TFile } from 'obsidian'
 import type { EventRef } from 'obsidian'
 import { DEFAULT_SETTINGS, type PluginSettings } from './types/plugin-settings.intf'
 import { SettingsTab } from './settings/settings-tab'
-import { log, setDebugMode } from '../utils/log'
+import { isDebugModeEnabled, log, setDebugMode } from '../utils/log'
 import { produce } from 'immer'
 import type { Draft } from 'immer'
 import { isExcalidrawFile } from './utils/is-excalidraw-file.fn'
@@ -54,6 +54,8 @@ function getDataviewApi(app: App): DataviewApi | undefined {
 }
 import { add, isAfter } from 'date-fns'
 import { serializeQuery } from './utils/serialize-query.fn'
+import { buildVaultNameIndex } from './utils/vault-name-index.fn'
+import type { VaultNameIndex } from './utils/vault-name-index.fn'
 import { findQueries, type QueryWithContext } from './utils/find-queries.fn'
 import { getBlockquotePrefix, stripLinePrefix } from './utils/blockquote.fn'
 import { buildSerializedBlock } from './utils/build-serialized-block.fn'
@@ -74,6 +76,7 @@ import {
 } from './utils/convert-dataview-query.fn'
 import {
     findInlineQueries,
+    hasInlineQueryMarker,
     buildSerializedInlineQuery,
     type InlineQueryWithContext
 } from './utils/find-inline-queries.fn'
@@ -936,7 +939,9 @@ export class DataviewSerializerPlugin extends Plugin {
 
             const text = await this.app.vault.cachedRead(file)
             const foundQueries: QueryWithContext[] = findQueries(text)
-            const foundInlineQueries: InlineQueryWithContext[] = findInlineQueries(text)
+            // Only a presence test is needed here; processInlineQueries parses the
+            // (possibly rewritten) text itself, so parsing it twice served no purpose.
+            const mayHaveInlineQueries = hasInlineQueryMarker(text)
             const foundDataviewJSQueries: DataviewJSQueryWithContext[] = this.settings
                 .enableDataviewJS
                 ? findDataviewJSQueries(text)
@@ -944,7 +949,7 @@ export class DataviewSerializerPlugin extends Plugin {
 
             if (
                 foundQueries.length === 0 &&
-                foundInlineQueries.length === 0 &&
+                !mayHaveInlineQueries &&
                 foundDataviewJSQueries.length === 0
             ) {
                 // No queries to serialize found in the file
@@ -953,6 +958,15 @@ export class DataviewSerializerPlugin extends Plugin {
 
             // Process the modified file
             let updatedText = `${text}` // To ensure we have access to replaceAll...
+
+            // Every query in this file resolves its links against the same vault
+            // state, so the file-name index is built at most once per file (and
+            // not at all when no link needs shortening) instead of once per query.
+            let vaultNameIndex: VaultNameIndex | undefined
+            const getVaultNameIndex = (): VaultNameIndex => {
+                vaultNameIndex ??= buildVaultNameIndex(this.app)
+                return vaultNameIndex
+            }
 
             // NOTE: We no longer strip serialized content upfront because:
             // 1. The replacement regex already handles replacing existing serialized blocks
@@ -1022,7 +1036,8 @@ export class DataviewSerializerPlugin extends Plugin {
                     dataviewApi: this.dataviewApi!,
                     app: this.app,
                     indentation,
-                    linkFormat: this.settings.linkFormat
+                    linkFormat: this.settings.linkFormat,
+                    getVaultNameIndex
                 })
 
                 // Check for errors
@@ -1097,17 +1112,21 @@ export class DataviewSerializerPlugin extends Plugin {
 
                     log(`[DEBUG] Replacement regex: ${queryToSerializeRegex.source}`, 'debug')
 
-                    // Test if the regex matches and what it matches
-                    const regexTestMatch = updatedText.match(queryToSerializeRegex)
-                    log(
-                        `[DEBUG] Regex test - matches: ${regexTestMatch ? regexTestMatch.length : 0}, matched text length: ${regexTestMatch?.[0]?.length ?? 0}`,
-                        'debug'
-                    )
-                    if (regexTestMatch) {
+                    // Test if the regex matches and what it matches.
+                    // This scans the whole document purely to describe the match, so
+                    // it is only worth doing when the output can actually be seen.
+                    if (isDebugModeEnabled()) {
+                        const regexTestMatch = updatedText.match(queryToSerializeRegex)
                         log(
-                            `[DEBUG] Matched text (first 200 chars): "${regexTestMatch[0]?.substring(0, 200)}"`,
+                            `[DEBUG] Regex test - matches: ${regexTestMatch ? regexTestMatch.length : 0}, matched text length: ${regexTestMatch?.[0]?.length ?? 0}`,
                             'debug'
                         )
+                        if (regexTestMatch) {
+                            log(
+                                `[DEBUG] Matched text (first 200 chars): "${regexTestMatch[0]?.substring(0, 200)}"`,
+                                'debug'
+                            )
+                        }
                     }
 
                     let queryAndSerializedQuery = ''
@@ -1520,12 +1539,6 @@ export class DataviewSerializerPlugin extends Plugin {
             return true
         }
 
-        const fileContent = (await this.app.vault.read(file)).trim()
-
-        if (fileContent.length === 0) {
-            return true
-        }
-
         if (isExcalidrawFile(file)) {
             return true
         }
@@ -1533,6 +1546,15 @@ export class DataviewSerializerPlugin extends Plugin {
         // Respect the per-note ignore frontmatter flag, even on manual/forced runs.
         if (this.isFileIgnoredByFrontmatter(file)) {
             log(`Ignoring file [${file.path}] due to frontmatter flag`, 'debug')
+            return true
+        }
+
+        // Read last, and from the cache: the checks above reject a file without
+        // touching its content, and processFile reads the very same cached copy,
+        // so the two reads can no longer disagree or hit the disk twice.
+        const fileContent = (await this.app.vault.cachedRead(file)).trim()
+
+        if (fileContent.length === 0) {
             return true
         }
 
