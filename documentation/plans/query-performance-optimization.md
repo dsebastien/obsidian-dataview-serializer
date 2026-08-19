@@ -4,143 +4,22 @@
 
 Optimize the Obsidian Dataview Serializer plugin's query processing performance through caching and string manipulation improvements.
 
-## Remaining Bottlenecks (by Impact)
+## Status
 
-| Bottleneck                                 | Impact | Location                        |
-| ------------------------------------------ | ------ | ------------------------------- |
-| No caching for vault files/link uniqueness | HIGH   | `serialize-query.fn.ts:59,92`   |
-| Regex per query in processFile             | MEDIUM | `plugin.ts:752-866`             |
-| Inefficient string indentation             | LOW    | `serialize-query.fn.ts:203-207` |
+Most of this plan shipped with PR #68 (perf pass, 2026-08), though with a simpler design than originally sketched below. What shipped:
 
-## Implementation Plan
+- **Vault file-name index** — `src/app/utils/vault-name-index.fn.ts` builds a `Map<fileName, occurrenceCount>` in one vault walk. `serializeQuery()` consults it through a lazy `getVaultNameIndex` provider, so the index is built at most once per file-processing pass (and not at all when no link needs shortening). This replaces the per-link `vault.getFiles().filter(...)` scan. The originally planned `VaultFileCache` class (TTL-based, plugin-lifetime, event-invalidated) was **not** implemented — the per-pass index is simpler and cannot serve stale data across passes. Revisit the long-lived cache only if profiling shows index construction itself is a bottleneck in very large vaults.
+- **Single-pass link rewriting** — `rewriteLinks()` in `serialize-query.fn.ts` rebuilds the output from match offsets instead of one `String.replace` per link (which was quadratic and could hit the wrong occurrence).
+- **Cheap rejection gates** — `hasInlineQueryMarker()` and the `COMMENT_OPENER` prefilter in `refresh-button-extension.ts` skip parsing for lines/files without HTML comments; `shouldFileBeIgnored()` performs all metadata-only rejections (type, canvas, Excalidraw, frontmatter opt-out, cooldown, ignored folders) before reading file content, and reads through `cachedRead`.
+- **Editor widget reuse** — CodeMirror widgets have stable identity via `eq()` (query, type, and refresh-button setting), so unchanged badges/buttons keep their DOM across rebuilds.
+- **Indentation** — superseded: indentation runs through `applyIndentation()` (`blockquote.fn.ts`), which is blockquote-aware; the plan's single-`replace` micro-optimization no longer applies to the current code shape.
 
-### Phase 1: Vault File Cache
+## Remaining Work
 
-**New file:** `src/app/cache/vault-file-cache.ts`
-
-Cache vault file list and filename uniqueness map to avoid repeated scans.
-
-```typescript
-export class VaultFileCache {
-    private allFiles: TFile[] | null = null
-    private nameUniqueness: Map<string, boolean> | null = null
-    private lastUpdate = 0
-    private maxAge: number
-
-    constructor(
-        private app: App,
-        maxAgeMs = 1000
-    ) {
-        this.maxAge = maxAgeMs
-    }
-
-    invalidate(): void {
-        this.allFiles = null
-        this.nameUniqueness = null
-    }
-
-    getAllFiles(): TFile[] {
-        if (!this.allFiles || this.isStale()) {
-            this.allFiles = this.app.vault.getFiles()
-            this.lastUpdate = Date.now()
-        }
-        return this.allFiles
-    }
-
-    getNameUniquenessMap(): Map<string, boolean> {
-        if (!this.nameUniqueness || this.isStale()) {
-            const counts = new Map<string, number>()
-            for (const file of this.getAllFiles()) {
-                counts.set(file.name, (counts.get(file.name) || 0) + 1)
-            }
-            this.nameUniqueness = new Map()
-            for (const [name, count] of counts) {
-                this.nameUniqueness.set(name, count <= 1)
-            }
-        }
-        return this.nameUniqueness
-    }
-
-    isNameUnique(name: string): boolean {
-        return this.getNameUniquenessMap().get(name) ?? true
-    }
-
-    private isStale(): boolean {
-        return Date.now() - this.lastUpdate > this.maxAge
-    }
-}
-```
-
-**Modify:** `src/app/utils/serialize-query.fn.ts`
-
-- Accept `VaultFileCache` instance as parameter
-- Replace `params.app.vault.getFiles()` with `cache.getAllFiles()`
-- Replace `isNameUnique()` filter logic with `cache.isNameUnique(name)`
-
-**Modify:** `src/app/plugin.ts`
-
-- Create cache instance in plugin class
-- Invalidate on file create/delete/rename events
-- Pass cache to `serializeQuery()`
-
----
-
-### Phase 2: Optimize String Indentation
-
-**File:** `src/app/utils/serialize-query.fn.ts` lines 202-208
-
-```typescript
-// Before (3 operations: split, map, join)
-if (params.indentation && serializedQuery) {
-    const lines = serializedQuery.split('\n')
-    const indentedLines = lines.map((line) => params.indentation + line)
-    serializedQuery = indentedLines.join('\n')
-}
-
-// After (1 operation)
-if (params.indentation && serializedQuery) {
-    serializedQuery = params.indentation + serializedQuery.replace(/\n/g, '\n' + params.indentation)
-}
-```
-
----
-
-### Phase 3: Cache Query-Specific Regex Patterns
-
-**File:** `src/app/plugin.ts`
-
-Add a module-level regex cache for query-specific patterns:
-
-```typescript
-const queryRegexCache = new Map<string, RegExp>()
-
-function getQueryRegex(key: string, patternBuilder: () => string, flags: string): RegExp {
-    const cacheKey = `${key}:${flags}`
-    let regex = queryRegexCache.get(cacheKey)
-    if (!regex) {
-        regex = new RegExp(patternBuilder(), flags)
-        queryRegexCache.set(cacheKey, regex)
-    }
-    regex.lastIndex = 0 // Reset for global patterns
-    return regex
-}
-```
-
-Use for the 3 regexes created per query in `processFile()`:
-
-- `alreadySerializedRegex` (line 752)
-- `existingSerializedRegex` (line 798)
-- `queryToSerializeRegex` (line 862)
-
----
-
-## Files to Modify
-
-| File                                  | Changes                           |
-| ------------------------------------- | --------------------------------- |
-| `src/app/utils/serialize-query.fn.ts` | Vault cache, optimize indentation |
-| `src/app/plugin.ts`                   | Add caches, regex cache           |
-| `src/app/cache/vault-file-cache.ts`   | **NEW** - Vault file caching      |
+| Item                                                     | Impact     | Notes                                                                                                                                                                                                                                                                                                          |
+| -------------------------------------------------------- | ---------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Cache query-specific replacement regexes                 | LOW-MEDIUM | `buildBlockQueryReplacementRegex` / `buildDataviewJSReplacementRegex` (`serialized-block-regexes.fn.ts`) still construct regexes per query per pass. A module-level `Map<cacheKey, RegExp>` keyed on the query text + flags would remove that. Only worth doing if profiling shows regex construction matters. |
+| `vault.read()` vs `cachedRead()` before `vault.modify()` | —          | `processFile()` bases its rewrite on `cachedRead` (pre-dating PR #68). Obsidian docs recommend `read()` when the content feeds a subsequent write. Consider `vault.process()` for an atomic read-modify-write if stale-cache writes are ever observed in the wild.                                             |
 
 ## Verification
 
@@ -151,9 +30,3 @@ Use for the 3 regexes created per query in `processFile()`:
     - Verify idempotency (running twice produces same output)
 3. **Check TypeScript:** `bun run tsc:watch`
 4. **Lint/format:** `bun run format && bun run lint`
-
-## Expected Improvements
-
-- **Serialize-all command:** 30-50% faster for large vaults (caching)
-- **Single file processing:** 20-40% faster for files with multiple queries (regex cache + vault cache)
-- **Memory:** Slight increase (~5-10%) due to caches (bounded by cache invalidation)

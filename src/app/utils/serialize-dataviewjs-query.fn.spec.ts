@@ -152,6 +152,64 @@ describe('serializeDataviewJSQuery', () => {
             delete (globalThis as { __dvProbe?: unknown }).__dvProbe
         })
 
+        it('should make a method captured before the timeout throw after it', async () => {
+            const probe: { threw?: boolean; message?: string } = {}
+            ;(globalThis as { __dvProbe?: unknown }).__dvProbe = probe
+
+            await serializeDataviewJSQuery({
+                jsCode: `
+                    const probe = globalThis.__dvProbe
+                    const list = dv.list
+                    await new Promise((r) => setTimeout(r, 30))
+                    try {
+                        list(["late"])
+                        probe.threw = false
+                    } catch (e) {
+                        probe.threw = true
+                        probe.message = String(e)
+                    }
+                `,
+                originFile: 'origin.md',
+                dataviewApi: createMockDataviewApi()
+            })
+
+            await settleAbandonedExecutions()
+
+            expect(probe.threw).toBe(true)
+            expect(probe.message).toContain('timed out')
+
+            delete (globalThis as { __dvProbe?: unknown }).__dvProbe
+        })
+
+        it('should make a nested object captured before the timeout throw after it', async () => {
+            const probe: { threw?: boolean; message?: string } = {}
+            ;(globalThis as { __dvProbe?: unknown }).__dvProbe = probe
+
+            await serializeDataviewJSQuery({
+                jsCode: `
+                    const probe = globalThis.__dvProbe
+                    const io = dv.io
+                    await new Promise((r) => setTimeout(r, 30))
+                    try {
+                        await io.load("some.md")
+                        probe.threw = false
+                    } catch (e) {
+                        probe.threw = true
+                        probe.message = String(e)
+                    }
+                `,
+                originFile: 'origin.md',
+                dataviewApi: createMockDataviewApi()
+            })
+
+            await settleAbandonedExecutions()
+
+            expect(probe.threw).toBe(true)
+            expect(probe.message).toContain('timed out')
+
+            delete (globalThis as { __dvProbe?: unknown }).__dvProbe
+        })
+
         it('should not capture output produced after abandonment', async () => {
             const result = await serializeDataviewJSQuery({
                 jsCode: 'await new Promise((r) => setTimeout(r, 30)); dv.list(["late"])',

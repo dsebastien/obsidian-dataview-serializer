@@ -1510,37 +1510,34 @@ export class DataviewSerializerPlugin extends Plugin {
             return true
         }
 
+        // Cooldown and ignored-folder rejections are metadata-only, so they too
+        // run before the content read. Forced runs bypass both, matching the
+        // behavior before the read was moved.
+        if (!force) {
+            // Make sure the file was not modified too recently (avoid update loops)
+            if (this.nextPossibleUpdates.has(file.path)) {
+                const nextPossibleUpdateForFile = this.nextPossibleUpdates.get(file.path)!
+                if (isAfter(nextPossibleUpdateForFile, new Date())) {
+                    log('File has been updated recently. Ignoring', 'debug', file.path)
+                    return true
+                } else {
+                    log('File has not been updated recently. Processing', 'debug', file.path)
+                }
+            }
+
+            const isInIgnoredFolder = this.settings.ignoredFolders.some((ignoredFolder) =>
+                file.path.startsWith(ignoredFolder)
+            )
+            if (isInIgnoredFolder) {
+                return true
+            }
+        }
+
         // Read last, and from the cache: the checks above reject a file without
         // touching its content, and processFile reads the very same cached copy,
         // so the two reads can no longer disagree or hit the disk twice.
         const fileContent = (await this.app.vault.cachedRead(file)).trim()
 
-        if (fileContent.length === 0) {
-            return true
-        }
-
-        if (force) {
-            return false
-        }
-
-        // Make sure the file was not modified too recently (avoid update loops)
-        if (this.nextPossibleUpdates.has(file.path)) {
-            const nextPossibleUpdateForFile = this.nextPossibleUpdates.get(file.path)!
-            if (isAfter(nextPossibleUpdateForFile, new Date())) {
-                log('File has been updated recently. Ignoring', 'debug', file.path)
-                return true
-            } else {
-                log('File has not been updated recently. Processing', 'debug', file.path)
-            }
-        }
-
-        return this.settings.ignoredFolders.some((ignoredFolder) => {
-            if (file.path.startsWith(ignoredFolder)) {
-                //log(`Skipping because the file is part of an ignored folder: [${ignoredFolder}]`, 'debug');
-                return true
-            } else {
-                return false
-            }
-        })
+        return fileContent.length === 0
     }
 }
