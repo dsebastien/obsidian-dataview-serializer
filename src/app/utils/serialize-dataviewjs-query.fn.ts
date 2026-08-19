@@ -86,8 +86,17 @@ async function withTimeout<T>(
  * unwinds the vast majority of runaway loops instead of letting them spin (and
  * keep appending to the captured output) for the rest of the session.
  *
- * A loop that never touches `dv` still cannot be interrupted; that would need a
- * worker, which cannot reach the Dataview API.
+ * The guard is recursive: methods and nested objects handed out through `dv`
+ * (a captured `dv.list`, a stashed `dv.io`) are wrapped too, so references
+ * taken before the timeout also fail after it — not just fresh `dv` accesses.
+ * Methods are invoked on the unwrapped object, so built-ins with internal
+ * slots (promises returned by `dv.io.load`, arrays from `dv.pages`) keep
+ * working. Wrapper functions are created per property access, so comparing
+ * two reads of the same method for identity is not supported — user snippets
+ * do not do that.
+ *
+ * A loop that never touches anything reached through `dv` still cannot be
+ * interrupted; that would need a worker, which cannot reach the Dataview API.
  *
  * @param dv The proxy to guard
  * @param isAbandoned Tells whether execution has been abandoned
@@ -99,14 +108,44 @@ function guardAgainstAbandonedExecution(
     isAbandoned: () => boolean,
     timeoutMs: number
 ): Record<string, unknown> {
-    return new Proxy(dv, {
-        get(target, property, receiver): unknown {
-            if (isAbandoned()) {
-                throw new Error(`DataviewJS execution timed out after ${timeoutMs}ms`)
-            }
-            return Reflect.get(target, property, receiver)
+    const wrappedObjects = new WeakMap<object, unknown>()
+
+    function failIfAbandoned(): void {
+        if (isAbandoned()) {
+            throw new Error(`DataviewJS execution timed out after ${timeoutMs}ms`)
         }
-    })
+    }
+
+    function guardValue(value: unknown, thisTarget: object | null): unknown {
+        if (typeof value === 'function') {
+            const fn = value as (...args: unknown[]) => unknown
+            return (...args: unknown[]): unknown => {
+                failIfAbandoned()
+                return guardValue(Reflect.apply(fn, thisTarget, args), null)
+            }
+        }
+        if (typeof value === 'object' && value !== null) {
+            return guardObject(value)
+        }
+        return value
+    }
+
+    function guardObject(obj: object): unknown {
+        const existing = wrappedObjects.get(obj)
+        if (existing) {
+            return existing
+        }
+        const proxy = new Proxy(obj, {
+            get(target, property): unknown {
+                failIfAbandoned()
+                return guardValue(Reflect.get(target, property, target), target)
+            }
+        })
+        wrappedObjects.set(obj, proxy)
+        return proxy
+    }
+
+    return guardObject(dv) as Record<string, unknown>
 }
 
 /**

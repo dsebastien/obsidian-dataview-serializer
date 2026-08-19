@@ -122,11 +122,13 @@ describe('DataviewSerializerPlugin.shouldFileBeIgnored', () => {
     })
 
     describe('recently updated files', () => {
-        it('should ignore a file updated too recently', async () => {
+        it('should ignore a file updated too recently, without reading it', async () => {
             const nextPossibleUpdates = new Map([['note.md', add(new Date(), { seconds: 30 })]])
-            const { plugin } = createPlugin({ nextPossibleUpdates })
+            const { plugin, cachedRead, read } = createPlugin({ nextPossibleUpdates })
 
             expect(await plugin.shouldFileBeIgnored(createFile('note.md'))).toBe(true)
+            expect(cachedRead).not.toHaveBeenCalled()
+            expect(read).not.toHaveBeenCalled()
         })
 
         it('should process a file whose cooldown has elapsed', async () => {
@@ -145,10 +147,12 @@ describe('DataviewSerializerPlugin.shouldFileBeIgnored', () => {
     })
 
     describe('ignored folders', () => {
-        it('should ignore a file inside an ignored folder', async () => {
-            const { plugin } = createPlugin({ ignoredFolders: ['Archive'] })
+        it('should ignore a file inside an ignored folder, without reading it', async () => {
+            const { plugin, cachedRead, read } = createPlugin({ ignoredFolders: ['Archive'] })
 
             expect(await plugin.shouldFileBeIgnored(createFile('Archive/note.md'))).toBe(true)
+            expect(cachedRead).not.toHaveBeenCalled()
+            expect(read).not.toHaveBeenCalled()
         })
 
         it('should not ignore a file outside the ignored folders', async () => {
