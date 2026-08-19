@@ -123,5 +123,29 @@ describe('FolderSuggest', () => {
             expect(suggest.getSuggestions('beta').map((f) => f.path)).toEqual(['beta'])
             expect(suggest.getSuggestions('alpha').map((f) => f.path)).toEqual(['alpha'])
         })
+
+        it('should drop the cache when the popover closes', () => {
+            const { suggest, getAllLoadedFiles } = createSuggest(['alpha'])
+
+            suggest.getSuggestions('a')
+            suggest.close()
+            suggest.getSuggestions('a')
+
+            expect(getAllLoadedFiles).toHaveBeenCalledTimes(2)
+        })
+
+        it('should see a folder created while the settings tab stays open', () => {
+            const vaultPaths = ['alpha']
+            const getAllLoadedFiles = mock(() => vaultPaths.map(createFolder))
+            const { suggest } = createSuggest(vaultPaths, getAllLoadedFiles)
+
+            expect(suggest.getSuggestions('beta')).toHaveLength(0)
+
+            // A folder appears while the popover is closed
+            vaultPaths.push('beta')
+            suggest.close()
+
+            expect(suggest.getSuggestions('beta').map((f) => f.path)).toEqual(['beta'])
+        })
     })
 })

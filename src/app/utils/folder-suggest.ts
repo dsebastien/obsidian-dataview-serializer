@@ -67,4 +67,16 @@ export class FolderSuggest extends AbstractInputSuggest<TFolder> {
         this.inputEl.value = folder.path
         this.close()
     }
+
+    /**
+     * Drop the cached index when the popover closes, so a folder created,
+     * renamed, or deleted while the settings tab stays open shows up the next
+     * time the suggester opens. The cache then lives exactly as long as one
+     * popover session — long enough to make keystrokes cheap, short enough to
+     * never serve a stale vault.
+     */
+    override close(): void {
+        this.indexedFolders = undefined
+        super.close()
+    }
 }

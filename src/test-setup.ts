@@ -22,7 +22,9 @@ void mock.module('obsidian', () => ({
     MarkdownView: class MarkdownView {},
     TAbstractFile: class TAbstractFile {},
     TFolder: class TFolder {},
-    AbstractInputSuggest: class AbstractInputSuggest {},
+    AbstractInputSuggest: class AbstractInputSuggest {
+        close(): void {}
+    },
     SearchComponent: class SearchComponent {},
     // Pulled in transitively by the plugin entry point and the What's new view.
     // Only their identity matters here; nothing calls into them under test.

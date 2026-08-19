@@ -366,7 +366,8 @@ export const refreshButtonExtension = (
     class QueryWidgetGroup extends WidgetType {
         constructor(
             private query: string,
-            private queryType: QueryType
+            private queryType: QueryType,
+            private showRefreshButton: boolean
         ) {
             super()
         }
@@ -375,12 +376,17 @@ export const refreshButtonExtension = (
          * Two badges/buttons for the same query are interchangeable, so CodeMirror
          * can keep the existing DOM. Without this, every keystroke tears down and
          * rebuilds every icon and listener in the note.
+         *
+         * The refresh-button setting is part of the identity: without it, toggling
+         * the setting would keep reusing DOM built under the old value and the
+         * change would only apply after reopening the note.
          */
         override eq(other: WidgetType): boolean {
             return (
                 other instanceof QueryWidgetGroup &&
                 other.query === this.query &&
-                other.queryType === this.queryType
+                other.queryType === this.queryType &&
+                other.showRefreshButton === this.showRefreshButton
             )
         }
 
@@ -392,7 +398,7 @@ export const refreshButtonExtension = (
             container.appendChild(badge)
 
             // Add refresh button if enabled
-            if (getSettings().showRefreshButton) {
+            if (this.showRefreshButton) {
                 const btn = createRefreshButton(async () => {
                     try {
                         const leaf = app.workspace
@@ -450,7 +456,8 @@ export const refreshButtonExtension = (
     class InlineQueryWidgetGroup extends WidgetType {
         constructor(
             private expression: string,
-            private queryType: QueryType
+            private queryType: QueryType,
+            private showRefreshButton: boolean
         ) {
             super()
         }
@@ -458,12 +465,17 @@ export const refreshButtonExtension = (
         /**
          * Two badges/buttons for the same inline expression are interchangeable,
          * so CodeMirror can keep the existing DOM.
+         *
+         * The refresh-button setting is part of the identity: without it, toggling
+         * the setting would keep reusing DOM built under the old value and the
+         * change would only apply after reopening the note.
          */
         override eq(other: WidgetType): boolean {
             return (
                 other instanceof InlineQueryWidgetGroup &&
                 other.expression === this.expression &&
-                other.queryType === this.queryType
+                other.queryType === this.queryType &&
+                other.showRefreshButton === this.showRefreshButton
             )
         }
 
@@ -681,7 +693,8 @@ export const refreshButtonExtension = (
                                         decoration: Decoration.widget({
                                             widget: new QueryWidgetGroup(
                                                 normalizedQuery,
-                                                multiLineState.queryType
+                                                multiLineState.queryType,
+                                                settings.showRefreshButton
                                             ),
                                             side: 1
                                         })
@@ -732,7 +745,11 @@ export const refreshButtonExtension = (
                                         from: endPos,
                                         to: endPos,
                                         decoration: Decoration.widget({
-                                            widget: new QueryWidgetGroup(query, queryType),
+                                            widget: new QueryWidgetGroup(
+                                                query,
+                                                queryType,
+                                                settings.showRefreshButton
+                                            ),
                                             side: 1
                                         })
                                     })
@@ -826,7 +843,8 @@ export const refreshButtonExtension = (
                                         decoration: Decoration.widget({
                                             widget: new QueryWidgetGroup(
                                                 jsCode,
-                                                dvjsMultiLineState.queryType
+                                                dvjsMultiLineState.queryType,
+                                                settings.showRefreshButton
                                             ),
                                             side: 1
                                         })
@@ -879,7 +897,11 @@ export const refreshButtonExtension = (
                                         from: endPos,
                                         to: endPos,
                                         decoration: Decoration.widget({
-                                            widget: new QueryWidgetGroup(jsCode, queryType),
+                                            widget: new QueryWidgetGroup(
+                                                jsCode,
+                                                queryType,
+                                                settings.showRefreshButton
+                                            ),
                                             side: 1
                                         })
                                     })
@@ -970,7 +992,11 @@ export const refreshButtonExtension = (
                                 from: line.from + iq.endIdx,
                                 to: line.from + iq.endIdx,
                                 decoration: Decoration.widget({
-                                    widget: new InlineQueryWidgetGroup(iq.expression, iq.queryType),
+                                    widget: new InlineQueryWidgetGroup(
+                                        iq.expression,
+                                        iq.queryType,
+                                        settings.showRefreshButton
+                                    ),
                                     side: 1
                                 })
                             })
