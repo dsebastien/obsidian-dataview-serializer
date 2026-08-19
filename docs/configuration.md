@@ -21,7 +21,7 @@ In the settings of the plugin, you can configure:
 
 - **Show error notifications**: When enabled, a notification popup will be displayed when a query fails to serialize. This helps you identify and fix invalid queries. Errors show the problematic query and the error message from Dataview.
 
-- **Debug logging**: When enabled, verbose debug messages will be logged to the browser console. This is useful for troubleshooting issues with the plugin. When disabled (default), only warnings and errors are logged, keeping the console clean.
+- **Debug logging**: When enabled, verbose debug messages will be logged to the browser console. This is useful for troubleshooting issues with the plugin. When disabled (default), the plugin writes nothing to the console, keeping it clean and avoiding the cost of logging during large vault scans.
 
 - **Enable DataviewJS queries**: When enabled (default), the plugin will process DataviewJS queries in addition to standard Dataview DQL queries. DataviewJS queries allow you to write JavaScript code using the Dataview API. When disabled, DataviewJS queries will be ignored during serialization.
 

@@ -82,13 +82,35 @@ describe('log', () => {
             expect(() => log('error message', 'error')).not.toThrow()
         })
 
-        it('should not produce console output (calls suppressed for community scorecard)', () => {
-            log('message', 'info', { key: 'value' })
-            expect(consoleSpy.log).not.toHaveBeenCalled()
-            expect(consoleSpy.debug).not.toHaveBeenCalled()
-            expect(consoleSpy.info).not.toHaveBeenCalled()
-            expect(consoleSpy.warn).not.toHaveBeenCalled()
-            expect(consoleSpy.error).not.toHaveBeenCalled()
+        it('should log debug messages to console.debug', () => {
+            log('debug message', 'debug')
+            expect(consoleSpy.debug).toHaveBeenCalledWith(`${LOG_PREFIX} debug message`)
+        })
+
+        it('should log info messages to console.info', () => {
+            log('info message', 'info')
+            expect(consoleSpy.info).toHaveBeenCalledWith(`${LOG_PREFIX} info message`)
+        })
+
+        it('should log warn messages to console.warn', () => {
+            log('warn message', 'warn')
+            expect(consoleSpy.warn).toHaveBeenCalledWith(`${LOG_PREFIX} warn message`)
+        })
+
+        it('should log error messages to console.error', () => {
+            log('error message', 'error')
+            expect(consoleSpy.error).toHaveBeenCalledWith(`${LOG_PREFIX} error message`)
+        })
+
+        it('should log to console.log when no level is given', () => {
+            log('plain message')
+            expect(consoleSpy.log).toHaveBeenCalledWith(`${LOG_PREFIX} plain message`)
+        })
+
+        it('should forward additional data to the console', () => {
+            const data = { key: 'value' }
+            log('message', 'info', data)
+            expect(consoleSpy.info).toHaveBeenCalledWith(`${LOG_PREFIX} message`, data)
         })
 
         it('should handle empty message without throwing', () => {
@@ -125,7 +147,7 @@ describe('log', () => {
             expect(() => log('error message', 'error')).not.toThrow()
         })
 
-        it('should not produce console output at any level', () => {
+        it('should not produce any console output at any level', () => {
             log('test', undefined)
             log('debug', 'debug')
             log('info', 'info')

@@ -105,3 +105,30 @@ test('processInBatches should handle errors in processor', async () => {
 
     await expect(processInBatches(items, processor, 3)).rejects.toThrow('Processing failed')
 })
+
+test('processInBatches should report progress after each batch', async () => {
+    const items = [1, 2, 3, 4, 5]
+    const processor = async (item: number) => item
+    const progress: Array<[number, number]> = []
+
+    await processInBatches(items, processor, 2, (processed, total) => {
+        progress.push([processed, total])
+    })
+
+    expect(progress).toEqual([
+        [2, 5],
+        [4, 5],
+        [5, 5]
+    ])
+})
+
+test('processInBatches should not report progress for an empty array', async () => {
+    const processor = async (item: number) => item
+    let calls = 0
+
+    await processInBatches([] as number[], processor, 2, () => {
+        calls++
+    })
+
+    expect(calls).toBe(0)
+})

@@ -12,7 +12,7 @@ let debugModeEnabled = false
 
 /**
  * Set debug mode on or off
- * When debug mode is disabled, only warn and error messages are logged
+ * When debug mode is disabled, nothing is written to the console
  * @param enabled Whether to enable debug logging
  */
 export const setDebugMode = (enabled: boolean): void => {
@@ -28,35 +28,39 @@ export const isDebugModeEnabled = (): boolean => {
 
 /**
  * Log a message
+ *
+ * Console output is opt-in: nothing is written unless the user enables the
+ * "Debug logging" setting. This keeps the default build silent (the Obsidian
+ * community plugin review flags unconditional console usage, and verbose
+ * logging measurably slows down large vault scans) while still giving users a
+ * way to observe what the plugin is doing when troubleshooting.
+ *
  * @param message
  * @param level
  * @param data
  */
 export const log = (message: string, level?: LogLevel, ...data: unknown[]): void => {
-    // Skip debug and info messages when debug mode is disabled
-    if (!debugModeEnabled && (level === 'debug' || level === 'info' || level === undefined)) {
+    // Nothing is ever logged unless the user opted into debug logging
+    if (!debugModeEnabled) {
         return
     }
 
-    // Console output disabled in shipped bundle to satisfy the community scorecard.
-    // Re-enable by uncommenting if you need verbose plugin logs while debugging.
-    const _logMessage = `${LOG_PREFIX} ${message}`
-    void _logMessage
-    void data
+    const logMessage = `${LOG_PREFIX} ${message}`
+
     switch (level) {
         case 'debug':
-            // console.debug(_logMessage, data)
+            console.debug(logMessage, ...data)
             break
         case 'info':
-            // console.info(_logMessage, data)
+            console.info(logMessage, ...data)
             break
         case 'warn':
-            // console.warn(_logMessage, data)
+            console.warn(logMessage, ...data)
             break
         case 'error':
-            // console.error(_logMessage, data)
+            console.error(logMessage, ...data)
             break
         default:
-        // console.log(_logMessage, data)
+            console.log(logMessage, ...data)
     }
 }

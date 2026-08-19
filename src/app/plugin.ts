@@ -101,6 +101,10 @@ interface FileProcessingResult {
         message: string
         query: string
     }>
+    /**
+     * Whether the file content was actually modified and saved.
+     */
+    updated?: boolean
 }
 
 export class DataviewSerializerPlugin extends Plugin {
@@ -322,17 +326,51 @@ export class DataviewSerializerPlugin extends Plugin {
                     error: { message: string; query: string }
                 }> = []
 
-                const results = await processInBatches(
-                    allVaultFiles,
-                    (vaultFile) => this.processFile(vaultFile, false, undefined, true),
-                    5 // Process 5 files concurrently
+                // Persistent notice (timeout 0) reporting progress across the whole vault.
+                // Large vaults can take a while; without this the command looks like it
+                // does nothing until it is done.
+                const progressNotice = new Notice(
+                    `Dataview Serializer: scanning 0/${allVaultFiles.length} files...`,
+                    0
                 )
 
+                let results: FileProcessingResult[] = []
+                try {
+                    results = await processInBatches(
+                        allVaultFiles,
+                        (vaultFile) => this.processFile(vaultFile, false, undefined, true),
+                        5, // Process 5 files concurrently
+                        (processed, total) => {
+                            progressNotice.setMessage(
+                                `Dataview Serializer: scanning ${processed}/${total} files...`
+                            )
+                        }
+                    )
+                } finally {
+                    progressNotice.hide()
+                }
+
+                let updatedFilesCount = 0
                 for (const result of results) {
+                    if (result.updated) {
+                        updatedFilesCount++
+                    }
                     for (const error of result.errors) {
                         allErrors.push({ filePath: result.filePath, error })
                     }
                 }
+
+                log(
+                    `Finished scanning ${allVaultFiles.length} file(s): ${updatedFilesCount} updated, ${allErrors.length} error(s)`,
+                    'info'
+                )
+
+                new Notice(
+                    `Dataview Serializer: scanned ${allVaultFiles.length} file(s), updated ${updatedFilesCount}${
+                        allErrors.length > 0 ? `, ${allErrors.length} error(s)` : ''
+                    }`,
+                    NOTICE_TIMEOUT
+                )
 
                 // Show error notifications if enabled
                 if (this.settings.showErrorNotifications && allErrors.length > 0) {
@@ -1171,8 +1209,9 @@ export class DataviewSerializerPlugin extends Plugin {
                         this.filesToIgnoreFileEvents.delete(file.path)
                     }
                 }, 2000)
-                //log('The file content has changed. Saving the modifications', 'info');
+                log('The file content has changed. Saving the modifications', 'info')
                 await this.app.vault.modify(file, updatedText)
+                result.updated = true
             }
         } catch (e: unknown) {
             // Ensure cleanup on error

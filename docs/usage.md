@@ -555,6 +555,8 @@ This provides several benefits:
 
 The plugin includes a command you can use to scan and update all the Dataview queries to serialize in the entire vault: Hit CTRL/CMD + P then type "Scan and serialize all Dataview queries" to invoke it.
 
+While the scan runs, a notice shows the live progress (e.g., `scanning 240/1300 files...`). Once it completes, a summary notice reports how many files were scanned, how many were updated, and how many errors occurred. This makes it easy to know when the scan is actually done (e.g., before committing the changes to a repository).
+
 #### Scan current file
 
 To serialize only the queries in the currently open file, use the command "Scan and serialize Dataview queries in current file". This is useful when you want to refresh a specific file without processing the entire vault.
@@ -658,6 +660,6 @@ If you're experiencing issues with the plugin:
    - References to non-existent fields or folders
    - Queries that depend on other plugins not being loaded
 
-3. **Console warnings**: Even with debug logging disabled, warnings and errors are always logged to the console. Check there for any issues the plugin encounters.
+3. **Console warnings**: Warnings and errors are only written to the console when debug logging is enabled. Turn it on before reproducing an issue, then check the console for what the plugin encountered.
 
 4. **Link format inconsistencies**: If you're seeing different link formats when syncing across devices, see the "Syncing Vaults Across Devices" section above.
