@@ -2,6 +2,17 @@
 
 All notable changes to this project will be documented in this file.
 
+## [2.15.1](https://github.com/dsebastien/obsidian-dataview-serializer/compare/2.15.0...2.15.1) (2026-08-19)
+
+### Bug Fixes
+
+* **plugin:** harden the DataviewJS abandonment guard and skip reads for rejected files ([7a89a2c](https://github.com/dsebastien/obsidian-dataview-serializer/commit/7a89a2c0274c1617cbc4678254b27a02e7123c1a))
+* **plugin:** keep cached editor widgets and folder index from serving stale state ([6a3267d](https://github.com/dsebastien/obsidian-dataview-serializer/commit/6a3267d4ae898f39098cdc74ffc5c0390b5ebb59))
+
+### Performance Improvements
+
+* **plugin:** reduce vault scans and editor rebuild cost (11 items) ([c54d121](https://github.com/dsebastien/obsidian-dataview-serializer/commit/c54d12169343fb3487c426087678ae79ae59dc5d))
+
 ## [2.15.0](https://github.com/dsebastien/obsidian-dataview-serializer/compare/2.14.0...2.15.0) (2026-08-19)
 
 ### Features
@@ -231,6 +242,7 @@ All notable changes to this project will be documented in this file.
 ## [1.0.2](https://github.com/dsebastien/obsidian-dataview-serializer/compare/1.0.1...1.0.2) (2024-05-14)
 ## [1.0.1](https://github.com/dsebastien/obsidian-dataview-serializer/compare/1.0.0...1.0.1) (2024-05-14)
 ## 1.0.0 (2024-05-13)
+
 
 
 

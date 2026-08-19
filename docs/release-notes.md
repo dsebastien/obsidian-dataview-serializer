@@ -1,5 +1,16 @@
 # Release Notes
 
+## 2.15.1 (2026-08-19)
+
+### Bug Fixes
+
+* **plugin:** harden the DataviewJS abandonment guard and skip reads for rejected files
+* **plugin:** keep cached editor widgets and folder index from serving stale state
+
+### Performance Improvements
+
+* **plugin:** reduce vault scans and editor rebuild cost (11 items)
+
 ## 2.15.0 (2026-08-19)
 
 ### Features
