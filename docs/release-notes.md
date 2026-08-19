@@ -1,5 +1,15 @@
 # Release Notes
 
+## 2.15.0 (2026-08-19)
+
+### Features
+
+* **plugin:** show what's new in a tab instead of a modal dialog
+
+### Bug Fixes
+
+* **logging:** restore console output when debug logging is enabled
+
 ## 2.14.0 (2026-07-29)
 
 ### Features

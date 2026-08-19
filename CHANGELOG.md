@@ -2,6 +2,16 @@
 
 All notable changes to this project will be documented in this file.
 
+## [2.15.0](https://github.com/dsebastien/obsidian-dataview-serializer/compare/2.14.0...2.15.0) (2026-08-19)
+
+### Features
+
+* **plugin:** show what's new in a tab instead of a modal dialog ([d9e0b81](https://github.com/dsebastien/obsidian-dataview-serializer/commit/d9e0b810eeda194c8171d40d2910c731ab1a825b))
+
+### Bug Fixes
+
+* **logging:** restore console output when debug logging is enabled ([0faf1c6](https://github.com/dsebastien/obsidian-dataview-serializer/commit/0faf1c6eb896426405091aeae6b441b47d5b67dd)), closes [#66](https://github.com/dsebastien/obsidian-dataview-serializer/issues/66)
+
 ## [2.14.0](https://github.com/dsebastien/obsidian-dataview-serializer/compare/2.13.0...2.14.0) (2026-07-29)
 
 ### Features
@@ -221,6 +231,7 @@ All notable changes to this project will be documented in this file.
 ## [1.0.2](https://github.com/dsebastien/obsidian-dataview-serializer/compare/1.0.1...1.0.2) (2024-05-14)
 ## [1.0.1](https://github.com/dsebastien/obsidian-dataview-serializer/compare/1.0.0...1.0.1) (2024-05-14)
 ## 1.0.0 (2024-05-13)
+
 
 
 
