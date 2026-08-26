@@ -53,7 +53,7 @@ By adding the folder containing your index files to "Folders to force update", t
 - Add `Index` to "Folders to force update"
 - Now whenever you add the `#project` tag to any note, your `Projects.md` index will automatically update
 
-**Note:** The force update uses a 10-second debounce delay to avoid overwhelming the system with updates when many files change rapidly.
+**Note:** Force updates are debounced by 10 seconds, much longer than the 500 ms used for regular updates. Since a change anywhere in the vault can trigger a rebuild of every dashboard, a bulk operation (a sync pulling down hundreds of notes, a rename cascade) would otherwise rebuild them hundreds of times over. See [Update timing](usage.md#update-timing) for the rest of the timing rules.
 
 ### Date placeholders in "Folders to force update"
 

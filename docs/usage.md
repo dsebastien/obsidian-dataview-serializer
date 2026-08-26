@@ -5,7 +5,7 @@ nav_order: 2
 
 # Usage
 
-This plugin automatically serializes configured Dataview queries present in your notes. The queries will be serialized when you save the note (with a minimum of 5 seconds between updates to the same file to avoid update loops).
+This plugin automatically serializes configured Dataview queries present in your notes. Queries are re-serialized shortly after you stop editing, not on every keystroke. See [Update timing](#update-timing) for the delays involved and why each one is there.
 
 The following files are automatically ignored by the plugin:
 - Non-markdown files
@@ -73,13 +73,41 @@ Whenever you update that note, the query will be executed and serialized, replac
 
 Note that a single note can include multiple queries. As soon as a file is modified, this plugin reads it and tries to locate queries to serialize. It starts by removing all the serialized queries, recognized by the `<!--SerializedQuery: END -->`line. Then, it serializes all the found queries to Markdown and saves the file again.
 
-There is a minimal delay between the executions of this plugin, to avoid issues with file synchronization systems.
+## Update timing
 
-### Per-Query Update Control
+The plugin does not serialize on every keystroke. Three separate delays sit between "a file changed" and "the file gets rewritten", and each exists for a different reason.
+
+| Delay | Value | What it covers |
+| --- | --- | --- |
+| Event debounce | 500 ms | Regular updates after a file is created, modified, or renamed |
+| Force-update debounce | 10 seconds | Re-serializing the folders listed in **Folders to force update** |
+| Per-file cooldown | 5 seconds | Minimum time before the same file is allowed to be serialized again |
+
+### Why the 500 ms event debounce exists
+
+Obsidian fires `modify` events constantly: every autosave while you type, every write from a sync tool, every change made by another plugin. Serializing on each of those would mean reading the file, running Dataview, and rewriting the file dozens of times a minute, in the middle of your edit.
+
+Instead, changed files pile up in a list and the countdown restarts every time a new event arrives. Once 500 ms pass with nothing new happening, the whole batch is processed at once, five files in parallel. So the rewrite lands just after you stop typing, and a file that changed ten times in two seconds is serialized once instead of ten times.
+
+### Why the force-update debounce is longer
+
+**Folders to force update** re-processes your index and dashboard notes whenever _anything_ in the vault changes. That is a much bigger hammer: one edit anywhere can trigger work across every dashboard you own.
+
+So those runs wait for ten seconds of quiet instead of half a second. Bulk operations then cost you a single dashboard rebuild rather than hundreds: a sync pulling down 200 notes, a folder rename cascading through links, or another plugin rewriting frontmatter across your vault.
+
+### Why the per-file cooldown exists
+
+The plugin rewrites files. Rewriting a file fires a `modify` event. That event would schedule another serialization of the same file, which would rewrite it again. Left alone, that is an infinite loop.
+
+Two guards prevent it. The plugin ignores the `modify` event triggered by its own write, and it refuses to serialize the same file twice within five seconds. The cooldown is the safety net for the cases the first guard misses, such as a sync tool writing the file back a moment later, or another plugin reacting to the change.
+
+Manual runs skip the cooldown entirely. The commands and the inline refresh button always serialize immediately, so you never have to wait to see a result.
+
+## Per-Query Update Control
 
 You can control when individual queries are updated by using different query syntaxes. This allows you to mix automatic and manual queries in the same file.
 
-#### Automatic Updates (Default)
+### Automatic Updates (Default)
 
 ```
 <!-- QueryToSerialize: LIST FROM #project -->
@@ -87,7 +115,7 @@ You can control when individual queries are updated by using different query syn
 
 This is the standard behavior. The query is automatically re-serialized whenever the file is modified.
 
-#### Manual-Only Updates
+### Manual-Only Updates
 
 ```
 <!-- QueryToSerializeManual: LIST FROM #archive -->
@@ -100,7 +128,7 @@ Manual queries are **skipped during automatic updates**. They will only be updat
 
 This is useful for queries that are expensive to run or that you only want to update occasionally.
 
-#### Write-Once Updates
+### Write-Once Updates
 
 ```
 <!-- QueryToSerializeOnce: TABLE file.ctime FROM "Templates" -->
@@ -113,7 +141,7 @@ This is useful for:
 - Queries where you want the initial result preserved
 - Reducing processing overhead for static content
 
-#### Write-Once and Eject Updates
+### Write-Once and Eject Updates
 
 ```
 <!-- QueryToSerializeOnceAndEject: LIST FROM #daily-notes LIMIT 5 -->
@@ -140,7 +168,7 @@ This is useful for:
 - One-time data insertion where the query mechanism should disappear after execution
 - Creating "snapshot" content that blends seamlessly with regular markdown
 
-#### Example: Mixed Query Types
+### Example: Mixed Query Types
 
 You can use different query types in the same file:
 
