@@ -488,11 +488,20 @@ export function createDataviewJSProxy(
         // it straight into capturedOutputs stringified the wrapper object
         // instead of the query output — invisible until the dataview typings
         // were made to resolve, because every type behind DataviewApi was
-        // degrading to `error`. A failed query is dropped rather than rendered:
-        // the serialized note should not carry a Dataview error string.
+        // degrading to `error`.
+        //
+        // A failed query THROWS rather than yielding nothing. Returning quietly
+        // would let serialization report success with empty output, and in
+        // `once-and-eject` mode the replacement is the output alone — so an
+        // empty result silently erases the query definition and whatever it had
+        // previously produced, with no way back. Throwing surfaces the failure
+        // through DataviewJSSerializationResult and leaves the note untouched.
         execute: async (query: string, file?: string): Promise<void> => {
             const result = await dataviewApi.queryMarkdown(query, file ?? originFile)
-            if (result.successful && result.value) {
+            if (!result.successful) {
+                throw new Error(`dv.execute() failed: ${result.error}`)
+            }
+            if (result.value) {
                 capturedOutputs.push({ type: 'paragraph', content: result.value })
             }
         }

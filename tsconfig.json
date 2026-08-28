@@ -9,6 +9,14 @@
         // `tsc` under skipLibCheck but makes every call through the API an
         // `@typescript-eslint/no-unsafe-*` violation. Mapping the prefixes back
         // into the package makes the real types resolve.
+        //
+        // CAUTION: these are generic names, so they are global type-resolution
+        // aliases, not dataview-scoped ones. If any source file — or a future
+        // dependency's .d.ts — imports a bare `api/...`, `ui/...`, `settings`
+        // or `index`, it will be type-checked against Dataview internals while
+        // resolving to something else at runtime. `tsconfig-paths.spec.ts`
+        // fails the build if this repo ever grows such an import; nothing here
+        // uses one today, and everything local uses relative paths.
         "paths": {
             "api/*": ["node_modules/obsidian-dataview/lib/api/*"],
             "data-import/*": ["node_modules/obsidian-dataview/lib/data-import/*"],

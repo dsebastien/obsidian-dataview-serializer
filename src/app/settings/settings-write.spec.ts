@@ -15,6 +15,14 @@ import type { PluginSettings } from '../types/plugin-settings.intf'
  * file handlers fire only after the write lands.
  */
 
+/** Lets the fire-and-forget writes the pane starts run to completion. */
+async function settle(): Promise<void> {
+    for (let i = 0; i < 20; i += 1) {
+        await Promise.resolve()
+    }
+    await new Promise((resolve) => setTimeout(resolve, 10))
+}
+
 async function expectRejection(promise: Promise<unknown>, contains: string): Promise<void> {
     let caught: unknown
     await promise.catch((error: unknown) => {
@@ -128,6 +136,173 @@ describe('updateSettings', () => {
 
         expect(plugin.settings.foldersToScan).toEqual(['Notes'])
         expect(plugin.settings.debugLogging).toBe(true)
+    })
+})
+
+describe('folder list writes', () => {
+    // Regression for the two races the adversarial review found: both the add
+    // and the delete path used to compute the next array OUTSIDE the mutator,
+    // capturing a pre-await snapshot and defeating the write chain they were
+    // meant to be using.
+
+    /**
+     * `getSettingDefinitions()` builds the force-update description with
+     * `DocumentFragment` and Obsidian's element helpers, neither of which
+     * exists under bun:test. Stub just enough of both to let the definitions be
+     * built; nothing here asserts on the fragment.
+     */
+    function withDomStubs<T>(fn: () => T): T {
+        const g = globalThis as unknown as Record<string, unknown>
+        const had = 'DocumentFragment' in g
+        const previous = g['DocumentFragment']
+        const node = (): Record<string, unknown> => {
+            const self: Record<string, unknown> = {}
+            self['createSpan'] = () => node()
+            self['createEl'] = () => node()
+            self['createDiv'] = () => node()
+            self['appendChild'] = () => node()
+            return self
+        }
+        g['DocumentFragment'] = function DocumentFragmentStub() {
+            return node()
+        }
+        try {
+            return fn()
+        } finally {
+            if (had) {
+                g['DocumentFragment'] = previous
+            } else {
+                delete g['DocumentFragment']
+            }
+        }
+    }
+
+    function firstFolderList(tab: SettingsTab): { onDelete?: (i: number) => void } {
+        const defs = withDomStubs(() =>
+            (
+                tab as unknown as { getSettingDefinitions: () => Record<string, unknown>[] }
+            ).getSettingDefinitions()
+        )
+        return defs.find((d) => d['type'] === 'list') as { onDelete?: (i: number) => void }
+    }
+
+    test('two quick additions through the pane both survive', async () => {
+        let releaseFirst = (): void => {}
+        const first = new Promise<void>((resolve) => {
+            releaseFirst = resolve
+        })
+        let gating = false
+        let call = 0
+        const { plugin, tab } = createHarness({
+            saveData: () => {
+                if (!gating) {
+                    return Promise.resolve()
+                }
+                call += 1
+                return call === 1 ? first : Promise.resolve()
+            }
+        })
+        gating = true
+
+        const a = tab.addFolder('foldersToScan', 'A')
+        const b = tab.addFolder('foldersToScan', 'B')
+        releaseFirst()
+        await Promise.all([a, b])
+
+        expect(plugin.settings.foldersToScan).toContain('A')
+        expect(plugin.settings.foldersToScan).toContain('B')
+    })
+
+    test('a folder name is stored verbatim, and blank input is refused', async () => {
+        const { plugin, tab } = createHarness()
+
+        expect(await tab.addFolder('foldersToScan', '   ')).toBe(false)
+        expect(await tab.addFolder('foldersToScan', '')).toBe(false)
+        // Leading/trailing spaces are pathological but legal in a folder name;
+        // silently trimming would store a path that never matches.
+        expect(await tab.addFolder('foldersToScan', ' Odd Folder ')).toBe(true)
+
+        expect(plugin.settings.foldersToScan).toEqual([' Odd Folder '])
+    })
+
+    test('two quick deletions through the pane do not resurrect each other', async () => {
+        // Goes through the tab's own onDelete, not updateSettings directly:
+        // the bug was at the CALL SITE, filtering a pre-await snapshot of the
+        // array rather than the committed draft.
+        let releaseFirst = (): void => {}
+        const first = new Promise<void>((resolve) => {
+            releaseFirst = resolve
+        })
+        let gating = false
+        let call = 0
+        const { plugin, tab } = createHarness({
+            saveData: () => {
+                if (!gating) {
+                    return Promise.resolve()
+                }
+                call += 1
+                return call === 1 ? first : Promise.resolve()
+            }
+        })
+        await plugin.updateSettings((draft) => {
+            draft.foldersToScan = ['A', 'B']
+        })
+        gating = true
+
+        const list = firstFolderList(tab)
+        list.onDelete?.(0) // A
+        list.onDelete?.(1) // B, by its position in the list as drawn
+        await Promise.resolve()
+        releaseFirst()
+        await settle()
+
+        expect(plugin.settings.foldersToScan).toEqual([])
+    })
+
+    test('a deletion racing an addition keeps both effects', async () => {
+        let releaseFirst = (): void => {}
+        const first = new Promise<void>((resolve) => {
+            releaseFirst = resolve
+        })
+        let gating = false
+        let call = 0
+        const { plugin, tab } = createHarness({
+            saveData: () => {
+                if (!gating) {
+                    return Promise.resolve()
+                }
+                call += 1
+                return call === 1 ? first : Promise.resolve()
+            }
+        })
+        await plugin.updateSettings((draft) => {
+            draft.foldersToScan = ['A', 'B']
+        })
+        gating = true
+
+        const list = firstFolderList(tab)
+        list.onDelete?.(0) // remove A
+        void plugin.updateSettings((draft) => {
+            draft.foldersToScan = [...draft.foldersToScan, 'C']
+        })
+        await Promise.resolve()
+        releaseFirst()
+        await settle()
+
+        expect(plugin.settings.foldersToScan).toEqual(['B', 'C'])
+    })
+
+    test('onDelete resolves the entry by value, so a shifted index cannot delete the wrong one', async () => {
+        const { plugin, tab } = createHarness()
+        await plugin.updateSettings((draft) => {
+            draft.foldersToScan = ['A', 'B', 'C']
+        })
+
+        const list = firstFolderList(tab)
+        list.onDelete?.(1)
+        await settle()
+
+        expect(plugin.settings.foldersToScan).toEqual(['A', 'C'])
     })
 })
 

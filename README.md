@@ -7,7 +7,10 @@ Turning Dataview queries into Markdown also ensures that the generated content a
 
 The [Dataview](https://github.com/blacksmithgu/obsidian-dataview) plugin MUST be installed for this plugin to function correctly.
 
-Obsidian **1.8.7 or later** is required.
+Obsidian **1.13.0 or later** is required. The settings pane is built on the declarative
+settings API introduced in 1.13; on an older version the plugin does not load. The
+community catalog will not offer you an incompatible update, but a manual or BRAT install
+still can — check **Settings → About** first.
 
 ## Installation
 

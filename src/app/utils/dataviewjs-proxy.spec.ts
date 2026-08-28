@@ -319,13 +319,19 @@ describe('createDataviewJSProxy', () => {
             expect(markdown).not.toContain('object Object')
         })
 
-        test('drops a failed query instead of serializing its error', async () => {
+        test('throws on a failed query rather than yielding nothing', async () => {
+            // Returning quietly would let serialization report success with
+            // empty output — and in `once-and-eject` mode the replacement IS
+            // the output, so an empty result erases the query definition and
+            // everything it had previously produced, irreversibly.
             const mockApi = createMockDataviewApi()
             mockApi.queryMarkdown = async () => fail<string>('no such field: bogus')
 
             const { proxy, getMarkdown } = createDataviewJSProxy(mockApi, 'test.md')
-            await (proxy['execute'] as (q: string) => Promise<void>)('LIST FROM bogus')
-
+            await expectRejection(
+                (proxy['execute'] as (q: string) => Promise<void>)('LIST FROM bogus'),
+                'no such field: bogus'
+            )
             expect(getMarkdown()).toBe('')
         })
 

@@ -151,6 +151,32 @@ export class SettingsTab extends PluginSettingTab {
     }
 
     /**
+     * Append a folder to one of the lists.
+     *
+     * Extracted from the add button so the write can be tested without a DOM:
+     * the bug this guards against lived at the call site, not in the chain.
+     *
+     * Returns whether anything was written, so the caller knows whether to
+     * clear its input.
+     */
+    async addFolder(key: FolderListKey, raw: string): Promise<boolean> {
+        // Reject blank input, but store the value VERBATIM: trimming would
+        // quietly rewrite a folder whose name legitimately carries leading or
+        // trailing spaces into a different path that never matches.
+        if (raw.trim() === '') {
+            return false
+        }
+        // Derive INSIDE the mutator. The write chain runs each mutation against
+        // the previously committed state; computing the next array out here
+        // would capture a pre-await snapshot, and two quick additions would
+        // each build on the same base — the second silently dropping the first.
+        await this.plugin.updateSettings((draft) => {
+            draft[key] = [...draft[key], raw].filter(onlyUniqueArray)
+        })
+        return true
+    }
+
+    /**
      * One folder list: a header row carrying the description and the
      * add-a-folder control, then the entries as a native list.
      *
@@ -184,21 +210,11 @@ export class SettingsTab extends PluginSettingTab {
                         cb.setIcon('plus')
                         cb.setTooltip('Add folder')
                         cb.onClick(() => {
-                            const folder = searchInput?.getValue().trim()
-                            if (!folder) {
-                                return
-                            }
+                            const raw = searchInput?.getValue() ?? ''
                             void (async () => {
-                                // Read the live list at click time, not at
-                                // render time: another row may have written
-                                // since this row was drawn.
-                                const next = [...this.plugin.settings[key], folder].filter(
-                                    onlyUniqueArray
-                                )
-                                await this.plugin.updateSettings((draft) => {
-                                    draft[key] = next
-                                })
-                                searchInput?.setValue('')
+                                if (await this.addFolder(key, raw)) {
+                                    searchInput?.setValue('')
+                                }
                                 this.update()
                             })()
                         })
@@ -208,17 +224,20 @@ export class SettingsTab extends PluginSettingTab {
             {
                 type: 'list',
                 emptyState: 'No folders configured.',
-                // Index into the LIVE array. The framework hands back a
-                // position, and the list may have changed since it was drawn.
+                // The framework hands back a position into the list as it was
+                // DRAWN. Resolve the entry to a value here, while that position
+                // is still meaningful, then filter INSIDE the mutator against
+                // the committed array. Filtering a snapshot captured out here
+                // would let two quick deletions each write a stale whole array,
+                // resurrecting the entry the other one removed.
                 onDelete: (index: number): void => {
-                    const current = this.plugin.settings[key]
-                    const target = current[index]
+                    const target = this.plugin.settings[key][index]
                     if (target === undefined) {
                         return
                     }
                     void (async () => {
                         await this.plugin.updateSettings((draft) => {
-                            draft[key] = current.filter((value) => value !== target)
+                            draft[key] = draft[key].filter((value) => value !== target)
                         })
                         this.update()
                     })()
