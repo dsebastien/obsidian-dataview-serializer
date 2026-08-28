@@ -12,6 +12,18 @@
 }
 
 /* Banner shown at the top of the settings tab when the plugin is disabled on this device */
+/* Declarative settings: rows that render a full-width section (the disabled
+   banner, the support links block) instead of the standard name/control
+   layout. `.setting-item` is a flex ROW, so those need block flow.
+
+   Deliberately unlayered: unlayered CSS beats layered CSS whatever the
+   specificity, and Obsidian's own `.setting-item { display: flex }` is
+   unlayered. This stylesheet has no @layer today — if one is ever added, this
+   rule has to stay outside it or it silently stops working. */
+.dvs-settings-embed {
+    display: block;
+}
+
 .dvs-device-disabled-banner {
     @apply mb-4 p-3 rounded border;
     background-color: color-mix(in srgb, var(--color-orange) 12%, transparent);

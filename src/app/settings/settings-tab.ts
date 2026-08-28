@@ -1,7 +1,6 @@
-import { App, PluginSettingTab, SearchComponent, Setting } from 'obsidian'
+import { Notice, PluginSettingTab, SearchComponent } from 'obsidian'
+import type { App, SettingDefinitionItem } from 'obsidian'
 import type DataviewSerializerPlugin from '../../main'
-import { produce } from 'immer'
-import type { Draft } from 'immer'
 import type { LinkFormat, PluginSettings } from '../types/plugin-settings.intf'
 import { onlyUniqueArray } from '../utils/only-unique-array.fn'
 import { FolderSuggest } from '../utils/folder-suggest'
@@ -9,11 +8,33 @@ import {
     containsPathPlaceholders,
     resolvePathPlaceholders
 } from '../utils/resolve-path-placeholders.fn'
-import type { ArgsSearchAndRemove } from './args-search-and-remove.intf'
 import { setDebugMode } from '../../utils/log'
 import { BUY_ME_A_COFFEE_BADGE_DATA_URL } from '../assets/buy-me-a-coffee'
 import { renderSupportSection } from '../ui/support-links'
 
+/** The three folder lists, keyed by the settings field each one edits. */
+type FolderListKey = 'foldersToScan' | 'ignoredFolders' | 'foldersToForceUpdate'
+
+/**
+ * Settings tab, declared rather than rendered (Obsidian 1.13+).
+ *
+ * `getSettingDefinitions()` REPLACES `display()`: when it returns a non-empty
+ * array, `display()` is never called. There is no partial adoption — the whole
+ * settings UI is declarative, or none of it. In exchange, Obsidian owns
+ * navigation, focus and ARIA, and every declared `name`/`desc` is indexed by
+ * the settings search.
+ *
+ * Rules that each cost a shipped bug somewhere in the plugin collection the
+ * first time they were broken (see AGENTS.md "Declarative settings"):
+ *
+ * - A `render:` hook renders the ROW. Write into `setting.settingEl` only;
+ *   anything written outside it (e.g. `group.listEl`) is the framework's to
+ *   discard, and the control simply does not appear.
+ * - `onDelete(index)` indexes the LIVE list. Resolve the entry from the live
+ *   array at call time, never from a render-time snapshot.
+ * - `setControlValue` MUST reject on failure, and validate before writing.
+ * - Side effects run only AFTER the write lands.
+ */
 export class SettingsTab extends PluginSettingTab {
     plugin: DataviewSerializerPlugin
 
@@ -22,268 +43,196 @@ export class SettingsTab extends PluginSettingTab {
         this.plugin = plugin
     }
 
-    override display(): void {
-        const { containerEl } = this
-
-        containerEl.empty()
-
-        this.renderDeviceDisabledBanner()
-        this.renderDeviceDisableToggle()
-        this.renderAutomaticUpdatesToggle()
-        this.renderRefreshButtonToggle()
-        this.renderDataviewJSToggle()
-        this.renderErrorNotificationsToggle()
-        this.renderTrailingNewlineToggle()
-        this.renderLinkFormatDropdown()
-        this.renderDebugLoggingToggle()
-        this.renderFoldersToScan()
-        this.renderFoldersToIgnore()
-        this.renderFoldersToForceUpdate()
-        this.renderSupportSection(containerEl)
+    override getSettingDefinitions(): SettingDefinitionItem[] {
+        return [
+            {
+                name: 'Disabled on this device',
+                // Only rendered while the plugin is actually off here. The
+                // banner explains why nothing in the pane appears to work.
+                visible: (): boolean => this.plugin.isDisabledOnDevice(),
+                searchable: false,
+                render: (setting): void => {
+                    setting.infoEl.remove()
+                    setting.settingEl.addClass('dvs-settings-embed')
+                    const banner = setting.settingEl.createDiv({
+                        cls: 'dvs-device-disabled-banner'
+                    })
+                    banner.createEl('strong', { text: 'Disabled on this device.' })
+                    banner.createSpan({
+                        text: ' The plugin is inert here: no automatic serialization, file events, refresh buttons, or commands. This choice is device-local and is not synced to your other devices.'
+                    })
+                }
+            },
+            {
+                name: 'Disable on this device',
+                desc: 'When enabled, the plugin is fully disabled on this device only: it performs no automatic or manual serialization and its commands do nothing. This setting is stored locally and is never synced to your other devices.',
+                control: { type: 'toggle', key: 'disabledOnDevice' }
+            },
+            {
+                name: 'Disable automatic updates',
+                desc: 'When enabled, the plugin will not automatically serialize queries when files are created, modified, or renamed. You can still manually serialize queries using the command palette.',
+                control: { type: 'toggle', key: 'disableAutomaticUpdates' }
+            },
+            {
+                name: 'Show refresh button',
+                desc: 'When enabled, a refresh button will be displayed next to each serialized Dataview query.',
+                control: { type: 'toggle', key: 'showRefreshButton' }
+            },
+            {
+                name: 'Enable DataviewJS serialization',
+                desc: 'When enabled, JavaScript-based Dataview queries can be serialized to static Markdown. Note: JavaScript code cannot contain "--" due to HTML comment limitations.',
+                control: { type: 'toggle', key: 'enableDataviewJS' }
+            },
+            {
+                name: 'Show error notifications',
+                desc: 'When enabled, a notification popup will be displayed when a query fails to serialize.',
+                control: { type: 'toggle', key: 'showErrorNotifications' }
+            },
+            {
+                name: 'Add trailing newline',
+                desc: 'When enabled, an empty line will be added between the serialized content and the END marker. Useful for static site generators like Jekyll that require blank lines after tables or lists.',
+                control: { type: 'toggle', key: 'addTrailingNewline' }
+            },
+            {
+                name: 'Link format',
+                desc: 'Format for internal links in serialized output. "Use Obsidian setting" respects your vault\'s "New link format" and "Use [[Wikilinks]]" preferences. "Shortest path" simplifies links when the filename is unique. "Absolute path" always uses the full path, which ensures consistency when syncing vaults across devices.',
+                control: {
+                    type: 'dropdown',
+                    key: 'linkFormat',
+                    options: {
+                        obsidian: 'Use Obsidian setting',
+                        shortest: 'Shortest path when possible',
+                        absolute: 'Absolute path'
+                    }
+                }
+            },
+            {
+                name: 'Debug logging',
+                desc: 'When enabled, verbose debug messages will be logged to the console. Useful for troubleshooting.',
+                control: { type: 'toggle', key: 'debugLogging' }
+            },
+            ...this.folderListDefinitions(
+                'foldersToScan',
+                'Folders to scan',
+                'Folders to scan when looking for queries to serialize.'
+            ),
+            ...this.folderListDefinitions(
+                'ignoredFolders',
+                'Folders to ignore',
+                'Folders to ignore when processing added/modified files.'
+            ),
+            ...this.folderListDefinitions(
+                'foldersToForceUpdate',
+                'Folders to force update',
+                this.buildFoldersToForceUpdateDescription(),
+                true
+            ),
+            {
+                type: 'group',
+                // No heading: renderSupportSection draws its own.
+                items: [
+                    {
+                        name: 'Support',
+                        searchable: false,
+                        render: (setting): void => {
+                            setting.infoEl.remove()
+                            // `.setting-item` is a flex ROW. The support block
+                            // is a stack of full-width rows, so without this it
+                            // would lay heading, buttons and badge side by side.
+                            setting.settingEl.addClass('dvs-settings-embed')
+                            renderSupportSection(setting.settingEl, (el) => {
+                                this.renderBuyMeACoffeeBadge(el)
+                            })
+                        }
+                    }
+                ]
+            }
+        ]
     }
 
     /**
-     * Show a prominent banner at the top of the tab when the plugin is disabled
-     * on the current device, so it's obvious why nothing is happening here.
-     */
-    renderDeviceDisabledBanner(): void {
-        if (!this.plugin.isDisabledOnDevice()) {
-            return
-        }
-
-        const banner = this.containerEl.createDiv({ cls: 'dvs-device-disabled-banner' })
-        banner.createEl('strong', { text: 'Disabled on this device.' })
-        banner.createSpan({
-            text: ' The plugin is inert here: no automatic serialization, file events, refresh buttons, or commands. This choice is device-local and is not synced to your other devices.'
-        })
-    }
-
-    /**
-     * Device-local toggle to fully disable the plugin on this device only.
+     * One folder list: a header row carrying the description and the
+     * add-a-folder control, then the entries as a native list.
      *
-     * Stored in device-local storage (never synced), so it does not affect other
-     * devices. Applied immediately — no reload required.
+     * The add control stays an inline search box with folder autocomplete
+     * rather than the framework's `addItem` affordance, because `addItem` hands
+     * back a bare element and the whole point here is the `FolderSuggest`
+     * completion the old tab had.
      */
-    renderDeviceDisableToggle(): void {
-        new Setting(this.containerEl)
-            .setName('Disable on this device')
-            .setDesc(
-                'When enabled, the plugin is fully disabled on this device only: it performs no automatic or manual serialization and its commands do nothing. This setting is stored locally and is never synced to your other devices.'
-            )
-            .addToggle((toggle) => {
-                toggle.setValue(this.plugin.isDisabledOnDevice()).onChange((value) => {
-                    this.plugin.setDisabledOnDevice(value)
-                    // Re-render so the banner and dependent state reflect the change.
-                    this.display()
-                })
-            })
-    }
-
-    renderAutomaticUpdatesToggle(): void {
-        new Setting(this.containerEl)
-            .setName('Disable automatic updates')
-            .setDesc(
-                'When enabled, the plugin will not automatically serialize queries when files are created, modified, or renamed. You can still manually serialize queries using the command palette.'
-            )
-            .addToggle((toggle) => {
-                toggle
-                    .setValue(this.plugin.settings.disableAutomaticUpdates)
-                    .onChange(async (value) => {
-                        this.plugin.settings = produce(
-                            this.plugin.settings,
-                            (draft: Draft<PluginSettings>) => {
-                                draft.disableAutomaticUpdates = value
-                            }
+    private folderListDefinitions(
+        key: FolderListKey,
+        name: string,
+        desc: string | DocumentFragment,
+        supportsPlaceholders = false
+    ): SettingDefinitionItem[] {
+        return [
+            {
+                name,
+                desc,
+                render: (setting): void => {
+                    let searchInput: SearchComponent | undefined
+                    setting.addSearch((cb) => {
+                        searchInput = cb
+                        new FolderSuggest(cb.inputEl, this.app)
+                        cb.setPlaceholder(
+                            supportsPlaceholders
+                                ? 'Example: Daily/{{year}}/{{month}}'
+                                : 'Example: folder1/folder2'
                         )
-                        await this.plugin.saveSettings()
-
-                        // Immediately register or unregister event handlers based on new value
-                        if (value) {
-                            // User enabled "disable automatic updates" - unregister handlers
-                            this.plugin.unregisterEventHandlers()
-                        } else {
-                            // User disabled "disable automatic updates" - register handlers
-                            this.plugin.setupEventHandlers()
-                        }
                     })
-            })
-    }
-
-    renderRefreshButtonToggle(): void {
-        new Setting(this.containerEl)
-            .setName('Show refresh button')
-            .setDesc(
-                'When enabled, a refresh button will be displayed next to each serialized Dataview query.'
-            )
-            .addToggle((toggle) => {
-                toggle.setValue(this.plugin.settings.showRefreshButton).onChange(async (value) => {
-                    this.plugin.settings = produce(
-                        this.plugin.settings,
-                        (draft: Draft<PluginSettings>) => {
-                            draft.showRefreshButton = value
-                        }
-                    )
-                    await this.plugin.saveSettings()
-                })
-            })
-    }
-
-    renderDataviewJSToggle(): void {
-        new Setting(this.containerEl)
-            .setName('Enable DataviewJS serialization')
-            .setDesc(
-                'When enabled, JavaScript-based Dataview queries can be serialized to static Markdown. Note: JavaScript code cannot contain "--" due to HTML comment limitations.'
-            )
-            .addToggle((toggle) => {
-                toggle.setValue(this.plugin.settings.enableDataviewJS).onChange(async (value) => {
-                    this.plugin.settings = produce(
-                        this.plugin.settings,
-                        (draft: Draft<PluginSettings>) => {
-                            draft.enableDataviewJS = value
-                        }
-                    )
-                    await this.plugin.saveSettings()
-                })
-            })
-    }
-
-    renderErrorNotificationsToggle(): void {
-        new Setting(this.containerEl)
-            .setName('Show error notifications')
-            .setDesc(
-                'When enabled, a notification popup will be displayed when a query fails to serialize.'
-            )
-            .addToggle((toggle) => {
-                toggle
-                    .setValue(this.plugin.settings.showErrorNotifications)
-                    .onChange(async (value) => {
-                        this.plugin.settings = produce(
-                            this.plugin.settings,
-                            (draft: Draft<PluginSettings>) => {
-                                draft.showErrorNotifications = value
+                    setting.addButton((cb) => {
+                        cb.setIcon('plus')
+                        cb.setTooltip('Add folder')
+                        cb.onClick(() => {
+                            const folder = searchInput?.getValue().trim()
+                            if (!folder) {
+                                return
                             }
-                        )
-                        await this.plugin.saveSettings()
+                            void (async () => {
+                                // Read the live list at click time, not at
+                                // render time: another row may have written
+                                // since this row was drawn.
+                                const next = [...this.plugin.settings[key], folder].filter(
+                                    onlyUniqueArray
+                                )
+                                await this.plugin.updateSettings((draft) => {
+                                    draft[key] = next
+                                })
+                                searchInput?.setValue('')
+                                this.update()
+                            })()
+                        })
                     })
-            })
-    }
-
-    renderTrailingNewlineToggle(): void {
-        new Setting(this.containerEl)
-            .setName('Add trailing newline')
-            .setDesc(
-                'When enabled, an empty line will be added between the serialized content and the END marker. Useful for static site generators like Jekyll that require blank lines after tables or lists.'
-            )
-            .addToggle((toggle) => {
-                toggle.setValue(this.plugin.settings.addTrailingNewline).onChange(async (value) => {
-                    this.plugin.settings = produce(
-                        this.plugin.settings,
-                        (draft: Draft<PluginSettings>) => {
-                            draft.addTrailingNewline = value
-                        }
-                    )
-                    await this.plugin.saveSettings()
-                })
-            })
-    }
-
-    renderLinkFormatDropdown(): void {
-        new Setting(this.containerEl)
-            .setName('Link format')
-            .setDesc(
-                'Format for internal links in serialized output. "Use Obsidian setting" respects your vault\'s "New link format" and "Use [[Wikilinks]]" preferences. "Shortest path" simplifies links when the filename is unique. "Absolute path" always uses the full path, which ensures consistency when syncing vaults across devices.'
-            )
-            .addDropdown((dropdown) => {
-                dropdown
-                    .addOption('obsidian', 'Use Obsidian setting')
-                    .addOption('shortest', 'Shortest path when possible')
-                    .addOption('absolute', 'Absolute path')
-                    .setValue(this.plugin.settings.linkFormat)
-                    .onChange(async (value) => {
-                        this.plugin.settings = produce(
-                            this.plugin.settings,
-                            (draft: Draft<PluginSettings>) => {
-                                draft.linkFormat = value as LinkFormat
-                            }
-                        )
-                        await this.plugin.saveSettings()
-                    })
-            })
-    }
-
-    renderDebugLoggingToggle(): void {
-        new Setting(this.containerEl)
-            .setName('Debug logging')
-            .setDesc(
-                'When enabled, verbose debug messages will be logged to the console. Useful for troubleshooting.'
-            )
-            .addToggle((toggle) => {
-                toggle.setValue(this.plugin.settings.debugLogging).onChange(async (value) => {
-                    this.plugin.settings = produce(
-                        this.plugin.settings,
-                        (draft: Draft<PluginSettings>) => {
-                            draft.debugLogging = value
-                        }
-                    )
-                    setDebugMode(value)
-                    await this.plugin.saveSettings()
-                })
-            })
-    }
-
-    renderSupportSection(containerEl: HTMLElement): void {
-        renderSupportSection(containerEl, (el) => {
-            this.renderBuyMeACoffeeBadge(el)
-        })
-    }
-
-    renderFoldersToScan(): void {
-        this.doSearchAndRemoveList({
-            currentList: this.plugin.settings.foldersToScan,
-            setValue: async (newValue) => {
-                this.plugin.settings = produce(
-                    this.plugin.settings,
-                    (draft: Draft<PluginSettings>) => {
-                        draft.foldersToScan = newValue
-                    }
-                )
+                }
             },
-            name: 'Folders to scan',
-            description: 'Folders to scan when looking for queries to serialize.'
-        })
-    }
-
-    renderFoldersToIgnore(): void {
-        this.doSearchAndRemoveList({
-            currentList: this.plugin.settings.ignoredFolders,
-            setValue: async (newValue) => {
-                this.plugin.settings = produce(
-                    this.plugin.settings,
-                    (draft: Draft<PluginSettings>) => {
-                        draft.ignoredFolders = newValue
+            {
+                type: 'list',
+                emptyState: 'No folders configured.',
+                // Index into the LIVE array. The framework hands back a
+                // position, and the list may have changed since it was drawn.
+                onDelete: (index: number): void => {
+                    const current = this.plugin.settings[key]
+                    const target = current[index]
+                    if (target === undefined) {
+                        return
                     }
-                )
-            },
-            name: 'Folders to ignore',
-            description: 'Folders to ignore when processing added/modified files.'
-        })
-    }
-
-    renderFoldersToForceUpdate(): void {
-        this.doSearchAndRemoveList({
-            currentList: this.plugin.settings.foldersToForceUpdate,
-            setValue: async (newValue) => {
-                this.plugin.settings = produce(
-                    this.plugin.settings,
-                    (draft: Draft<PluginSettings>) => {
-                        draft.foldersToForceUpdate = newValue
-                    }
-                )
-            },
-            name: 'Folders to force update',
-            description: this.buildFoldersToForceUpdateDescription(),
-            supportsPlaceholders: true
-        })
+                    void (async () => {
+                        await this.plugin.updateSettings((draft) => {
+                            draft[key] = current.filter((value) => value !== target)
+                        })
+                        this.update()
+                    })()
+                },
+                items: this.plugin.settings[key].map((folder) => ({
+                    name: folder,
+                    // Entries are data, not settings: keep them out of search.
+                    searchable: false,
+                    ...(supportsPlaceholders && containsPathPlaceholders(folder)
+                        ? { desc: `Currently resolves to: ${resolvePathPlaceholders(folder)}` }
+                        : {})
+                }))
+            }
+        ]
     }
 
     /**
@@ -335,61 +284,127 @@ export class SettingsTab extends PluginSettingTab {
         return fragment
     }
 
-    doSearchAndRemoveList({
-        currentList,
-        setValue,
-        description,
-        name,
-        supportsPlaceholders = false
-    }: ArgsSearchAndRemove) {
-        let searchInput: SearchComponent | undefined
-        new Setting(this.containerEl)
-            .setName(name)
-            .setDesc(description)
-            .addSearch((cb) => {
-                searchInput = cb
-                new FolderSuggest(cb.inputEl, this.app)
-                cb.setPlaceholder(
-                    supportsPlaceholders
-                        ? 'Example: Daily/{{year}}/{{month}}'
-                        : 'Example: folder1/folder2'
-                )
-            })
-            .addButton((cb) => {
-                cb.setIcon('plus')
-                cb.setTooltip('Add folder')
-                cb.onClick(() => {
-                    if (!searchInput) {
-                        return
-                    }
-                    const newFolder = searchInput.getValue()
+    /**
+     * Reads the value behind a control `key`.
+     *
+     * `disabledOnDevice` is deliberately not a settings field: it lives in
+     * device-local storage and is never synced, so it is read and written
+     * through the plugin rather than through `updateSettings`.
+     */
+    override getControlValue(key: string): unknown {
+        switch (key) {
+            case 'disabledOnDevice':
+                return this.plugin.isDisabledOnDevice()
+            case 'disableAutomaticUpdates':
+                return this.plugin.settings.disableAutomaticUpdates
+            case 'showRefreshButton':
+                return this.plugin.settings.showRefreshButton
+            case 'enableDataviewJS':
+                return this.plugin.settings.enableDataviewJS
+            case 'showErrorNotifications':
+                return this.plugin.settings.showErrorNotifications
+            case 'addTrailingNewline':
+                return this.plugin.settings.addTrailingNewline
+            case 'linkFormat':
+                return this.plugin.settings.linkFormat
+            case 'debugLogging':
+                return this.plugin.settings.debugLogging
+            default:
+                return undefined
+        }
+    }
 
-                    void (async () => {
-                        await setValue([...currentList, newFolder].filter(onlyUniqueArray))
-                        await this.plugin.saveSettings()
-                        searchInput?.setValue('')
-                        this.display()
-                    })()
-                })
-            })
-
-        currentList.forEach((ignoreFolder) => {
-            const setting = new Setting(this.containerEl).setName(ignoreFolder)
-
-            if (supportsPlaceholders && containsPathPlaceholders(ignoreFolder)) {
-                setting.setDesc(`Currently resolves to: ${resolvePathPlaceholders(ignoreFolder)}`)
+    /**
+     * Persists a control edit. Rejecting (not resolving) on failure is what
+     * lets the framework roll the control back to the stored truth.
+     *
+     * Side effects run only AFTER the write lands: registering file handlers or
+     * flipping debug logging on the strength of a value that was never
+     * persisted would leave the plugin and its settings disagreeing.
+     */
+    override async setControlValue(key: string, value: unknown): Promise<void> {
+        switch (key) {
+            case 'disabledOnDevice': {
+                const next = this.expectBoolean(key, value)
+                // Device-local storage, not the synced settings file. Applied
+                // immediately; setDisabledOnDevice owns the handler churn.
+                this.plugin.setDisabledOnDevice(next)
+                // Re-render so the banner appears or disappears with it.
+                this.update()
+                return
             }
-
-            setting.addButton((button) => {
-                button.setButtonText('Remove').onClick(() => {
-                    void (async () => {
-                        await setValue(currentList.filter((value) => value !== ignoreFolder))
-                        await this.plugin.saveSettings()
-                        this.display()
-                    })()
+            case 'disableAutomaticUpdates': {
+                const next = this.expectBoolean(key, value)
+                await this.plugin.updateSettings((draft) => {
+                    draft.disableAutomaticUpdates = next
                 })
-            })
-        })
+                if (next) {
+                    this.plugin.unregisterEventHandlers()
+                } else if (!this.plugin.isDisabledOnDevice()) {
+                    // Do not resurrect handlers the device-local disable turned
+                    // off: that flag outranks this one.
+                    this.plugin.setupEventHandlers()
+                }
+                return
+            }
+            case 'showRefreshButton': {
+                const next = this.expectBoolean(key, value)
+                await this.plugin.updateSettings((draft) => {
+                    draft.showRefreshButton = next
+                })
+                return
+            }
+            case 'enableDataviewJS': {
+                const next = this.expectBoolean(key, value)
+                await this.plugin.updateSettings((draft) => {
+                    draft.enableDataviewJS = next
+                })
+                return
+            }
+            case 'showErrorNotifications': {
+                const next = this.expectBoolean(key, value)
+                await this.plugin.updateSettings((draft) => {
+                    draft.showErrorNotifications = next
+                })
+                return
+            }
+            case 'addTrailingNewline': {
+                const next = this.expectBoolean(key, value)
+                await this.plugin.updateSettings((draft) => {
+                    draft.addTrailingNewline = next
+                })
+                return
+            }
+            case 'linkFormat': {
+                if (value !== 'obsidian' && value !== 'shortest' && value !== 'absolute') {
+                    throw new Error(`Setting "${key}" expects a known link format.`)
+                }
+                const next: LinkFormat = value
+                await this.plugin.updateSettings((draft) => {
+                    draft.linkFormat = next
+                })
+                return
+            }
+            case 'debugLogging': {
+                const next = this.expectBoolean(key, value)
+                await this.plugin.updateSettings((draft) => {
+                    draft.debugLogging = next
+                })
+                setDebugMode(next)
+                return
+            }
+            default:
+                new Notice('Failed to save settings.')
+                throw new Error(`Setting "${key}" does not address a known field.`)
+        }
+    }
+
+    /** Rejects rather than coerces: a bad value must not reach the store. */
+    private expectBoolean(key: string, value: unknown): boolean {
+        if (typeof value !== 'boolean') {
+            throw new Error(`Setting "${key}" expects a boolean.`)
+        }
+        return value
     }
 
     renderBuyMeACoffeeBadge(contentEl: HTMLElement | DocumentFragment, width = 175): void {
@@ -402,3 +417,5 @@ export class SettingsTab extends PluginSettingTab {
         imgEl.width = width
     }
 }
+
+export type { PluginSettings }

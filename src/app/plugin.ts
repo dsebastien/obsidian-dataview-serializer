@@ -788,8 +788,42 @@ export class DataviewSerializerPlugin extends Plugin {
         }
     }
 
+    /** Serializes settings writes; see {@link updateSettings}. */
+    private settingsWriteChain: Promise<void> = Promise.resolve()
+
     /**
-     * Save the plugin settings
+     * Apply a mutation to the settings and persist the result. The single write
+     * path for anything that edits a setting at runtime — the settings pane
+     * routes every control edit through here.
+     *
+     * Persist-then-commit: memory is swapped only after `saveData()` succeeds,
+     * so a rejected write leaves `this.settings` matching what is on disk and
+     * the control rolls back to the stored truth rather than to a value that
+     * was never saved.
+     *
+     * Serialized: writes queue, and each mutation derives from the previous
+     * COMMITTED state. Without the chain, two overlapping calls both `produce`
+     * from the same base across the save await and the second commit silently
+     * drops the first edit — easy to hit here, where adding a folder and
+     * toggling a switch are one click apart.
+     */
+    updateSettings(mutator: (draft: Draft<PluginSettings>) => void): Promise<void> {
+        const run = async (): Promise<void> => {
+            const next = produce(this.settings, mutator)
+            await this.saveData(next)
+            this.settings = next
+        }
+        const p = this.settingsWriteChain.then(run, run)
+        this.settingsWriteChain = p.catch(() => {})
+        return p
+    }
+
+    /**
+     * Bulk write of the current in-memory settings.
+     *
+     * Load-time migrations only. Runtime edits go through
+     * {@link updateSettings}, which is the serialized, persist-then-commit
+     * path; this one bypasses both.
      */
     async saveSettings() {
         log('Saving settings', 'debug')
