@@ -2,6 +2,54 @@
 
 All notable changes to this project will be documented in this file.
 
+## [3.0.0](https://github.com/dsebastien/obsidian-dataview-serializer/compare/2.15.1...3.0.0) (2026-08-28)
+
+### ⚠ BREAKING CHANGES
+
+* **plugin:** requires Obsidian 1.13.0 (minAppVersion bumped from 1.8.7).
+
+`getSettingDefinitions()` replaces `display()` — all-or-nothing, so the whole
+404-line tab is now declarative. Obsidian owns navigation, focus and ARIA, and
+every setting name and description is indexed by the settings search.
+
+The write path changed with it. Every control used to `produce()` a new settings
+object and then call `saveSettings()`, so a failed write left memory ahead of
+disk and the control showing a value that was never stored. Edits now go through
+a serialized, persist-then-commit `updateSettings`: memory is swapped only after
+saveData() resolves, and writes queue so each mutation derives from the previous
+committed state. That matters here because adding a folder and flipping a toggle
+are one click apart, and the old code would have dropped the first of two
+overlapping edits.
+
+The three folder lists become native `type: 'list'` groups, so delete comes from
+the framework rather than a hand-rolled Remove button per row. `onDelete` reads
+the LIVE array and resolves the entry by value before writing — the index it
+receives can be stale by the time the write runs. Adding keeps its inline search
+box rather than moving to the framework's `addItem` affordance, because the
+point of that box is the FolderSuggest completion.
+
+Side effects preserved and now sequenced after the write: registering and
+unregistering the file-event handlers, and `setDebugMode`. The device-local
+disable is deliberately NOT routed through `updateSettings` — it lives in
+device-local storage and is never synced — and turning automatic updates back on
+no longer resurrects handlers on a device where the plugin is switched off.
+
+Covered by settings-write.spec.ts (13 tests: queue, rollback, validation, and
+handler sequencing) plus the collection's settings guard spec. Both regressions
+were checked against a deliberately broken `updateSettings` to confirm the tests
+actually fail. Verified in a live vault: pane renders, folder add and delete
+round-trip, an invalid link format is rejected without touching the store, all
+six command ids unchanged, and data.json byte-identical afterwards.
+
+### Features
+
+* **plugin:** declare settings via getSettingDefinitions (Obsidian 1.13) ([da6ef4a](https://github.com/dsebastien/obsidian-dataview-serializer/commit/da6ef4a8823a9b2c74c5f26b3da1312af32a6e12))
+
+### Bug Fixes
+
+* **build:** lint against the catalog's ruleset, and fix what it found ([2473373](https://github.com/dsebastien/obsidian-dataview-serializer/commit/247337394ee280bca9664a3f442ec278a6f0e2e3))
+* **plugin:** a failed dv.execute() must not erase the query it came from ([a94ff6c](https://github.com/dsebastien/obsidian-dataview-serializer/commit/a94ff6c0ad551dca894d7d79609a11a8886c5f08))
+
 ## [2.15.1](https://github.com/dsebastien/obsidian-dataview-serializer/compare/2.15.0...2.15.1) (2026-08-19)
 
 ### Bug Fixes
@@ -242,6 +290,7 @@ All notable changes to this project will be documented in this file.
 ## [1.0.2](https://github.com/dsebastien/obsidian-dataview-serializer/compare/1.0.1...1.0.2) (2024-05-14)
 ## [1.0.1](https://github.com/dsebastien/obsidian-dataview-serializer/compare/1.0.0...1.0.1) (2024-05-14)
 ## 1.0.0 (2024-05-13)
+
 
 
 
