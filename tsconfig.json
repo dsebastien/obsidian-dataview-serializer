@@ -1,7 +1,33 @@
 {
     "compilerOptions": {
         "baseUrl": ".",
+        // obsidian-dataview ships .d.ts files that import their own modules by
+        // bare, baseUrl-relative specifiers ("data-model/value",
+        // "expression/functions", ...). Those resolve inside the dataview repo
+        // and nowhere else, so from here every type reachable through
+        // `DataviewApi` silently degrades to `error` — which is invisible to
+        // `tsc` under skipLibCheck but makes every call through the API an
+        // `@typescript-eslint/no-unsafe-*` violation. Mapping the prefixes back
+        // into the package makes the real types resolve.
+        "paths": {
+            "api/*": ["node_modules/obsidian-dataview/lib/api/*"],
+            "data-import/*": ["node_modules/obsidian-dataview/lib/data-import/*"],
+            "data-index/*": ["node_modules/obsidian-dataview/lib/data-index/*"],
+            "data-model/*": ["node_modules/obsidian-dataview/lib/data-model/*"],
+            "expression/*": ["node_modules/obsidian-dataview/lib/expression/*"],
+            "query/*": ["node_modules/obsidian-dataview/lib/query/*"],
+            "ui/*": ["node_modules/obsidian-dataview/lib/ui/*"],
+            "settings": ["node_modules/obsidian-dataview/lib/settings"],
+            "index": ["node_modules/obsidian-dataview/lib/index"]
+        },
         "lib": ["DOM", "ESNext"],
+        // Pin the ambient type roots. Without this, TypeScript auto-scans
+        // top-level node_modules/@types only; @types/node arrives transitively
+        // (via @types/bun -> bun-types) and can end up NESTED, at which point
+        // every node:* import silently types as `error` and the catalog
+        // reviewer sees ~80 no-unsafe-* warnings that never reproduce locally.
+        // With this line, a missing package is instead a hard TS2688 at build.
+        "types": ["bun", "node"],
         "target": "ESNext",
         "module": "ESNext",
         "moduleDetection": "force",

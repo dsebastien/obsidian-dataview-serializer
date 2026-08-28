@@ -329,7 +329,7 @@ function createQueryBadge(queryType: QueryType): HTMLElement {
 function createRefreshButton(onClick: () => void | Promise<void>): HTMLButtonElement {
     const btn = createEl('button', {
         cls: 'dvs-refresh-button',
-        attr: { 'aria-label': 'Refresh Dataview Query' }
+        attr: { 'aria-label': 'Refresh Dataview query' }
     })
     setIcon(btn, 'refresh-cw')
 
@@ -439,7 +439,7 @@ export const refreshButtonExtension = (
                         }
                     } catch (err) {
                         log('Failed to refresh dataview query', 'error', err)
-                        new Notice('Failed to refresh dataview query')
+                        new Notice('Failed to refresh Dataview query')
                     }
                 })
 
@@ -497,7 +497,7 @@ export const refreshButtonExtension = (
             if (getSettings().showRefreshButton) {
                 const btn = createEl('button', {
                     cls: 'dvs-inline-refresh-button',
-                    attr: { 'aria-label': 'Refresh Inline Query' }
+                    attr: { 'aria-label': 'Refresh inline query' }
                 })
                 setIcon(btn, 'refresh-cw')
 

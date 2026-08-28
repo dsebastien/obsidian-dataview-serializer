@@ -888,6 +888,7 @@ describe('serializeQuery', () => {
         it('should handle non-Error exceptions', async () => {
             const mockApp = createMockApp([])
             const mockApi = {
+                // eslint-disable-next-line @typescript-eslint/prefer-promise-reject-errors -- rejecting with a non-Error is the whole point of this test
                 tryQueryMarkdown: mock(() => Promise.reject('String error'))
             } as unknown as DataviewApi
 

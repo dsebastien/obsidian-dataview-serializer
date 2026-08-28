@@ -12,7 +12,7 @@ class FakeStore implements DeviceLocalStore {
         return this.data.has(key) ? this.data.get(key) : null
     }
 
-    saveLocalStorage(key: string, value: unknown | null): void {
+    saveLocalStorage(key: string, value: unknown): void {
         if (value === null) {
             this.data.delete(key)
         } else {

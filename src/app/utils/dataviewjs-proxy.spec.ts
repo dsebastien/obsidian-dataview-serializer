@@ -1,6 +1,47 @@
 import { describe, expect, test, mock } from 'bun:test'
 import { createDataviewJSProxy } from './dataviewjs-proxy'
 import type { DataviewApi } from 'obsidian-dataview/lib/api/plugin-api'
+import type { Result } from 'obsidian-dataview/lib/api/result'
+import type { QueryResult } from 'obsidian-dataview/lib/api/plugin-api'
+
+/**
+ * Awaited rejection assertion.
+ *
+ * `expect(p).rejects.toThrow()` types as void here, so awaiting it trips
+ * `await-thenable` while not awaiting it lets a passing-by-accident test
+ * through. Catching the error directly is both typed and actually awaited.
+ */
+async function expectRejection(promise: Promise<unknown>, contains: string): Promise<void> {
+    let caught: unknown
+    await promise.catch((error: unknown) => {
+        caught = error
+    })
+    expect(caught).toBeInstanceOf(Error)
+    expect((caught as Error).message).toContain(contains)
+}
+
+/**
+ * `queryMarkdown` and `query` return a `Result`, not their payload.
+ *
+ * The mocks here used to return the payload directly, which type-checked only
+ * because obsidian-dataview's own .d.ts files import their modules by bare
+ * baseUrl specifiers that do not resolve from a consumer — so every type behind
+ * `DataviewApi` degraded to `error` and the mocks matched anything. That is how
+ * `dv.execute()` came to push the Result wrapper into the captured output
+ * instead of its value. Build real Results here so the mocks cannot drift from
+ * the contract again.
+ */
+function ok<T>(value: T): Result<T, string> {
+    // Shaped by hand rather than `new Success(...)`: obsidian-dataview ships
+    // types for `api/result` but no runtime module at that path, so importing
+    // the class is a resolution error at test time. Only `successful`/`value`
+    // are read by the code under test.
+    return { successful: true, value } as unknown as Result<T, string>
+}
+
+function fail<T>(error: string): Result<T, string> {
+    return { successful: false, error } as unknown as Result<T, string>
+}
 
 // Create a mock DataviewApi
 function createMockDataviewApi(): DataviewApi {
@@ -19,9 +60,9 @@ function createMockDataviewApi(): DataviewApi {
         compare: mock(() => 0),
         equal: mock(() => true),
         evaluate: mock(() => ({ successful: true, value: '' })),
-        query: mock(async () => ({ successful: true, value: { values: [] } })),
-        queryMarkdown: mock(async () => ''),
-        tryQuery: mock(async () => ({ successful: true, value: { values: [] } })),
+        query: mock(async () => ok({ values: [] } as unknown as QueryResult)),
+        queryMarkdown: mock(async () => ok('')),
+        tryQuery: mock(async () => ok({ values: [] })),
         tryQueryMarkdown: mock(async () => ''),
         io: {
             load: mock(async () => ''),
@@ -251,7 +292,7 @@ describe('createDataviewJSProxy', () => {
         test('should capture query output via queryMarkdown', async () => {
             const mockApi = createMockDataviewApi()
             // Mock queryMarkdown to return some markdown
-            mockApi.queryMarkdown = async () => '- Item 1\n- Item 2'
+            mockApi.queryMarkdown = async () => ok('- Item 1\n- Item 2')
 
             const { proxy, getMarkdown } = createDataviewJSProxy(mockApi, 'test.md')
 
@@ -262,12 +303,38 @@ describe('createDataviewJSProxy', () => {
             expect(markdown).toBe('- Item 1\n- Item 2')
         })
 
+        test('unwraps the Result rather than capturing the wrapper', async () => {
+            // Regression: queryMarkdown returns Result<string, string>, and the
+            // wrapper used to be pushed straight into the captured output, so a
+            // serialized dv.execute() rendered the object instead of the query.
+            const mockApi = createMockDataviewApi()
+            mockApi.queryMarkdown = async () => ok('- Real output')
+
+            const { proxy, getMarkdown } = createDataviewJSProxy(mockApi, 'test.md')
+            await (proxy['execute'] as (q: string) => Promise<void>)('LIST')
+
+            const markdown = getMarkdown()
+            expect(markdown).toBe('- Real output')
+            expect(markdown).not.toContain('successful')
+            expect(markdown).not.toContain('object Object')
+        })
+
+        test('drops a failed query instead of serializing its error', async () => {
+            const mockApi = createMockDataviewApi()
+            mockApi.queryMarkdown = async () => fail<string>('no such field: bogus')
+
+            const { proxy, getMarkdown } = createDataviewJSProxy(mockApi, 'test.md')
+            await (proxy['execute'] as (q: string) => Promise<void>)('LIST FROM bogus')
+
+            expect(getMarkdown()).toBe('')
+        })
+
         test('should pass origin file to queryMarkdown', async () => {
             const mockApi = createMockDataviewApi()
             let capturedFile: string | undefined
             mockApi.queryMarkdown = async (_query: string, file?: string) => {
                 capturedFile = file
-                return ''
+                return ok('')
             }
 
             const { proxy } = createDataviewJSProxy(mockApi, 'notes/my-file.md')
@@ -285,7 +352,7 @@ describe('createDataviewJSProxy', () => {
             const { proxy } = createDataviewJSProxy(mockApi, 'test.md')
 
             const dvView = proxy['view'] as () => Promise<void>
-            await expect(dvView()).rejects.toThrow('dv.view() is not supported')
+            await expectRejection(dvView(), 'dv.view() is not supported')
         })
 
         test('dv.executeJs() should return rejected promise', async () => {
@@ -293,7 +360,7 @@ describe('createDataviewJSProxy', () => {
             const { proxy } = createDataviewJSProxy(mockApi, 'test.md')
 
             const dvExecuteJs = proxy['executeJs'] as () => Promise<void>
-            await expect(dvExecuteJs()).rejects.toThrow('dv.executeJs() is not supported')
+            await expectRejection(dvExecuteJs(), 'dv.executeJs() is not supported')
         })
     })
 
@@ -320,12 +387,15 @@ describe('createDataviewJSProxy', () => {
 
         test('dv.fileLink() should return a Link object', () => {
             const mockApi = createMockDataviewApi()
-            mockApi.fileLink = mock(() => ({
-                path: '2021-08-08',
-                embed: false,
-                display: undefined,
-                toString: () => '[[2021-08-08]]'
-            }))
+            mockApi.fileLink = mock(
+                () =>
+                    ({
+                        path: '2021-08-08',
+                        embed: false,
+                        display: undefined,
+                        toString: () => '[[2021-08-08]]'
+                    }) as unknown as ReturnType<DataviewApi['fileLink']>
+            )
 
             const { proxy } = createDataviewJSProxy(mockApi, 'test.md')
 
@@ -342,13 +412,16 @@ describe('createDataviewJSProxy', () => {
 
         test('dv.sectionLink() should return a Link object', () => {
             const mockApi = createMockDataviewApi()
-            mockApi.sectionLink = mock(() => ({
-                path: 'note',
-                subpath: 'section',
-                type: 'header',
-                embed: false,
-                toString: () => '[[note#section]]'
-            }))
+            mockApi.sectionLink = mock(
+                () =>
+                    ({
+                        path: 'note',
+                        subpath: 'section',
+                        type: 'header',
+                        embed: false,
+                        toString: () => '[[note#section]]'
+                    }) as unknown as ReturnType<DataviewApi['fileLink']>
+            )
 
             const { proxy } = createDataviewJSProxy(mockApi, 'test.md')
 
@@ -371,13 +444,16 @@ describe('createDataviewJSProxy', () => {
 
         test('dv.blockLink() should return a Link object', () => {
             const mockApi = createMockDataviewApi()
-            mockApi.blockLink = mock(() => ({
-                path: 'note',
-                subpath: 'block123',
-                type: 'block',
-                embed: false,
-                toString: () => '[[note#^block123]]'
-            }))
+            mockApi.blockLink = mock(
+                () =>
+                    ({
+                        path: 'note',
+                        subpath: 'block123',
+                        type: 'block',
+                        embed: false,
+                        toString: () => '[[note#^block123]]'
+                    }) as unknown as ReturnType<DataviewApi['fileLink']>
+            )
 
             const { proxy } = createDataviewJSProxy(mockApi, 'test.md')
 
@@ -625,20 +701,26 @@ describe('createDataviewJSProxy', () => {
     describe('query methods', () => {
         test('dv.queryMarkdown() should call the underlying API with origin file', async () => {
             const mockApi = createMockDataviewApi()
-            mockApi.queryMarkdown = mock(async () => '- Result 1\n- Result 2')
+            mockApi.queryMarkdown = mock(async () => ok('- Result 1\n- Result 2'))
 
             const { proxy } = createDataviewJSProxy(mockApi, 'notes/test.md')
 
-            const dvQueryMarkdown = proxy['queryMarkdown'] as (query: string) => Promise<string>
+            // Passthrough: dv.queryMarkdown() hands back whatever the real API
+            // returns, which is a Result — not the markdown string. Only
+            // dv.execute() unwraps it.
+            const dvQueryMarkdown = proxy['queryMarkdown'] as (
+                query: string
+            ) => Promise<Result<string, string>>
             const result = await dvQueryMarkdown('LIST FROM #tag')
 
             expect(mockApi.queryMarkdown).toHaveBeenCalledWith('LIST FROM #tag', 'notes/test.md')
-            expect(result).toBe('- Result 1\n- Result 2')
+            expect(result.successful).toBe(true)
+            expect(result).toEqual(ok('- Result 1\n- Result 2'))
         })
 
         test('dv.query() should call the underlying API', async () => {
             const mockApi = createMockDataviewApi()
-            const queryResult = { successful: true, value: { values: ['a', 'b'] } }
+            const queryResult = ok({ values: ['a', 'b'] } as unknown as QueryResult)
             mockApi.query = mock(async () => queryResult)
 
             const { proxy } = createDataviewJSProxy(mockApi, 'test.md')

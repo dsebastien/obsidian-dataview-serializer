@@ -21,7 +21,8 @@
  * - dv.io.load(), dv.io.csv(), dv.io.json()
  */
 import type { DataviewApi } from 'obsidian-dataview/lib/api/plugin-api'
-import type { Literal, Link } from 'obsidian-dataview/lib/data-model/value'
+import type { Grouping, Literal, Link } from 'obsidian-dataview/lib/data-model/value'
+import type { SListItem } from 'obsidian-dataview/lib/data-model/serialized/markdown'
 import { literalToString } from './literal-to-string.fn'
 
 /**
@@ -460,9 +461,11 @@ export function createDataviewJSProxy(
         widget: dataviewApi.widget,
 
         // evaluate expressions
-        evaluate: (expr: string, context?: Record<string, unknown>) =>
+        // `Literal`, not `unknown`: the Dataview expression evaluator only
+        // accepts its own value type in the context bag.
+        evaluate: (expr: string, context?: Record<string, Literal>) =>
             dataviewApi.evaluate(expr, context, originFile),
-        tryEvaluate: (expr: string, context?: Record<string, unknown>) =>
+        tryEvaluate: (expr: string, context?: Record<string, Literal>) =>
             dataviewApi.tryEvaluate(expr, context, originFile),
 
         // query (returns markdown, same as block queries)
@@ -477,13 +480,20 @@ export function createDataviewJSProxy(
         markdownTable: (headers: string[] | undefined, values: unknown[][] | undefined) =>
             dataviewApi.markdownTable(headers, values),
         markdownList: (values: unknown[] | undefined) => dataviewApi.markdownList(values),
-        markdownTaskList: (values: unknown) => dataviewApi.markdownTaskList(values),
+        markdownTaskList: (values: Grouping<SListItem>) => dataviewApi.markdownTaskList(values),
 
-        // execute() normally renders to DOM, but we capture via queryMarkdown
+        // execute() normally renders to DOM, but we capture via queryMarkdown.
+        //
+        // queryMarkdown returns a Result<string, string>, NOT a string. Pushing
+        // it straight into capturedOutputs stringified the wrapper object
+        // instead of the query output — invisible until the dataview typings
+        // were made to resolve, because every type behind DataviewApi was
+        // degrading to `error`. A failed query is dropped rather than rendered:
+        // the serialized note should not carry a Dataview error string.
         execute: async (query: string, file?: string): Promise<void> => {
-            const markdown = await dataviewApi.queryMarkdown(query, file ?? originFile)
-            if (markdown) {
-                capturedOutputs.push({ type: 'paragraph', content: markdown })
+            const result = await dataviewApi.queryMarkdown(query, file ?? originFile)
+            if (result.successful && result.value) {
+                capturedOutputs.push({ type: 'paragraph', content: result.value })
             }
         }
     }

@@ -1,6 +1,22 @@
 import { test, expect } from 'bun:test'
 import { processInBatches } from './batch-processor'
 
+/**
+ * Awaited rejection assertion.
+ *
+ * `expect(p).rejects.toThrow()` types as void here, so awaiting it trips
+ * `await-thenable` while not awaiting it lets a passing-by-accident test
+ * through. Catching the error directly is both typed and actually awaited.
+ */
+async function expectRejection(promise: Promise<unknown>, contains: string): Promise<void> {
+    let caught: unknown
+    await promise.catch((error: unknown) => {
+        caught = error
+    })
+    expect(caught).toBeInstanceOf(Error)
+    expect((caught as Error).message).toContain(contains)
+}
+
 test('processInBatches should process items in batches', async () => {
     const items = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
     const processor = async (item: number) => item * 2
@@ -103,7 +119,7 @@ test('processInBatches should handle errors in processor', async () => {
         return item
     }
 
-    await expect(processInBatches(items, processor, 3)).rejects.toThrow('Processing failed')
+    await expectRejection(processInBatches(items, processor, 3), 'Processing failed')
 })
 
 test('processInBatches should report progress after each batch', async () => {

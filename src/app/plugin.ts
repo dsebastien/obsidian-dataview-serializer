@@ -114,7 +114,9 @@ export class DataviewSerializerPlugin extends Plugin {
     /**
      * The plugin settings are immutable
      */
-    settings: PluginSettings = produce(DEFAULT_SETTINGS, () => DEFAULT_SETTINGS)
+    // `override` required: `Plugin.settings?: unknown` exists in the 1.13+
+    // typings, so redeclaring it without the modifier is a TS4114 error.
+    override settings: PluginSettings = produce(DEFAULT_SETTINGS, () => DEFAULT_SETTINGS)
     /**
      * The API of the Dataview plugin
      */
@@ -437,6 +439,7 @@ export class DataviewSerializerPlugin extends Plugin {
 
         // Add command to insert dataview serializer block
         this.addCommand({
+            // eslint-disable-next-line obsidianmd/commands/no-plugin-id-in-command-id -- the id shipped in a released version; renaming it silently breaks every user-bound hotkey, which costs more than the duplicated prefix in the palette. Deliberate, and the catalog reviewer will still report it.
             id: 'insert-dataview-serializer-block',
             name: 'Insert query block',
             editorCallback: (editor) => {
@@ -814,7 +817,7 @@ export class DataviewSerializerPlugin extends Plugin {
      */
     private blockedByDeviceDisable(): boolean {
         if (this.isDisabledOnDevice()) {
-            new Notice('Dataview Serializer is disabled on this device', NOTICE_TIMEOUT)
+            new Notice('Dataview serializer is disabled on this device', NOTICE_TIMEOUT)
             return true
         }
         return false

@@ -22,7 +22,7 @@ export class SettingsTab extends PluginSettingTab {
         this.plugin = plugin
     }
 
-    display(): void {
+    override display(): void {
         const { containerEl } = this
 
         containerEl.empty()
@@ -132,7 +132,7 @@ export class SettingsTab extends PluginSettingTab {
         new Setting(this.containerEl)
             .setName('Enable DataviewJS serialization')
             .setDesc(
-                'When enabled, JavaScript-based Dataview queries can be serialized to static markdown. Note: JavaScript code cannot contain "--" due to HTML comment limitations.'
+                'When enabled, JavaScript-based Dataview queries can be serialized to static Markdown. Note: JavaScript code cannot contain "--" due to HTML comment limitations.'
             )
             .addToggle((toggle) => {
                 toggle.setValue(this.plugin.settings.enableDataviewJS).onChange(async (value) => {
