@@ -439,7 +439,8 @@ export class DataviewSerializerPlugin extends Plugin {
 
         // Add command to insert dataview serializer block
         this.addCommand({
-            // eslint-disable-next-line obsidianmd/commands/no-plugin-id-in-command-id -- the id shipped in a released version; renaming it silently breaks every user-bound hotkey, which costs more than the duplicated prefix in the palette. Deliberate, and the catalog reviewer will still report it.
+            // The id keeps its plugin-name prefix on purpose; see the
+            // no-plugin-id-in-command-id exemption in eslint.config.ts.
             id: 'insert-dataview-serializer-block',
             name: 'Insert query block',
             editorCallback: (editor) => {

@@ -137,5 +137,23 @@ export default defineConfig([
         rules: {
             'no-console': 'off'
         }
+    },
+    {
+        // `insert-dataview-serializer-block` repeats the plugin id in its
+        // command id. Renaming it would silently break every hotkey users
+        // have bound to it, which costs more than a duplicated prefix in the
+        // palette, so the id stays.
+        //
+        // The exemption lives HERE rather than as an inline disable comment
+        // on the command: the community catalog's automated review treats a
+        // suppressed obsidianmd rule in source as an ERROR and fails the
+        // whole release over it ("Disabling '...' is not allowed"), which is
+        // exactly what happened to 3.0.0. A config-level decision is not a
+        // suppression comment, and the underlying finding — if their own
+        // ruleset still reports it — is a warning they can weigh.
+        files: ['src/app/plugin.ts'],
+        rules: {
+            'obsidianmd/commands/no-plugin-id-in-command-id': 'off'
+        }
     }
 ])
