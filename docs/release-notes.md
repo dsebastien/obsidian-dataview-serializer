@@ -1,5 +1,11 @@
 # Release Notes
 
+## 3.0.1 (2026-08-29)
+
+### Bug Fixes
+
+* **build:** move the command-id exemption out of the source file
+
 ## 3.0.0 (2026-08-28)
 
 ### ⚠ BREAKING CHANGES

@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented in this file.
 
+## [3.0.1](https://github.com/dsebastien/obsidian-dataview-serializer/compare/3.0.0...3.0.1) (2026-08-29)
+
+### Bug Fixes
+
+* **build:** move the command-id exemption out of the source file ([2401366](https://github.com/dsebastien/obsidian-dataview-serializer/commit/24013666da06a9dd5348d7a7fbc94ffe5f85b263))
+
 ## [3.0.0](https://github.com/dsebastien/obsidian-dataview-serializer/compare/2.15.1...3.0.0) (2026-08-28)
 
 ### ⚠ BREAKING CHANGES
@@ -290,6 +296,7 @@ six command ids unchanged, and data.json byte-identical afterwards.
 ## [1.0.2](https://github.com/dsebastien/obsidian-dataview-serializer/compare/1.0.1...1.0.2) (2024-05-14)
 ## [1.0.1](https://github.com/dsebastien/obsidian-dataview-serializer/compare/1.0.0...1.0.1) (2024-05-14)
 ## 1.0.0 (2024-05-13)
+
 
 
 
