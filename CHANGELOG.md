@@ -2,6 +2,15 @@
 
 All notable changes to this project will be documented in this file.
 
+## [3.1.0](https://github.com/dsebastien/obsidian-dataview-serializer/compare/3.0.1...3.1.0) (2026-08-30)
+
+### Features
+
+* **build:** fail the build on a lockfile the catalog review cannot parse ([36daf79](https://github.com/dsebastien/obsidian-dataview-serializer/commit/36daf798680bc7488ef23eef09550b8e58c3c54b))
+* **build:** make the rule floor check that it is still wired in ([2f6f4ff](https://github.com/dsebastien/obsidian-dataview-serializer/commit/2f6f4ff6c96c54bbeed34257ee829a6c36cf17fe))
+* **build:** refuse commits that loosen the rules instead of fixing the finding ([96821a0](https://github.com/dsebastien/obsidian-dataview-serializer/commit/96821a00584bb07bfba9f794740e2e29e7093837))
+* **plugin:** add the {{isoyear}} path placeholder ([604f690](https://github.com/dsebastien/obsidian-dataview-serializer/commit/604f690d84f06686afa10573e8a1b4543c5562a3))
+
 ## [3.0.1](https://github.com/dsebastien/obsidian-dataview-serializer/compare/3.0.0...3.0.1) (2026-08-29)
 
 ### Bug Fixes
@@ -296,6 +305,7 @@ six command ids unchanged, and data.json byte-identical afterwards.
 ## [1.0.2](https://github.com/dsebastien/obsidian-dataview-serializer/compare/1.0.1...1.0.2) (2024-05-14)
 ## [1.0.1](https://github.com/dsebastien/obsidian-dataview-serializer/compare/1.0.0...1.0.1) (2024-05-14)
 ## 1.0.0 (2024-05-13)
+
 
 
 

@@ -1,5 +1,14 @@
 # Release Notes
 
+## 3.1.0 (2026-08-30)
+
+### Features
+
+* **build:** fail the build on a lockfile the catalog review cannot parse
+* **build:** make the rule floor check that it is still wired in
+* **build:** refuse commits that loosen the rules instead of fixing the finding
+* **plugin:** add the {{isoyear}} path placeholder
+
 ## 3.0.1 (2026-08-29)
 
 ### Bug Fixes
