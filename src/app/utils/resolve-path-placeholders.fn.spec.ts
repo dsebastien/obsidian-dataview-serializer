@@ -192,3 +192,45 @@ describe('containsPathPlaceholders', () => {
         expect(containsPathPlaceholders('{{year}}')).toBe(true)
     })
 })
+
+describe('{{isoyear}}', () => {
+    it('matches the calendar year in mid-year', () => {
+        expect(resolvePathPlaceholders('J/{{isoyear}}/{{week}}', new Date(2026, 7, 30))).toBe(
+            'J/2026/35'
+        )
+    })
+
+    it('rolls forward in late December, keeping the week together', () => {
+        // 2024-12-30 is the Monday of ISO week 01 of 2025. {{year}} would strand
+        // it in the previous January's week folder.
+        const d = new Date(2024, 11, 30)
+        expect(resolvePathPlaceholders('J/{{isoyear}}/{{week}}', d)).toBe('J/2025/01')
+        expect(resolvePathPlaceholders('J/{{year}}/{{week}}', d)).toBe('J/2024/01')
+    })
+
+    it('rolls back in early January', () => {
+        expect(resolvePathPlaceholders('J/{{isoyear}}/{{week}}', new Date(2022, 0, 1))).toBe(
+            'J/2021/52'
+        )
+    })
+})
+
+describe('placeholder map and regex stay in sync', () => {
+    it('resolves every placeholder name the map defines', () => {
+        // A name added to PLACEHOLDERS but missing from PLACEHOLDER_REGEX is
+        // silently never substituted, which is how {{isoyear}} shipped broken.
+        for (const name of [
+            'year',
+            'isoyear',
+            'quarter',
+            'monthname',
+            'month',
+            'week',
+            'date',
+            'day'
+        ]) {
+            const resolved = resolvePathPlaceholders(`X/{{${name}}}`, new Date(2026, 7, 30))
+            expect(resolved).not.toContain('{{')
+        }
+    })
+})

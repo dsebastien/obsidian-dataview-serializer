@@ -22,6 +22,14 @@ const PLACEHOLDERS = {
         unit: 'year',
         render: (date: Date): string => format(date, 'yyyy')
     },
+    isoyear: {
+        // The ISO week-numbering year: the year {{week}} counts within, which is
+        // not always the calendar year. 2024-12-30 is week 01 of 2025, so a
+        // folder of {{year}}/{{week}} splits a single week across two folders
+        // every New Year. Matches the Obsidian Starter Kit (1.8.0).
+        unit: 'year',
+        render: (date: Date): string => format(date, 'RRRR')
+    },
     quarter: {
         unit: 'quarter',
         render: (date: Date): string => `Q${getQuarter(date)}`
@@ -56,10 +64,12 @@ type PlaceholderUnit = (typeof PLACEHOLDERS)[PlaceholderName]['unit']
  * `{{name-1:FORMAT}}`.
  *
  * `monthname` MUST come before `month` in the alternation, otherwise `month`
- * would match its prefix and the placeholder would never resolve.
+ * would match its prefix and the placeholder would never resolve. `isoyear` is
+ * listed for the same reason, and every name in PLACEHOLDERS must appear here —
+ * a name added to the map but not to this pattern is silently never resolved.
  */
 const PLACEHOLDER_REGEX =
-    /\{\{\s*(year|quarter|monthname|month|week|date|day)\s*([+-]\s*\d+)?\s*(?::([^}]*?))?\s*\}\}/gi
+    /\{\{\s*(isoyear|year|quarter|monthname|month|week|date|day)\s*([+-]\s*\d+)?\s*(?::([^}]*?))?\s*\}\}/gi
 
 const shiftDate = (date: Date, unit: PlaceholderUnit, amount: number): Date => {
     switch (unit) {

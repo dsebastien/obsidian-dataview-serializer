@@ -65,11 +65,14 @@ This is mainly useful with Periodic Notes / Calendar style vaults: instead of fo
 
 | Placeholder | Resolves to | Example |
 |---|---|---|
-| `{{year}}` | Year | `2026` |
+| `{{year}}` | Calendar year | `2026` |
+| `{{isoyear}}` | ISO week-numbering year — the year `{{week}}` counts within | `2026` |
 | `{{quarter}}` | Quarter | `Q3` |
 | `{{month}}` | Month number | `07` |
 | `{{monthName}}` | Short month name | `Jul` |
 | `{{week}}` | ISO week number (padded) | `30` |
+
+> Pair `{{week}}` with `{{isoyear}}`, not `{{year}}`. A week can straddle New Year: 2024-12-30 is week 01 of 2025, so `{{year}}/{{week}}` files it under `2024/01`, away from the rest of its own week. Use `{{year}}` where the calendar year is what you mean, such as `Monthly/{{year}}`.
 | `{{date}}` | Full date | `2026-07-23` |
 | `{{day}}` | Day of the month | `23` |
 
