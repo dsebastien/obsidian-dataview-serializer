@@ -31,3 +31,11 @@ When a query's indentation contains a blockquote marker, everything the plugin w
 Conversely, when the indentation contains no `>`, output and matching MUST stay byte-for-byte identical to what previous versions produced — plain whitespace indentation is applied to the content only, never to the markers. `getBlockquotePrefix` returning an empty string is the switch between the two behaviors.
 
 See `documentation/Blockquotes and callouts.md` and [#64](https://github.com/dsebastien/obsidian-dataview-serializer/issues/64).
+
+## Never overwrite a newer version of a note
+
+Serializing queries is asynchronous, so a note can be rewritten by someone else between the read that feeds the serialization and the write that saves it: Templater rendering a note created from a template, a sync, a capture plugin, another plugin. The plugin MUST therefore write through `Vault.process` and compare, inside the callback, the content it is about to replace against the content the serialization was computed from. When they differ, the newer content MUST be kept and nothing written.
+
+A skipped write MUST NOT start the update cooldown (`nextPossibleUpdates`). The write that overtook the run fires its own modify event, and that event has to be free to reprocess the note at once; throttling it would leave the note unserialized until the next unrelated edit.
+
+The bug this rule exists to prevent: a plugin created a daily note from a template, this plugin read the raw template, Templater rendered the note, and the serialized version, built on the raw text, was written on top. The note ended up holding unrendered `<% %>` template code.

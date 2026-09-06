@@ -1246,10 +1246,12 @@ export class DataviewSerializerPlugin extends Plugin {
             }
 
             // Keep track of the last time this file was updated to avoid modification loops
-            const nextPossibleUpdateTimeForFile = add(new Date(), {
-                seconds: MINIMUM_SECONDS_BETWEEN_UPDATES
-            })
-            this.nextPossibleUpdates.set(file.path, nextPossibleUpdateTimeForFile)
+            const startCooldown = (): void => {
+                this.nextPossibleUpdates.set(
+                    file.path,
+                    add(new Date(), { seconds: MINIMUM_SECONDS_BETWEEN_UPDATES })
+                )
+            }
 
             // Save the updated version
             log(
@@ -1257,18 +1259,33 @@ export class DataviewSerializerPlugin extends Plugin {
                 'debug'
             )
 
-            if (updatedText !== text) {
-                this.filesToIgnoreFileEvents.add(file.path)
-                // Safety net: ensure the file is eventually removed from the ignore list
-                // even if the modify event doesn't fire or an error occurs.
-                window.setTimeout(() => {
-                    if (this.filesToIgnoreFileEvents.has(file.path)) {
-                        this.filesToIgnoreFileEvents.delete(file.path)
-                    }
-                }, 2000)
-                log('The file content has changed. Saving the modifications', 'info')
-                await this.app.vault.modify(file, updatedText)
+            if (updatedText === text) {
+                startCooldown()
+                return result
+            }
+
+            this.filesToIgnoreFileEvents.add(file.path)
+            // Safety net: ensure the file is eventually removed from the ignore list
+            // even if the modify event doesn't fire or an error occurs.
+            window.setTimeout(() => {
+                if (this.filesToIgnoreFileEvents.has(file.path)) {
+                    this.filesToIgnoreFileEvents.delete(file.path)
+                }
+            }, 2000)
+            log('The file content has changed. Saving the modifications', 'info')
+
+            if (await this.saveSerializedContent(file, text, updatedText)) {
                 result.updated = true
+                startCooldown()
+            } else {
+                // No cooldown here on purpose: the write that overtook this run
+                // fires its own modify event, and that event must be allowed to
+                // reprocess the file immediately rather than be throttled away.
+                this.filesToIgnoreFileEvents.delete(file.path)
+                log(
+                    `The file [${file.path}] changed while its queries were being serialized. The newer content was kept and will be serialized by the run that change triggers.`,
+                    'info'
+                )
             }
         } catch (e: unknown) {
             // Ensure cleanup on error
@@ -1279,6 +1296,41 @@ export class DataviewSerializerPlugin extends Plugin {
         }
 
         return result
+    }
+
+    /**
+     * Write the serialized content, but only if the note still holds exactly the
+     * content the serialization was computed from.
+     *
+     * Serializing a query is asynchronous, so another writer can land a new
+     * version of the note in between: Templater rendering a note that was just
+     * created from a template, a sync, a capture, another plugin. A plain
+     * read-then-write would then save a version built on content that no longer
+     * exists and silently discard the newer one. `Vault.process` reads and writes
+     * under one lock, so comparing inside the callback closes that window.
+     *
+     * @param file The note to write
+     * @param expectedText The content the serialization was computed from
+     * @param updatedText The serialized content to save
+     * @returns true when the note was written, false when a newer version was left alone
+     */
+    private async saveSerializedContent(
+        file: TFile,
+        expectedText: string,
+        updatedText: string
+    ): Promise<boolean> {
+        let written = true
+
+        await this.app.vault.process(file, (currentText: string) => {
+            if (currentText !== expectedText) {
+                written = false
+                return currentText
+            }
+
+            return updatedText
+        })
+
+        return written
     }
 
     /**
