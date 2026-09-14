@@ -87,7 +87,7 @@
     },
     "dependencies": {
         "date-fns": "^3.6.0",
-        "immer": "11.0.1"
+        "immer": "11.1.18"
     },
     "overrides": {
         "svelte": "^4.2.19",
