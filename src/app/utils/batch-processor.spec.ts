@@ -19,7 +19,7 @@ async function expectRejection(promise: Promise<unknown>, contains: string): Pro
 
 test('processInBatches should process items in batches', async () => {
     const items = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
-    const processor = async (item: number) => item * 2
+    const processor = (item: number) => Promise.resolve(item * 2)
 
     const results = await processInBatches(items, processor, 3)
 
@@ -28,7 +28,7 @@ test('processInBatches should process items in batches', async () => {
 
 test('processInBatches should handle empty arrays', async () => {
     const items: number[] = []
-    const processor = async (item: number) => item * 2
+    const processor = (item: number) => Promise.resolve(item * 2)
 
     const results = await processInBatches(items, processor, 5)
 
@@ -37,7 +37,7 @@ test('processInBatches should handle empty arrays', async () => {
 
 test('processInBatches should handle single item', async () => {
     const items = [42]
-    const processor = async (item: number) => item * 2
+    const processor = (item: number) => Promise.resolve(item * 2)
 
     const results = await processInBatches(items, processor, 5)
 
@@ -47,9 +47,9 @@ test('processInBatches should handle single item', async () => {
 test('processInBatches should use default batch size of 5', async () => {
     const items = [1, 2, 3, 4, 5, 6]
     const callOrder: number[] = []
-    const processor = async (item: number) => {
+    const processor = (item: number) => {
         callOrder.push(item)
-        return item
+        return Promise.resolve(item)
     }
 
     const results = await processInBatches(items, processor)
@@ -64,7 +64,7 @@ test('processInBatches should process items concurrently within a batch', async 
 
     const processor = async (item: string) => {
         startTimes.push(Date.now())
-        await new Promise((resolve) => setTimeout(resolve, 50))
+        await new Promise<void>((resolve) => self.setTimeout(resolve, 50))
         return item.toUpperCase()
     }
 
@@ -81,7 +81,7 @@ test('processInBatches should preserve order across batches', async () => {
     const items = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
     // Simulate varying processing times
     const processor = async (item: number) => {
-        await new Promise((resolve) => setTimeout(resolve, Math.random() * 10))
+        await new Promise<void>((resolve) => self.setTimeout(resolve, Math.random() * 10))
         return `item-${item}`
     }
 
@@ -103,7 +103,7 @@ test('processInBatches should preserve order across batches', async () => {
 
 test('processInBatches should handle batch size larger than array length', async () => {
     const items = [1, 2, 3]
-    const processor = async (item: number) => item * 10
+    const processor = (item: number) => Promise.resolve(item * 10)
 
     const results = await processInBatches(items, processor, 100)
 
@@ -112,11 +112,11 @@ test('processInBatches should handle batch size larger than array length', async
 
 test('processInBatches should handle errors in processor', async () => {
     const items = [1, 2, 3]
-    const processor = async (item: number) => {
+    const processor = (item: number) => {
         if (item === 2) {
-            throw new Error('Processing failed')
+            return Promise.reject(new Error('Processing failed'))
         }
-        return item
+        return Promise.resolve(item)
     }
 
     await expectRejection(processInBatches(items, processor, 3), 'Processing failed')
@@ -124,7 +124,7 @@ test('processInBatches should handle errors in processor', async () => {
 
 test('processInBatches should report progress after each batch', async () => {
     const items = [1, 2, 3, 4, 5]
-    const processor = async (item: number) => item
+    const processor = (item: number) => Promise.resolve(item)
     const progress: Array<[number, number]> = []
 
     await processInBatches(items, processor, 2, (processed, total) => {
@@ -139,7 +139,7 @@ test('processInBatches should report progress after each batch', async () => {
 })
 
 test('processInBatches should not report progress for an empty array', async () => {
-    const processor = async (item: number) => item
+    const processor = (item: number) => Promise.resolve(item)
     let calls = 0
 
     await processInBatches([] as number[], processor, 2, () => {

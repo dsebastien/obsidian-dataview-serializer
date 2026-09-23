@@ -887,9 +887,18 @@ describe('serializeQuery', () => {
 
         it('should handle non-Error exceptions', async () => {
             const mockApp = createMockApp([])
+            // A thenable that rejects with a bare string. `Promise.resolve` adopts
+            // it, so the API returns a real Promise rejected with a non-Error
+            // reason, exactly what `Promise.reject('String error')` produced.
+            // Deliberate: this test covers non-Error rejections, so the reason
+            // must stay a bare string (do not turn it into an Error).
+            const rejectsWithString = {
+                then: (_onFulfilled: unknown, onRejected: (reason: unknown) => void): void => {
+                    onRejected('String error')
+                }
+            }
             const mockApi = {
-                // eslint-disable-next-line @typescript-eslint/prefer-promise-reject-errors -- rejecting with a non-Error is the whole point of this test
-                tryQueryMarkdown: mock(() => Promise.reject('String error'))
+                tryQueryMarkdown: mock(() => Promise.resolve(rejectsWithString))
             } as unknown as DataviewApi
 
             const result = await serializeQuery({

@@ -1,7 +1,7 @@
 import { describe, expect, it, mock } from 'bun:test'
 import { add, sub } from 'date-fns'
 import { DataviewSerializerPlugin } from './plugin'
-import type { TFile } from 'obsidian'
+import { TFile } from 'obsidian'
 
 /**
  * Harness for `shouldFileBeIgnored`.
@@ -40,7 +40,8 @@ const createPlugin = (options: HarnessOptions = {}) => {
 const createFile = (path: string): TFile => {
     const name = path.split('/').pop() ?? path
     const extension = name.includes('.') ? name.split('.').pop()! : ''
-    return { path, name, extension } as TFile
+    // A real instance of the (mocked) class, so `instanceof TFile` holds
+    return Object.assign(new TFile(), { path, name, extension })
 }
 
 describe('DataviewSerializerPlugin.shouldFileBeIgnored', () => {
@@ -193,7 +194,7 @@ const createWriter = (initialContent: string) => {
     return { plugin, state, process }
 }
 
-const writerFile = { path: 'Journal/2026-09-06.md' } as TFile
+const writerFile = Object.assign(new TFile(), { path: 'Journal/2026-09-06.md' })
 
 describe('DataviewSerializerPlugin.saveSerializedContent', () => {
     it('should write when the note still holds the content the queries were serialized from', async () => {

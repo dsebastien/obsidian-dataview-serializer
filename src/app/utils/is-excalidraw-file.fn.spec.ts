@@ -1,21 +1,21 @@
 import { describe, expect, it, beforeEach, afterEach } from 'bun:test'
 import { isExcalidrawFile } from './is-excalidraw-file.fn'
-import type { TFile } from 'obsidian'
+import { TFile } from 'obsidian'
 
 describe('isExcalidrawFile', () => {
     const mockTFile = (name: string): TFile =>
-        ({
+        Object.assign(new TFile(), {
             name,
             path: `folder/${name}`,
             basename: name.replace(/\.[^.]+$/, ''),
             extension: name.split('.').pop() || ''
-        }) as TFile
+        })
 
     describe('when ExcalidrawAutomate is not defined', () => {
         beforeEach(() => {
             // Ensure ExcalidrawAutomate is undefined
-            if ('ExcalidrawAutomate' in globalThis) {
-                delete (globalThis as Record<string, unknown>)['ExcalidrawAutomate']
+            if ('ExcalidrawAutomate' in self) {
+                delete (self as unknown as Record<string, unknown>)['ExcalidrawAutomate']
             }
         })
 
@@ -33,11 +33,12 @@ describe('isExcalidrawFile', () => {
             mockExcalidrawAutomate = {
                 isExcalidrawFile: (file: TFile) => file.name.includes('.excalidraw.')
             }
-            ;(globalThis as Record<string, unknown>)['ExcalidrawAutomate'] = mockExcalidrawAutomate
+            ;(self as unknown as Record<string, unknown>)['ExcalidrawAutomate'] =
+                mockExcalidrawAutomate
         })
 
         afterEach(() => {
-            delete (globalThis as Record<string, unknown>)['ExcalidrawAutomate']
+            delete (self as unknown as Record<string, unknown>)['ExcalidrawAutomate']
         })
 
         it('should return true for excalidraw files', () => {
@@ -54,13 +55,13 @@ describe('isExcalidrawFile', () => {
 
     describe('when ExcalidrawAutomate.isExcalidrawFile returns custom logic', () => {
         beforeEach(() => {
-            ;(globalThis as Record<string, unknown>)['ExcalidrawAutomate'] = {
+            ;(self as unknown as Record<string, unknown>)['ExcalidrawAutomate'] = {
                 isExcalidrawFile: (file: TFile) => file.extension === 'excalidraw'
             }
         })
 
         afterEach(() => {
-            delete (globalThis as Record<string, unknown>)['ExcalidrawAutomate']
+            delete (self as unknown as Record<string, unknown>)['ExcalidrawAutomate']
         })
 
         it('should delegate to ExcalidrawAutomate.isExcalidrawFile', () => {

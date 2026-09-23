@@ -60,13 +60,13 @@ function createMockDataviewApi(): DataviewApi {
         compare: mock(() => 0),
         equal: mock(() => true),
         evaluate: mock(() => ({ successful: true, value: '' })),
-        query: mock(async () => ok({ values: [] } as unknown as QueryResult)),
-        queryMarkdown: mock(async () => ok('')),
-        tryQuery: mock(async () => ok({ values: [] })),
-        tryQueryMarkdown: mock(async () => ''),
+        query: mock(() => Promise.resolve(ok({ values: [] } as unknown as QueryResult))),
+        queryMarkdown: mock(() => Promise.resolve(ok(''))),
+        tryQuery: mock(() => Promise.resolve(ok({ values: [] }))),
+        tryQueryMarkdown: mock(() => Promise.resolve('')),
         io: {
-            load: mock(async () => ''),
-            csv: mock(async () => []),
+            load: mock(() => Promise.resolve('')),
+            csv: mock(() => Promise.resolve([])),
             normalize: mock(() => '')
         },
         luxon: {},
@@ -292,7 +292,7 @@ describe('createDataviewJSProxy', () => {
         test('should capture query output via queryMarkdown', async () => {
             const mockApi = createMockDataviewApi()
             // Mock queryMarkdown to return some markdown
-            mockApi.queryMarkdown = async () => ok('- Item 1\n- Item 2')
+            mockApi.queryMarkdown = () => Promise.resolve(ok('- Item 1\n- Item 2'))
 
             const { proxy, getMarkdown } = createDataviewJSProxy(mockApi, 'test.md')
 
@@ -308,7 +308,7 @@ describe('createDataviewJSProxy', () => {
             // wrapper used to be pushed straight into the captured output, so a
             // serialized dv.execute() rendered the object instead of the query.
             const mockApi = createMockDataviewApi()
-            mockApi.queryMarkdown = async () => ok('- Real output')
+            mockApi.queryMarkdown = () => Promise.resolve(ok('- Real output'))
 
             const { proxy, getMarkdown } = createDataviewJSProxy(mockApi, 'test.md')
             await (proxy['execute'] as (q: string) => Promise<void>)('LIST')
@@ -325,7 +325,7 @@ describe('createDataviewJSProxy', () => {
             // the output, so an empty result erases the query definition and
             // everything it had previously produced, irreversibly.
             const mockApi = createMockDataviewApi()
-            mockApi.queryMarkdown = async () => fail<string>('no such field: bogus')
+            mockApi.queryMarkdown = () => Promise.resolve(fail<string>('no such field: bogus'))
 
             const { proxy, getMarkdown } = createDataviewJSProxy(mockApi, 'test.md')
             await expectRejection(
@@ -338,9 +338,9 @@ describe('createDataviewJSProxy', () => {
         test('should pass origin file to queryMarkdown', async () => {
             const mockApi = createMockDataviewApi()
             let capturedFile: string | undefined
-            mockApi.queryMarkdown = async (_query: string, file?: string) => {
+            mockApi.queryMarkdown = (_query: string, file?: string) => {
                 capturedFile = file
-                return ok('')
+                return Promise.resolve(ok(''))
             }
 
             const { proxy } = createDataviewJSProxy(mockApi, 'notes/my-file.md')
@@ -373,27 +373,31 @@ describe('createDataviewJSProxy', () => {
     describe('passthrough methods', () => {
         test('dv.pages() should call the underlying API', () => {
             const mockApi = createMockDataviewApi()
+            const pages = mock(() => [])
+            Object.assign(mockApi, { pages })
             const { proxy } = createDataviewJSProxy(mockApi, 'test.md')
 
             const dvPages = proxy['pages'] as (query?: string) => unknown
             dvPages('#project')
 
-            expect(mockApi.pages).toHaveBeenCalledWith('#project', 'test.md')
+            expect(pages).toHaveBeenCalledWith('#project', 'test.md')
         })
 
         test('dv.current() should call dv.page with origin file', () => {
             const mockApi = createMockDataviewApi()
+            const page = mock(() => undefined)
+            Object.assign(mockApi, { page })
             const { proxy } = createDataviewJSProxy(mockApi, 'notes/test.md')
 
             const dvCurrent = proxy['current'] as () => unknown
             dvCurrent()
 
-            expect(mockApi.page).toHaveBeenCalledWith('notes/test.md')
+            expect(page).toHaveBeenCalledWith('notes/test.md')
         })
 
         test('dv.fileLink() should return a Link object', () => {
             const mockApi = createMockDataviewApi()
-            mockApi.fileLink = mock(
+            const fileLink = mock(
                 () =>
                     ({
                         path: '2021-08-08',
@@ -402,6 +406,7 @@ describe('createDataviewJSProxy', () => {
                         toString: () => '[[2021-08-08]]'
                     }) as unknown as ReturnType<DataviewApi['fileLink']>
             )
+            mockApi.fileLink = fileLink
 
             const { proxy } = createDataviewJSProxy(mockApi, 'test.md')
 
@@ -412,13 +417,13 @@ describe('createDataviewJSProxy', () => {
             ) => unknown
             const link = dvFileLink('2021-08-08')
 
-            expect(mockApi.fileLink).toHaveBeenCalledWith('2021-08-08', undefined, undefined)
+            expect(fileLink).toHaveBeenCalledWith('2021-08-08', undefined, undefined)
             expect(link).toHaveProperty('path', '2021-08-08')
         })
 
         test('dv.sectionLink() should return a Link object', () => {
             const mockApi = createMockDataviewApi()
-            mockApi.sectionLink = mock(
+            const sectionLink = mock(
                 () =>
                     ({
                         path: 'note',
@@ -428,6 +433,7 @@ describe('createDataviewJSProxy', () => {
                         toString: () => '[[note#section]]'
                     }) as unknown as ReturnType<DataviewApi['fileLink']>
             )
+            mockApi.sectionLink = sectionLink
 
             const { proxy } = createDataviewJSProxy(mockApi, 'test.md')
 
@@ -439,18 +445,13 @@ describe('createDataviewJSProxy', () => {
             ) => unknown
             const link = dvSectionLink('note', 'section')
 
-            expect(mockApi.sectionLink).toHaveBeenCalledWith(
-                'note',
-                'section',
-                undefined,
-                undefined
-            )
+            expect(sectionLink).toHaveBeenCalledWith('note', 'section', undefined, undefined)
             expect(link).toHaveProperty('path', 'note')
         })
 
         test('dv.blockLink() should return a Link object', () => {
             const mockApi = createMockDataviewApi()
-            mockApi.blockLink = mock(
+            const blockLink = mock(
                 () =>
                     ({
                         path: 'note',
@@ -460,6 +461,7 @@ describe('createDataviewJSProxy', () => {
                         toString: () => '[[note#^block123]]'
                     }) as unknown as ReturnType<DataviewApi['fileLink']>
             )
+            mockApi.blockLink = blockLink
 
             const { proxy } = createDataviewJSProxy(mockApi, 'test.md')
 
@@ -471,7 +473,7 @@ describe('createDataviewJSProxy', () => {
             ) => unknown
             const link = dvBlockLink('note', 'block123')
 
-            expect(mockApi.blockLink).toHaveBeenCalledWith('note', 'block123', undefined, undefined)
+            expect(blockLink).toHaveBeenCalledWith('note', 'block123', undefined, undefined)
             expect(link).toHaveProperty('path', 'note')
         })
     })
@@ -607,42 +609,46 @@ describe('createDataviewJSProxy', () => {
     describe('io methods', () => {
         test('dv.io.load() should call the underlying API', async () => {
             const mockApi = createMockDataviewApi()
-            mockApi.io.load = mock(async () => 'file content')
+            const load = mock(() => Promise.resolve('file content'))
+            mockApi.io.load = load
 
             const { proxy } = createDataviewJSProxy(mockApi, 'test.md')
 
             const io = proxy['io'] as { load: (path: string) => Promise<string> }
             const result = await io.load('data.txt')
 
-            expect(mockApi.io.load).toHaveBeenCalledWith('data.txt', undefined)
+            expect(load).toHaveBeenCalledWith('data.txt', undefined)
             expect(result).toBe('file content')
         })
 
         test('dv.io.csv() should call the underlying API', async () => {
             const mockApi = createMockDataviewApi()
             const csvData = [{ name: 'Alice' }, { name: 'Bob' }]
-            // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            mockApi.io.csv = mock(async () => csvData) as any
+            // Object.assign: csvData is a plain array, not the DataArray the real
+            // signature promises; the proxy only passes the value through.
+            const csv = mock(() => Promise.resolve(csvData))
+            Object.assign(mockApi.io, { csv })
 
             const { proxy } = createDataviewJSProxy(mockApi, 'test.md')
 
             const io = proxy['io'] as { csv: (path: string) => Promise<unknown[]> }
             const result = await io.csv('data.csv')
 
-            expect(mockApi.io.csv).toHaveBeenCalledWith('data.csv', undefined)
+            expect(csv).toHaveBeenCalledWith('data.csv', undefined)
             expect(result).toEqual(csvData)
         })
 
         test('dv.io.normalize() should call the underlying API', () => {
             const mockApi = createMockDataviewApi()
-            mockApi.io.normalize = mock(() => '/absolute/path/file.md')
+            const normalize = mock(() => '/absolute/path/file.md')
+            mockApi.io.normalize = normalize
 
             const { proxy } = createDataviewJSProxy(mockApi, 'test.md')
 
             const io = proxy['io'] as { normalize: (path: string) => string }
             const result = io.normalize('relative/file.md')
 
-            expect(mockApi.io.normalize).toHaveBeenCalledWith('relative/file.md', undefined)
+            expect(normalize).toHaveBeenCalledWith('relative/file.md', undefined)
             expect(result).toBe('/absolute/path/file.md')
         })
     })
@@ -651,55 +657,59 @@ describe('createDataviewJSProxy', () => {
         test('dv.array() should call the underlying API', () => {
             const mockApi = createMockDataviewApi()
             const mockArray = { values: [1, 2, 3] }
-            // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            mockApi.array = mock(() => mockArray) as any
+            // Object.assign: mockArray stands in for a DataArray by identity only
+            const array = mock(() => mockArray)
+            Object.assign(mockApi, { array })
 
             const { proxy } = createDataviewJSProxy(mockApi, 'test.md')
 
             const dvArray = proxy['array'] as (raw: unknown) => unknown
             const result = dvArray([1, 2, 3])
 
-            expect(mockApi.array).toHaveBeenCalledWith([1, 2, 3])
+            expect(array).toHaveBeenCalledWith([1, 2, 3])
             expect(result).toBe(mockArray)
         })
 
         test('dv.isArray() should call the underlying API', () => {
             const mockApi = createMockDataviewApi()
-            // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            mockApi.isArray = mock(() => true) as any
+            // Object.assign: the real signature is a type guard, the mock is not
+            const isArray = mock(() => true)
+            Object.assign(mockApi, { isArray })
 
             const { proxy } = createDataviewJSProxy(mockApi, 'test.md')
 
             const dvIsArray = proxy['isArray'] as (raw: unknown) => boolean
             const result = dvIsArray([1, 2, 3])
 
-            expect(mockApi.isArray).toHaveBeenCalledWith([1, 2, 3])
+            expect(isArray).toHaveBeenCalledWith([1, 2, 3])
             expect(result).toBe(true)
         })
 
         test('dv.compare() should call the underlying API', () => {
             const mockApi = createMockDataviewApi()
-            mockApi.compare = mock(() => -1)
+            const compare = mock(() => -1)
+            mockApi.compare = compare
 
             const { proxy } = createDataviewJSProxy(mockApi, 'test.md')
 
             const dvCompare = proxy['compare'] as (a: unknown, b: unknown) => number
             const result = dvCompare('a', 'b')
 
-            expect(mockApi.compare).toHaveBeenCalledWith('a', 'b')
+            expect(compare).toHaveBeenCalledWith('a', 'b')
             expect(result).toBe(-1)
         })
 
         test('dv.equal() should call the underlying API', () => {
             const mockApi = createMockDataviewApi()
-            mockApi.equal = mock(() => true)
+            const equal = mock(() => true)
+            mockApi.equal = equal
 
             const { proxy } = createDataviewJSProxy(mockApi, 'test.md')
 
             const dvEqual = proxy['equal'] as (a: unknown, b: unknown) => boolean
             const result = dvEqual('a', 'a')
 
-            expect(mockApi.equal).toHaveBeenCalledWith('a', 'a')
+            expect(equal).toHaveBeenCalledWith('a', 'a')
             expect(result).toBe(true)
         })
     })
@@ -707,7 +717,8 @@ describe('createDataviewJSProxy', () => {
     describe('query methods', () => {
         test('dv.queryMarkdown() should call the underlying API with origin file', async () => {
             const mockApi = createMockDataviewApi()
-            mockApi.queryMarkdown = mock(async () => ok('- Result 1\n- Result 2'))
+            const queryMarkdown = mock(() => Promise.resolve(ok('- Result 1\n- Result 2')))
+            mockApi.queryMarkdown = queryMarkdown
 
             const { proxy } = createDataviewJSProxy(mockApi, 'notes/test.md')
 
@@ -719,7 +730,7 @@ describe('createDataviewJSProxy', () => {
             ) => Promise<Result<string, string>>
             const result = await dvQueryMarkdown('LIST FROM #tag')
 
-            expect(mockApi.queryMarkdown).toHaveBeenCalledWith('LIST FROM #tag', 'notes/test.md')
+            expect(queryMarkdown).toHaveBeenCalledWith('LIST FROM #tag', 'notes/test.md')
             expect(result.successful).toBe(true)
             expect(result).toEqual(ok('- Result 1\n- Result 2'))
         })
@@ -727,14 +738,15 @@ describe('createDataviewJSProxy', () => {
         test('dv.query() should call the underlying API', async () => {
             const mockApi = createMockDataviewApi()
             const queryResult = ok({ values: ['a', 'b'] } as unknown as QueryResult)
-            mockApi.query = mock(async () => queryResult)
+            const query = mock(() => Promise.resolve(queryResult))
+            mockApi.query = query
 
             const { proxy } = createDataviewJSProxy(mockApi, 'test.md')
 
             const dvQuery = proxy['query'] as (query: string) => Promise<unknown>
             const result = await dvQuery('LIST')
 
-            expect(mockApi.query).toHaveBeenCalledWith('LIST', 'test.md')
+            expect(query).toHaveBeenCalledWith('LIST', 'test.md')
             expect(result).toEqual(queryResult)
         })
     })
@@ -742,20 +754,22 @@ describe('createDataviewJSProxy', () => {
     describe('markdown generation methods', () => {
         test('dv.markdownList() should call the underlying API', () => {
             const mockApi = createMockDataviewApi()
-            mockApi.markdownList = mock(() => '- a\n- b')
+            const markdownList = mock(() => '- a\n- b')
+            mockApi.markdownList = markdownList
 
             const { proxy } = createDataviewJSProxy(mockApi, 'test.md')
 
             const dvMarkdownList = proxy['markdownList'] as (values: unknown[]) => string
             const result = dvMarkdownList(['a', 'b'])
 
-            expect(mockApi.markdownList).toHaveBeenCalledWith(['a', 'b'])
+            expect(markdownList).toHaveBeenCalledWith(['a', 'b'])
             expect(result).toBe('- a\n- b')
         })
 
         test('dv.markdownTable() should call the underlying API', () => {
             const mockApi = createMockDataviewApi()
-            mockApi.markdownTable = mock(() => '| A | B |\n|---|---|\n| 1 | 2 |')
+            const markdownTable = mock(() => '| A | B |\n|---|---|\n| 1 | 2 |')
+            mockApi.markdownTable = markdownTable
 
             const { proxy } = createDataviewJSProxy(mockApi, 'test.md')
 
@@ -765,7 +779,7 @@ describe('createDataviewJSProxy', () => {
             ) => string
             const result = dvMarkdownTable(['A', 'B'], [['1', '2']])
 
-            expect(mockApi.markdownTable).toHaveBeenCalledWith(['A', 'B'], [['1', '2']])
+            expect(markdownTable).toHaveBeenCalledWith(['A', 'B'], [['1', '2']])
             expect(result).toBe('| A | B |\n|---|---|\n| 1 | 2 |')
         })
     })

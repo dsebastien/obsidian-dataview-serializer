@@ -9,24 +9,26 @@ import type { DataviewApi } from 'obsidian-dataview/lib/api/plugin-api'
  * the next tick, so the abandonment path can be exercised without a 5s wait.
  */
 let fireTimeoutsImmediately = false
-const originalWindow = (globalThis as { window?: unknown }).window
+// `self` is Bun's global object (the same object as `globalThis`)
+const globalScope = self as unknown as { window?: unknown; __dvProbe?: unknown }
+const originalWindow = globalScope.window
 
 beforeAll(() => {
-    ;(globalThis as { window?: unknown }).window = {
+    globalScope.window = {
         setTimeout: (handler: () => void, timeout?: number): number =>
-            setTimeout(handler, fireTimeoutsImmediately ? 0 : timeout) as unknown as number,
-        clearTimeout: (id?: number): void => clearTimeout(id)
+            self.setTimeout(handler, fireTimeoutsImmediately ? 0 : timeout),
+        clearTimeout: (id?: number): void => self.clearTimeout(id)
     }
 })
 
 const settleAbandonedExecutions = (): Promise<void> =>
-    new Promise((resolve) => setTimeout(resolve, 80))
+    new Promise<void>((resolve) => self.setTimeout(resolve, 80))
 
 afterAll(async () => {
     // Abandoned executions keep running; let them finish touching the stub
     // before it is removed, or their late clearTimeout escapes this file.
     await settleAbandonedExecutions()
-    ;(globalThis as { window?: unknown }).window = originalWindow
+    globalScope.window = originalWindow
 })
 
 const createMockDataviewApi = (): DataviewApi =>
@@ -123,7 +125,7 @@ describe('serializeDataviewJSQuery', () => {
 
         it('should make the abandoned code throw on its next dv access', async () => {
             const probe: { accessed?: boolean; threw?: boolean; message?: string } = {}
-            ;(globalThis as { __dvProbe?: unknown }).__dvProbe = probe
+            globalScope.__dvProbe = probe
 
             await serializeDataviewJSQuery({
                 jsCode: `
@@ -149,12 +151,12 @@ describe('serializeDataviewJSQuery', () => {
             expect(probe.threw).toBe(true)
             expect(probe.message).toContain('timed out')
 
-            delete (globalThis as { __dvProbe?: unknown }).__dvProbe
+            delete globalScope.__dvProbe
         })
 
         it('should make a method captured before the timeout throw after it', async () => {
             const probe: { threw?: boolean; message?: string } = {}
-            ;(globalThis as { __dvProbe?: unknown }).__dvProbe = probe
+            globalScope.__dvProbe = probe
 
             await serializeDataviewJSQuery({
                 jsCode: `
@@ -178,12 +180,12 @@ describe('serializeDataviewJSQuery', () => {
             expect(probe.threw).toBe(true)
             expect(probe.message).toContain('timed out')
 
-            delete (globalThis as { __dvProbe?: unknown }).__dvProbe
+            delete globalScope.__dvProbe
         })
 
         it('should make a nested object captured before the timeout throw after it', async () => {
             const probe: { threw?: boolean; message?: string } = {}
-            ;(globalThis as { __dvProbe?: unknown }).__dvProbe = probe
+            globalScope.__dvProbe = probe
 
             await serializeDataviewJSQuery({
                 jsCode: `
@@ -207,7 +209,7 @@ describe('serializeDataviewJSQuery', () => {
             expect(probe.threw).toBe(true)
             expect(probe.message).toContain('timed out')
 
-            delete (globalThis as { __dvProbe?: unknown }).__dvProbe
+            delete globalScope.__dvProbe
         })
 
         it('should not capture output produced after abandonment', async () => {

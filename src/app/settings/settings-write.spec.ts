@@ -20,7 +20,7 @@ async function settle(): Promise<void> {
     for (let i = 0; i < 20; i += 1) {
         await Promise.resolve()
     }
-    await new Promise((resolve) => setTimeout(resolve, 10))
+    await new Promise<void>((resolve) => self.setTimeout(resolve, 10))
 }
 
 async function expectRejection(promise: Promise<unknown>, contains: string): Promise<void> {
@@ -152,7 +152,7 @@ describe('folder list writes', () => {
      * built; nothing here asserts on the fragment.
      */
     function withDomStubs<T>(fn: () => T): T {
-        const g = globalThis as unknown as Record<string, unknown>
+        const g = self as unknown as Record<string, unknown>
         const had = 'DocumentFragment' in g
         const previous = g['DocumentFragment']
         const node = (): Record<string, unknown> => {

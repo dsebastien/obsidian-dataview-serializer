@@ -1,6 +1,7 @@
 import { beforeAll, describe, expect, it, mock } from 'bun:test'
-import { TFolder } from 'obsidian'
-import type { App } from 'obsidian'
+import type { Mock } from 'bun:test'
+import { TFile, TFolder } from 'obsidian'
+import type { App, TAbstractFile } from 'obsidian'
 import { FolderSuggest } from './folder-suggest'
 
 // Polyfill for Obsidian's String.contains() method
@@ -31,7 +32,7 @@ const createFolder = (path: string): TFolder => {
  */
 const createSuggest = (
     paths: string[],
-    getAllLoadedFiles = mock(() => paths.map(createFolder))
+    getAllLoadedFiles: Mock<() => TAbstractFile[]> = mock(() => paths.map(createFolder))
 ): { suggest: FolderSuggest; getAllLoadedFiles: ReturnType<typeof mock> } => {
     const inputEl = { value: '' } as HTMLInputElement
     const app = { vault: { getAllLoadedFiles } } as unknown as App
@@ -64,8 +65,11 @@ describe('FolderSuggest', () => {
         })
 
         it('should ignore vault entries that are not folders', () => {
-            // A plain object stands in for a TFile: not a TFolder at runtime
-            const files = [createFolder('folder'), { path: 'note.md' } as unknown as TFolder]
+            // A real (mocked) TFile instance: in the vault listing, not a TFolder at runtime
+            const files: TAbstractFile[] = [
+                createFolder('folder'),
+                Object.assign(new TFile(), { path: 'note.md' })
+            ]
             const { suggest } = createSuggest(
                 [],
                 mock(() => files)
