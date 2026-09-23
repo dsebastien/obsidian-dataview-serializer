@@ -66,6 +66,13 @@ while [ $# -gt 0 ]; do
             ;;
         --version=*)
             VERSION="${1#*=}"
+            # An empty value must fail loudly, exactly like `--version ""`:
+            # in CI, an unset variable expanding to --version= would otherwise
+            # silently fall back to the calculated version.
+            if [ -z "$VERSION" ]; then
+                print_error "Error: --version needs a value (e.g. --version=2.0.0)"
+                exit 1
+            fi
             shift
             ;;
         --yes|-y)
@@ -122,15 +129,21 @@ if [ -n "$(git status --porcelain)" ]; then
     exit 1
 fi
 
-# Pull latest changes
-print_step "Pulling latest changes from origin..."
-git pull origin "$CURRENT_BRANCH"
+# Pull latest changes. Skipped under --dry-run: a documented preview must not
+# mutate the checkout (a pull can fast-forward or merge the branch). The
+# calculated version may therefore be stale in a dry run if origin is ahead.
+if [ "$DRY_RUN" = true ]; then
+    print_warning "--dry-run: skipping git pull (preview must not mutate the checkout)."
+else
+    print_step "Pulling latest changes from origin..."
+    git pull origin "$CURRENT_BRANCH"
 
-# Check if git working directory is still clean after pull
-if [ -n "$(git status --porcelain)" ]; then
-    print_error "Error: Git working directory is not clean after pulling. Please resolve conflicts or issues first."
-    git status
-    exit 1
+    # Check if git working directory is still clean after pull
+    if [ -n "$(git status --porcelain)" ]; then
+        print_error "Error: Git working directory is not clean after pulling. Please resolve conflicts or issues first."
+        git status
+        exit 1
+    fi
 fi
 
 # Calculate suggested next version based on conventional commits
@@ -199,7 +212,7 @@ echo ""
 
 if [ "$DRY_RUN" = true ]; then
     print_warning "--dry-run: stopping here. Nothing pushed, no workflow dispatched."
-    print_info "Would have run: gh workflow run release.yml -f version=$VERSION"
+    print_info "Would have run: gh workflow run release.yml --ref $CURRENT_BRANCH -f version=$VERSION"
     exit 0
 fi
 
@@ -219,7 +232,10 @@ git push origin "$CURRENT_BRANCH"
 
 # Trigger GitHub workflow
 print_step "Triggering release workflow on GitHub..."
-gh workflow run release.yml -f version="$VERSION"
+# Dispatch at the branch we just pushed: without --ref, gh runs the workflow
+# from the remote default branch, which can release different code than the
+# branch this script validated and pushed.
+gh workflow run release.yml --ref "$CURRENT_BRANCH" -f version="$VERSION"
 
 echo ""
 print_info "✓ Release workflow triggered successfully!"
