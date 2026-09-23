@@ -2,6 +2,15 @@
 
 All notable changes to this project will be documented in this file.
 
+## [3.1.3](https://github.com/dsebastien/obsidian-dataview-serializer/compare/3.1.2...3.1.3) (2026-09-23)
+
+### Bug Fixes
+
+* **build:** exclude bun-types alongside @types/bun from the release-age gate ([380d8ae](https://github.com/dsebastien/obsidian-dataview-serializer/commit/380d8ae3c1b05f8149e0ddf662c3eae88c5fa102))
+* **build:** harden the release path from the template ([0c83d1e](https://github.com/dsebastien/obsidian-dataview-serializer/commit/0c83d1ebdf3d90a870c48bc0cd8c597337bad629))
+* **build:** rebuild versions.json from the published releases ([c8282f8](https://github.com/dsebastien/obsidian-dataview-serializer/commit/c8282f8cb6c990be8b56151ee2df0a75832afb57))
+* **plugin:** rename the insert query block command without losing hotkeys, and clear the source lint findings ([11bb09b](https://github.com/dsebastien/obsidian-dataview-serializer/commit/11bb09b21d6f4d798c7e190f93ad4367ad95ef19))
+
 ## [3.1.2](https://github.com/dsebastien/obsidian-dataview-serializer/compare/3.1.1...3.1.2) (2026-09-06)
 
 ## [3.1.1](https://github.com/dsebastien/obsidian-dataview-serializer/compare/3.1.0...3.1.1) (2026-09-06)
@@ -313,6 +322,7 @@ six command ids unchanged, and data.json byte-identical afterwards.
 ## [1.0.2](https://github.com/dsebastien/obsidian-dataview-serializer/compare/1.0.1...1.0.2) (2024-05-14)
 ## [1.0.1](https://github.com/dsebastien/obsidian-dataview-serializer/compare/1.0.0...1.0.1) (2024-05-14)
 ## 1.0.0 (2024-05-13)
+
 
 
 

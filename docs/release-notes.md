@@ -1,5 +1,14 @@
 # Release Notes
 
+## 3.1.3 (2026-09-23)
+
+### Bug Fixes
+
+* **build:** exclude bun-types alongside @types/bun from the release-age gate
+* **build:** harden the release path from the template
+* **build:** rebuild versions.json from the published releases
+* **plugin:** rename the insert query block command without losing hotkeys, and clear the source lint findings
+
 ## 3.1.2 (2026-09-06)
 
 ## 3.1.1 (2026-09-06)
