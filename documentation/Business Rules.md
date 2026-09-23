@@ -16,7 +16,7 @@ Truthy means: boolean `true`, non-zero numbers, or any non-empty string that is 
 
 The exact key is defined by `IGNORE_FRONTMATTER_KEY` in `src/app/constants.ts`. Underscores are used (not dashes) to keep the key compatible with Dataview field-access syntax (`file.dataview_serializer_ignore`).
 
-Conversion and removal commands (`convert-dataview-query-at-cursor`, `convert-all-dataview-queries-in-file`, `remove-all-queries-in-current-file`, `insert-dataview-serializer-block`) are NOT subject to this rule: they only manipulate marker syntax, they do not run Dataview queries.
+Conversion and removal commands (`convert-dataview-query-at-cursor`, `convert-all-dataview-queries-in-file`, `remove-all-queries-in-current-file`, `insert-query-block`) are NOT subject to this rule: they only manipulate marker syntax, they do not run Dataview queries.
 
 ## Device-local disable flag
 

@@ -1,13 +1,14 @@
 import { describe, expect, it, spyOn, beforeEach, afterEach } from 'bun:test'
+import type { Mock } from 'bun:test'
 import { log, LOG_PREFIX, LOG_SEPARATOR, setDebugMode, isDebugModeEnabled } from './log'
 
 describe('log', () => {
     let consoleSpy: {
-        log: ReturnType<typeof spyOn>
-        debug: ReturnType<typeof spyOn>
-        info: ReturnType<typeof spyOn>
-        warn: ReturnType<typeof spyOn>
-        error: ReturnType<typeof spyOn>
+        log: Mock<Console['log']>
+        debug: Mock<Console['debug']>
+        info: Mock<Console['info']>
+        warn: Mock<Console['warn']>
+        error: Mock<Console['error']>
     }
 
     beforeEach(() => {
@@ -87,9 +88,9 @@ describe('log', () => {
             expect(consoleSpy.debug).toHaveBeenCalledWith(`${LOG_PREFIX} debug message`)
         })
 
-        it('should log info messages to console.info', () => {
+        it('should log info messages to console.debug (Obsidian allows debug, warn and error only)', () => {
             log('info message', 'info')
-            expect(consoleSpy.info).toHaveBeenCalledWith(`${LOG_PREFIX} info message`)
+            expect(consoleSpy.debug).toHaveBeenCalledWith(`${LOG_PREFIX} info message`)
         })
 
         it('should log warn messages to console.warn', () => {
@@ -102,15 +103,15 @@ describe('log', () => {
             expect(consoleSpy.error).toHaveBeenCalledWith(`${LOG_PREFIX} error message`)
         })
 
-        it('should log to console.log when no level is given', () => {
+        it('should log to console.debug when no level is given', () => {
             log('plain message')
-            expect(consoleSpy.log).toHaveBeenCalledWith(`${LOG_PREFIX} plain message`)
+            expect(consoleSpy.debug).toHaveBeenCalledWith(`${LOG_PREFIX} plain message`)
         })
 
         it('should forward additional data to the console', () => {
             const data = { key: 'value' }
             log('message', 'info', data)
-            expect(consoleSpy.info).toHaveBeenCalledWith(`${LOG_PREFIX} message`, data)
+            expect(consoleSpy.debug).toHaveBeenCalledWith(`${LOG_PREFIX} message`, data)
         })
 
         it('should handle empty message without throwing', () => {

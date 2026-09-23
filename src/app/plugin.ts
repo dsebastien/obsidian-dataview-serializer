@@ -1,3 +1,4 @@
+import { migrateCommandReferences, type AppLike } from './utils/migrate-command-references.fn'
 import { registerWhatsNewView } from './whats-new'
 import { App, debounce, Notice, Plugin, TAbstractFile, TFile } from 'obsidian'
 import type { EventRef } from 'obsidian'
@@ -89,6 +90,10 @@ import {
 } from './utils/find-dataviewjs-queries.fn'
 import { serializeDataviewJSQuery } from './utils/serialize-dataviewjs-query.fn'
 import { isDisabledOnDevice, setDisabledOnDevice } from './utils/device-disabled'
+
+/** The insert query block command; it used to repeat the plugin id. */
+const INSERT_QUERY_BLOCK_COMMAND_ID = 'insert-query-block'
+const LEGACY_INSERT_QUERY_BLOCK_COMMAND_ID = 'insert-dataview-serializer-block'
 
 /**
  * Maximum number of error notifications to show during batch operations
@@ -277,10 +282,13 @@ export class DataviewSerializerPlugin extends Plugin {
     /**
      * Executed as soon as the plugin loads
      */
-    override async onload() {
+    override onload(): void {
         // Must run before anything can call saveData (fresh-install detection)
         registerWhatsNewView(this)
         log('Initializing', 'debug')
+        this.app.workspace.onLayoutReady(() => {
+            void this.moveRenamedCommandReferences()
+        })
 
         // Wait for layout to be ready before checking for Dataview
         // This ensures Dataview has had a chance to initialize first
@@ -439,9 +447,9 @@ export class DataviewSerializerPlugin extends Plugin {
 
         // Add command to insert dataview serializer block
         this.addCommand({
-            // The id keeps its plugin-name prefix on purpose; see the
-            // no-plugin-id-in-command-id exemption in eslint.config.ts.
-            id: 'insert-dataview-serializer-block',
+            // Renamed from 'insert-dataview-serializer-block' (it repeated the
+            // plugin id); onload moves hotkeys, toolbar and pinned entries from the old id.
+            id: INSERT_QUERY_BLOCK_COMMAND_ID,
             name: 'Insert query block',
             editorCallback: (editor) => {
                 if (this.blockedByDeviceDisable()) {
@@ -479,7 +487,7 @@ export class DataviewSerializerPlugin extends Plugin {
         this.addCommand({
             id: 'convert-dataview-query-at-cursor',
             name: 'Convert Dataview query at cursor to serialized format',
-            editorCallback: async (editor) => {
+            editorCallback: (editor) => {
                 if (this.blockedByDeviceDisable()) {
                     return
                 }
@@ -561,7 +569,7 @@ export class DataviewSerializerPlugin extends Plugin {
         this.addCommand({
             id: 'convert-all-dataview-queries-in-file',
             name: 'Convert all Dataview queries in current file to serialized format',
-            editorCallback: async (editor) => {
+            editorCallback: (editor) => {
                 if (this.blockedByDeviceDisable()) {
                     return
                 }
@@ -879,6 +887,29 @@ export class DataviewSerializerPlugin extends Plugin {
     /**
      * Add the event handlers
      */
+    /**
+     * Moves what users attached to a renamed command (custom hotkeys, the
+     * mobile toolbar, pinned palette commands) from its old full id to its new
+     * one, once. Obsidian keys all three by the full command id, so without
+     * this a rename silently drops them.
+     */
+    private async moveRenamedCommandReferences(): Promise<void> {
+        const pluginId = this.manifest.id
+        try {
+            const moved = await migrateCommandReferences(
+                this.app as unknown as AppLike,
+                `${pluginId}:${LEGACY_INSERT_QUERY_BLOCK_COMMAND_ID}`,
+                `${pluginId}:${INSERT_QUERY_BLOCK_COMMAND_ID}`
+            )
+            if (moved.hotkeys || moved.mobileToolbar || moved.pinned) {
+                log('Moved references to the renamed insert query block command', 'info', moved)
+            }
+        } catch (error) {
+            // Internal APIs; never let them break loading
+            log('Could not move references to the insert query block command', 'warn', error)
+        }
+    }
+
     setupEventHandlers() {
         // Only register if not already registered
         if (this.createEventRef || this.modifyEventRef || this.renameEventRef) {
@@ -887,7 +918,7 @@ export class DataviewSerializerPlugin extends Plugin {
         }
 
         // Register events after layout is built to avoid initial wave of 'create' events
-        this.app.workspace.onLayoutReady(async () => {
+        this.app.workspace.onLayoutReady(() => {
             this.createEventRef = this.app.vault.on('create', (file) => {
                 this.recentlyUpdatedFiles.add(file)
                 this.scheduleUpdate()
@@ -1223,7 +1254,7 @@ export class DataviewSerializerPlugin extends Plugin {
             }
 
             // Process inline queries
-            updatedText = await this.processInlineQueries(
+            updatedText = this.processInlineQueries(
                 updatedText,
                 text,
                 file.path,
@@ -1345,14 +1376,14 @@ export class DataviewSerializerPlugin extends Plugin {
      * @param isManualTrigger Whether this is a manual trigger (vs automatic)
      * @returns The updated text with serialized inline queries
      */
-    private async processInlineQueries(
+    private processInlineQueries(
         updatedText: string,
         _originalText: string,
         filePath: string,
         result: FileProcessingResult,
         targetQuery?: string,
         isManualTrigger = false
-    ): Promise<string> {
+    ): string {
         const foundInlineQueries: InlineQueryWithContext[] = findInlineQueries(updatedText)
 
         if (foundInlineQueries.length === 0) {
@@ -1383,7 +1414,7 @@ export class DataviewSerializerPlugin extends Plugin {
             const inTable = isInsideTable(updatedText, startOffset)
 
             // Serialize the inline query
-            const serializationResult = await serializeInlineQuery({
+            const serializationResult = serializeInlineQuery({
                 expression,
                 originFile: filePath,
                 dataviewApi: this.dataviewApi!,

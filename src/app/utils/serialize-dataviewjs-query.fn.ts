@@ -179,13 +179,17 @@ export async function serializeDataviewJSQuery(
 
         // Create an async function from the JavaScript code
         // This allows the code to use await for async operations like dv.io.load()
-        const AsyncFunction = Object.getPrototypeOf(async function () {}).constructor
+        const AsyncFunction = (
+            Object.getPrototypeOf(async function () {}) as {
+                constructor: new (
+                    ...parameterNamesThenBody: string[]
+                ) => (dv: Record<string, unknown>) => Promise<void>
+            }
+        ).constructor
 
         // Create the function with 'dv' as the parameter
         // The code can reference 'dv' directly
-        const executeCode = new AsyncFunction('dv', jsCode) as (
-            dv: Record<string, unknown>
-        ) => Promise<void>
+        const executeCode = new AsyncFunction('dv', jsCode)
 
         // Execute the code with timeout. Once the timeout fires the execution is
         // abandoned, and the guarded proxy makes its next `dv` access throw.

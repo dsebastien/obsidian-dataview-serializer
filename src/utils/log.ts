@@ -52,7 +52,9 @@ export const log = (message: string, level?: LogLevel, ...data: unknown[]): void
             console.debug(logMessage, ...data)
             break
         case 'info':
-            console.info(logMessage, ...data)
+            // info goes to debug: Obsidian's guidelines allow only debug, warn
+            // and error, and this is all opt-in debug output anyway
+            console.debug(logMessage, ...data)
             break
         case 'warn':
             console.warn(logMessage, ...data)
@@ -61,6 +63,6 @@ export const log = (message: string, level?: LogLevel, ...data: unknown[]): void
             console.error(logMessage, ...data)
             break
         default:
-            console.log(logMessage, ...data)
+            console.debug(logMessage, ...data)
     }
 }

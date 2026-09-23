@@ -44,9 +44,9 @@ interface SerializeInlineQueryParams {
  * @param params Parameters for serialization
  * @returns Result containing the serialized content or error information
  */
-export async function serializeInlineQuery(
+export function serializeInlineQuery(
     params: SerializeInlineQueryParams
-): Promise<InlineQuerySerializationResult> {
+): InlineQuerySerializationResult {
     const { expression, originFile, dataviewApi, isTableCell = false } = params
 
     // Remove the leading = from the expression if present
