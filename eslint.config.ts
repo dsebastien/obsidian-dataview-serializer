@@ -16,10 +16,84 @@ import obsidianmd from 'eslint-plugin-obsidianmd'
 import { DEFAULT_BRANDS } from 'eslint-plugin-obsidianmd/dist/lib/rules/ui/brands.js'
 import { defineConfig } from 'eslint/config'
 
+// eslint-plugin-obsidianmd 0.4.x lowered these rules from error to warn in its
+// recommended preset. --max-warnings 0 would still fail on them, but the rule
+// floor (rules-baseline.json) guards the RESOLVED severity, and a warn is one
+// config edit away from being ignored. Keep them at error, with the preset's
+// own options, so upgrading the plugin never weakens the floor.
+const PRESET_WARNINGS_KEPT_AT_ERROR = [
+    'no-undef',
+    'no-implicit-globals',
+    'no-restricted-globals',
+    '@typescript-eslint/no-unused-expressions',
+    // Carries moment, the one restricted import the core rule cannot hold
+    // (it needs allowTypeImports); at warn, a value import of moment would
+    // sit below the floor.
+    '@typescript-eslint/no-restricted-imports',
+    '@microsoft/sdl/no-document-write',
+    '@microsoft/sdl/no-inner-html',
+    'import/no-extraneous-dependencies',
+    'obsidianmd/commands/no-command-in-command-id',
+    'obsidianmd/commands/no-command-in-command-name',
+    'obsidianmd/commands/no-default-hotkeys',
+    'obsidianmd/commands/no-plugin-id-in-command-id',
+    'obsidianmd/commands/no-plugin-name-in-command-name',
+    'obsidianmd/vault/iterate',
+    'obsidianmd/hardcoded-config-path',
+    'obsidianmd/no-tfile-tfolder-cast',
+    'obsidianmd/object-assign',
+    'obsidianmd/prefer-abstract-input-suggest',
+    'obsidianmd/validate-manifest',
+    'obsidianmd/validate-license'
+] as const
+
+/** The obsidianmd preset's own entry for a rule, or undefined. */
+const presetEntry = (rule: string): unknown => {
+    let entry: unknown
+    for (const config of obsidianmd.configs['recommended']) {
+        const value = (config as { rules?: Record<string, unknown> }).rules?.[rule]
+        if (value !== undefined) {
+            entry = value
+        }
+    }
+    return entry
+}
+
+/**
+ * The preset's rules raised to error with their options intact. A rule the
+ * preset stops configuring is skipped rather than thrown on: this config also
+ * loads in the community catalog reviewer's environment, where a throw fails
+ * the whole review. rules:check reports the vanished rule instead.
+ */
+const keptAtError = Object.fromEntries(
+    PRESET_WARNINGS_KEPT_AT_ERROR.flatMap((rule) => {
+        const entry = presetEntry(rule)
+        if (entry === undefined) {
+            return []
+        }
+        return [
+            [rule, Array.isArray(entry) ? ['error', ...(entry.slice(1) as unknown[])] : 'error']
+        ]
+    })
+)
+
+/**
+ * The preset's restricted-import list for the core rule. Entries that rely
+ * on allowTypeImports (moment) stay with the @typescript-eslint variant only:
+ * the core rule has no such option, so it would report the type-only import
+ * the message itself recommends.
+ */
+const coreRestrictedImports = (): unknown[] => {
+    const entry = presetEntry('@typescript-eslint/no-restricted-imports')
+    const paths: unknown[] = Array.isArray(entry) ? (entry.slice(1) as unknown[]) : []
+    return paths.filter(
+        (path) => !(typeof path === 'object' && path !== null && 'allowTypeImports' in path)
+    )
+}
+
 export default defineConfig([
     eslint.configs.recommended,
     ...tseslint.configs.recommended,
-    // @ts-expect-error - obsidianmd types are incomplete but the config works at runtime
     ...obsidianmd.configs['recommended'],
     eslintConfigPrettier,
     {
@@ -55,7 +129,7 @@ export default defineConfig([
             }
         },
         rules: {
-            '@typescript-eslint/no-require-imports': 'off',
+            '@typescript-eslint/no-require-imports': 'error',
             // The community-plugin reviewer treats both the rule violation
             // and any `eslint-disable @typescript-eslint/no-explicit-any` as
             // an ERROR that blocks the scorecard. Catch locally as error,
@@ -65,17 +139,48 @@ export default defineConfig([
                 'error',
                 { argsIgnorePattern: '^_', varsIgnorePattern: '^_' }
             ],
-            '@typescript-eslint/ban-ts-comment': 'off',
-            '@typescript-eslint/no-deprecated': 'off',
-            // These are too strict for dynamic plugin APIs
-            '@typescript-eslint/no-unsafe-call': 'off',
-            '@typescript-eslint/no-unsafe-member-access': 'off',
-            '@typescript-eslint/no-unsafe-assignment': 'off',
-            // Obsidian methods are dynamically added to prototypes
-            '@typescript-eslint/no-unsafe-enum-comparison': 'off',
-            'no-prototype-builtins': 'off',
-            // Allow confirm for delete confirmations
-            'no-alert': 'off',
+            // Nothing is switched off here: fix the finding, or scope a
+            // reasoned exemption to the one file that needs it and let the
+            // rule floor (rules-baseline.json) show it in review.
+            '@typescript-eslint/ban-ts-comment': 'error',
+            // Also reports Obsidian API deprecations. A replacement API may be
+            // newer than minAppVersion: check before swapping, and raise the
+            // floor (versions.json records it) only if the plugin needs it.
+            '@typescript-eslint/no-deprecated': 'error',
+            '@typescript-eslint/no-unsafe-call': 'error',
+            '@typescript-eslint/no-unsafe-member-access': 'error',
+            '@typescript-eslint/no-unsafe-assignment': 'error',
+            '@typescript-eslint/no-unsafe-enum-comparison': 'error',
+            // The preset switches both off; the core variant stays off only
+            // because @typescript-eslint/require-await replaces it.
+            '@typescript-eslint/require-await': 'error',
+            'prefer-const': 'error',
+            'no-prototype-builtins': 'error',
+            'no-alert': 'error',
+            ...keptAtError,
+            // keptAtError copies the preset's options, and 0.4.x allows short
+            // circuits and ternaries as statements. Before the upgrade both
+            // were errors; keep them errors.
+            '@typescript-eslint/no-unused-expressions': [
+                'error',
+                { allowShortCircuit: false, allowTernary: false, allowTaggedTemplates: false }
+            ],
+            // 0.4.x switched these three off in favour of replacements, which
+            // stay on: no-console -> obsidianmd/rule-custom-message,
+            // no-restricted-imports -> @typescript-eslint/no-restricted-imports,
+            // import/no-nodejs-modules -> obsidianmd/no-nodejs-modules. The
+            // originals stay on too, so the floor never records an `off`.
+            'no-console': ['error', { allow: ['warn', 'error', 'debug'] }],
+            'no-restricted-imports': ['error', ...coreRestrictedImports()],
+            // Mobile safety, so it follows the preset's own reading of the
+            // manifest: a desktop-only plugin (isDesktopOnly) may import Node
+            // modules, and the preset turns obsidianmd/no-nodejs-modules off
+            // for it. Every other plugin gets the core rule at error.
+            'import/no-nodejs-modules':
+                presetEntry('obsidianmd/no-nodejs-modules') === 'off' ? 'off' : 'error',
+            // The preset ships these two off; nothing here gets switched off.
+            'no-new-func': 'error',
+            'obsidianmd/prefer-active-doc': 'error',
             // Never disable obsidianmd/* rules here: the community catalog
             // reviewer runs its own ruleset against the git archive, so a
             // local disable only hides the finding until submission.
@@ -84,7 +189,9 @@ export default defineConfig([
                 'error',
                 {
                     brands: [
-                        ...DEFAULT_BRANDS,
+                        // 'Cursor' (the editor, a 0.4 default brand) is dropped:
+                        // here "cursor" is the editor caret in command names.
+                        ...DEFAULT_BRANDS.filter((brand) => brand !== 'Cursor'),
                         // Author and funding links. Add this plugin's own
                         // product names here; do NOT add ordinary UI words such
                         // as 'Settings' — as a brand it makes every lowercase
@@ -112,48 +219,6 @@ export default defineConfig([
                     ignoreWords: ['END']
                 }
             ]
-        }
-    },
-    {
-        // Tests are not shipped and are not scanned by the community scorecard.
-        //
-        // `unbound-method` guards against losing `this` when a method is passed
-        // around; asserting on a mock's call record (`expect(api.pages)`) is not
-        // that, and rewriting every assertion to dodge the rule would make the
-        // tests worse. `no-tfile-tfolder-cast` wants an `instanceof TFile`
-        // narrow, which is impossible in a test: a real TFile cannot be
-        // constructed outside Obsidian.
-        files: ['**/*.spec.ts'],
-        rules: {
-            '@typescript-eslint/unbound-method': 'off',
-            'obsidianmd/no-tfile-tfolder-cast': 'off'
-        }
-    },
-    {
-        // The logger is the one place console access is the point. Everywhere
-        // else `no-console` still applies, which is what keeps stray debugging
-        // out of the shipped plugin.
-        files: ['src/utils/log.ts'],
-        rules: {
-            'no-console': 'off'
-        }
-    },
-    {
-        // `insert-dataview-serializer-block` repeats the plugin id in its
-        // command id. Renaming it would silently break every hotkey users
-        // have bound to it, which costs more than a duplicated prefix in the
-        // palette, so the id stays.
-        //
-        // The exemption lives HERE rather than as an inline disable comment
-        // on the command: the community catalog's automated review treats a
-        // suppressed obsidianmd rule in source as an ERROR and fails the
-        // whole release over it ("Disabling '...' is not allowed"), which is
-        // exactly what happened to 3.0.0. A config-level decision is not a
-        // suppression comment, and the underlying finding — if their own
-        // ruleset still reports it — is a warning they can weigh.
-        files: ['src/app/plugin.ts'],
-        rules: {
-            'obsidianmd/commands/no-plugin-id-in-command-id': 'off'
         }
     }
 ])
