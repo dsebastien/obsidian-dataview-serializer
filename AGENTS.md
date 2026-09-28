@@ -615,6 +615,9 @@ export default class MyPlugin extends Plugin {
 }
 ```
 
+(Flat settings only: nested defaults going through Immer start from
+`createDefaultSettings()`, see "Persist settings" below.)
+
 **settings.ts**:
 
 ```ts
