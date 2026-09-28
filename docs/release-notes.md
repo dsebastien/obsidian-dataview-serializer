@@ -1,5 +1,12 @@
 # Release Notes
 
+## 3.1.4 (2026-09-28)
+
+### Bug Fixes
+
+* **plugin:** keep the support block from stacking on every settings refresh
+* **plugin:** lowercase the newsletter line
+
 ## 3.1.3 (2026-09-23)
 
 ### Bug Fixes

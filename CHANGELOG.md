@@ -2,6 +2,13 @@
 
 All notable changes to this project will be documented in this file.
 
+## [3.1.4](https://github.com/dsebastien/obsidian-dataview-serializer/compare/3.1.3...3.1.4) (2026-09-28)
+
+### Bug Fixes
+
+* **plugin:** keep the support block from stacking on every settings refresh ([b86ab76](https://github.com/dsebastien/obsidian-dataview-serializer/commit/b86ab765fa0f3deb5bf2085678566cb83e81019b))
+* **plugin:** lowercase the newsletter line ([c816d0e](https://github.com/dsebastien/obsidian-dataview-serializer/commit/c816d0e566254bbc36f1aae3f31176af9e1ce0be))
+
 ## [3.1.3](https://github.com/dsebastien/obsidian-dataview-serializer/compare/3.1.2...3.1.3) (2026-09-23)
 
 ### Bug Fixes
@@ -322,6 +329,7 @@ six command ids unchanged, and data.json byte-identical afterwards.
 ## [1.0.2](https://github.com/dsebastien/obsidian-dataview-serializer/compare/1.0.1...1.0.2) (2024-05-14)
 ## [1.0.1](https://github.com/dsebastien/obsidian-dataview-serializer/compare/1.0.0...1.0.1) (2024-05-14)
 ## 1.0.0 (2024-05-13)
+
 
 
 
