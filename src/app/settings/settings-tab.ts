@@ -51,7 +51,7 @@ export class SettingsTab extends PluginSettingTab {
                 // banner explains why nothing in the pane appears to work.
                 visible: (): boolean => this.plugin.isDisabledOnDevice(),
                 searchable: false,
-                render: (setting): void => {
+                render: (setting): (() => void) => {
                     setting.infoEl.remove()
                     setting.settingEl.addClass('dvs-settings-embed')
                     const banner = setting.settingEl.createDiv({
@@ -61,6 +61,9 @@ export class SettingsTab extends PluginSettingTab {
                     banner.createSpan({
                         text: ' The plugin is inert here: no automatic serialization, file events, refresh buttons, or commands. This choice is device-local and is not synced to your other devices.'
                     })
+                    // update() (folder list edits) re-runs this hook on the
+                    // SAME row and only resets its control area
+                    return () => banner.remove()
                 }
             },
             {
@@ -134,15 +137,20 @@ export class SettingsTab extends PluginSettingTab {
                     {
                         name: 'Support',
                         searchable: false,
-                        render: (setting): void => {
+                        render: (setting): (() => void) => {
                             setting.infoEl.remove()
                             // `.setting-item` is a flex ROW. The support block
                             // is a stack of full-width rows, so without this it
                             // would lay heading, buttons and badge side by side.
                             setting.settingEl.addClass('dvs-settings-embed')
-                            renderSupportSection(setting.settingEl, (el) => {
+                            // In a wrapper removed by the returned cleanup: update() re-runs
+                            // this hook on the SAME row and only resets its control area, so
+                            // content appended straight to settingEl would pile up.
+                            const blockEl = setting.settingEl.createDiv()
+                            renderSupportSection(blockEl, (el) => {
                                 this.renderBuyMeACoffeeBadge(el)
                             })
+                            return () => blockEl.remove()
                         }
                     }
                 ]

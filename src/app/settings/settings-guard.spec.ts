@@ -36,6 +36,10 @@ import { Glob, file } from 'bun'
 
 const LIST_EL = /(?<!\bthis)\.\s*listEl\b|\[\s*['"]listEl['"]\s*\]/
 const ROW_REMOVAL = /settingEl\s*[?!]?\s*\.\s*(remove|detach)\s*\(/
+// The support block drawn straight into a row: update() re-runs the hook on
+// the same row and only resets its control area, so each refresh stacks a
+// copy. It belongs in a wrapper that the hook's returned cleanup removes.
+const SUPPORT_INTO_ROW = /\w*[Ss]upportSection\s*\(\s*[\w.?!]*settingEl\s*[,)]/
 
 /** Strips comments one line at a time, so no sweep can swallow real code. */
 export const stripComments = (source: string): string =>
@@ -61,6 +65,9 @@ export const findOffenders = (source: string, label: string): string[] => {
     }
     if (ROW_REMOVAL.test(content)) {
         offenders.push(`${label}: removes the setting row`)
+    }
+    if (SUPPORT_INTO_ROW.test(content)) {
+        offenders.push(`${label}: draws the support block straight into a row`)
     }
     return offenders
 }
@@ -93,11 +100,13 @@ describe('declarative settings guard', () => {
             'function buildRow(group: SettingGroup, setting: Setting) {',
             "    group.listEl.createDiv({ text: 'invisible control' })",
             '    setting.settingEl.detach()',
+            '    renderSupportSection(setting.settingEl, (el) => badge(el))',
             '}'
         ].join('\n')
         expect(findOffenders(bad, 'bad.ts')).toEqual([
             'bad.ts: accesses a group listEl',
-            'bad.ts: removes the setting row'
+            'bad.ts: removes the setting row',
+            'bad.ts: draws the support block straight into a row'
         ])
 
         const good = [
@@ -110,6 +119,8 @@ describe('declarative settings guard', () => {
             '        this.listEl.empty()',
             '        this.setting.infoEl.remove()',
             "        this.setting.settingEl.addClass('is-wide')",
+            '        const blockEl = this.setting.settingEl.createDiv()',
+            '        renderSupportSection(blockEl, (el) => badge(el))',
             '    }',
             '}'
         ].join('\n')
