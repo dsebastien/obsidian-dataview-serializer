@@ -417,30 +417,10 @@ describe('setControlValue', () => {
     })
 })
 
-describe('loadSettings', () => {
+describe('default settings', () => {
     test('constructing the plugin never freezes the shared defaults', () => {
         const plugin = new DataviewSerializerPlugin({} as App, {} as PluginManifest)
         expect(Object.isFrozen(plugin.settings)).toBe(true)
-        expect(Object.isFrozen(DEFAULT_SETTINGS)).toBe(false)
-        expect(Object.isFrozen(DEFAULT_SETTINGS.foldersToScan)).toBe(false)
-        expect(Object.isFrozen(DEFAULT_SETTINGS.ignoredFolders)).toBe(false)
-        expect(Object.isFrozen(DEFAULT_SETTINGS.foldersToForceUpdate)).toBe(false)
-    })
-
-    test('with no stored data never freezes the shared defaults', async () => {
-        // The harness skips the constructor: its field initializer is the
-        // test above.
-        const { plugin, saveData } = createHarness()
-        Object.assign(plugin, { loadData: (): Promise<unknown> => Promise.resolve(null) })
-
-        await plugin.loadSettings()
-
-        // Immer deep-freezes what produce returns, including subtrees shared
-        // with its base: producing the no-data fallback from DEFAULT_SETTINGS
-        // froze the constant, and its arrays then landed in plugin.settings.
-        expect(plugin.settings).toEqual(DEFAULT_SETTINGS)
-        expect(plugin.settings.foldersToScan).not.toBe(DEFAULT_SETTINGS.foldersToScan)
-        expect(saveData).not.toHaveBeenCalled()
         expect(Object.isFrozen(DEFAULT_SETTINGS)).toBe(false)
         expect(Object.isFrozen(DEFAULT_SETTINGS.foldersToScan)).toBe(false)
         expect(Object.isFrozen(DEFAULT_SETTINGS.ignoredFolders)).toBe(false)
@@ -457,5 +437,27 @@ describe('loadSettings', () => {
         expect(two.ignoredFolders).toEqual([])
         expect(two.foldersToForceUpdate).toEqual([])
         expect(DEFAULT_SETTINGS.foldersToScan).toEqual([])
+    })
+})
+
+describe('loadSettings', () => {
+    test('with no stored data never freezes the shared defaults', async () => {
+        // The harness skips the constructor: its field initializer is the
+        // 'default settings' constructor test.
+        const { plugin, saveData } = createHarness()
+        Object.assign(plugin, { loadData: (): Promise<unknown> => Promise.resolve(null) })
+
+        await plugin.loadSettings()
+
+        // Immer deep-freezes what produce returns, including subtrees shared
+        // with its base: producing the no-data fallback from DEFAULT_SETTINGS
+        // froze the constant, and its arrays then landed in plugin.settings.
+        expect(plugin.settings).toEqual(DEFAULT_SETTINGS)
+        expect(plugin.settings.foldersToScan).not.toBe(DEFAULT_SETTINGS.foldersToScan)
+        expect(saveData).not.toHaveBeenCalled()
+        expect(Object.isFrozen(DEFAULT_SETTINGS)).toBe(false)
+        expect(Object.isFrozen(DEFAULT_SETTINGS.foldersToScan)).toBe(false)
+        expect(Object.isFrozen(DEFAULT_SETTINGS.ignoredFolders)).toBe(false)
+        expect(Object.isFrozen(DEFAULT_SETTINGS.foldersToForceUpdate)).toBe(false)
     })
 })
