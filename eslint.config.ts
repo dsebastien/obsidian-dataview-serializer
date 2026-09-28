@@ -207,8 +207,7 @@ export default defineConfig([
                         // with a lowercase s.
                         'Dataview',
                         // Proper nouns this plugin's settings copy names.
-                        'Jekyll',
-                        'Personal Knowledge Management'
+                        'Jekyll'
                     ],
                     // Quoted strings are UI labels, query snippets and setting
                     // names being referenced, not sentences to be recased.
