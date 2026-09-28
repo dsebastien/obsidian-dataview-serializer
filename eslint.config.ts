@@ -6,7 +6,7 @@ import obsidianmd from 'eslint-plugin-obsidianmd'
 // Passing `brands` REPLACES the plugin's default list rather than extending it
 // (see sentenceCaseUtil.js: `options?.brands ?? DEFAULT_BRANDS`). Listing only
 // this plugin's own names would therefore silently strip "Obsidian", "Git",
-// "Markdown", "GitHub", "Windows" and the other 40-odd defaults — and the
+// "Markdown", "GitHub", "Windows" and every other default — and the
 // community catalog reviewer, which runs the plugin's own ruleset, would keep
 // enforcing every one of them. The loss shows up as findings you never see
 // locally, not as findings that go away.
@@ -218,9 +218,7 @@ export default defineConfig([
                         // ways, and this plugin's own copy writes "Dataview
                         // serializer block" / "Dataview serializer queries"
                         // with a lowercase s.
-                        'Dataview',
-                        // Proper nouns this plugin's settings copy names.
-                        'Jekyll'
+                        'Dataview'
                     ],
                     // Quoted strings are UI labels, query snippets and setting
                     // names being referenced, not sentences to be recased.
