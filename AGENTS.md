@@ -349,7 +349,7 @@ override async onload() { }  // ✓ Must use 'override' keyword
 
 // 2. Uninitialized properties (TS2564)
 settings!: PluginSettings;  // ✓ Use definite assignment if initialized in onload
-settings: PluginSettings = DEFAULT_SETTINGS;  // ✓ Or initialize inline
+settings: PluginSettings = produce(createDefaultSettings(), () => {});  // ✓ Or initialize inline (never from DEFAULT_SETTINGS itself)
 
 // 3. Unchecked array access (noUncheckedIndexedAccess)
 const first = array[0];
@@ -665,6 +665,15 @@ async onload() {
   await this.saveData(this.settings);
 }
 ```
+
+`Object.assign` copies one level only: once settings are nested and go
+through Immer, start from `createDefaultSettings()` instead. Immer
+deep-freezes what `produce` returns, including every subtree it shares with
+its base, so producing from `DEFAULT_SETTINGS` (or a shallow copy of it)
+freezes the exported constant for the rest of the process. The `test`
+script runs `bun test --isolate`, which hides it, so `validate` and CI never
+see it: only the `Object.isFrozen` assertions in
+`src/app/settings/settings-write.spec.ts` do.
 
 ### Register listeners safely
 

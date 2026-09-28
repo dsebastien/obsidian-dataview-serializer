@@ -2,7 +2,7 @@ import { migrateCommandReferences, type AppLike } from './utils/migrate-command-
 import { registerWhatsNewView } from './whats-new'
 import { App, debounce, Notice, Plugin, TAbstractFile, TFile } from 'obsidian'
 import type { EventRef } from 'obsidian'
-import { DEFAULT_SETTINGS, type PluginSettings } from './types/plugin-settings.intf'
+import { createDefaultSettings, type PluginSettings } from './types/plugin-settings.intf'
 import { SettingsTab } from './settings/settings-tab'
 import { isDebugModeEnabled, log, setDebugMode } from '../utils/log'
 import { produce } from 'immer'
@@ -121,7 +121,7 @@ export class DataviewSerializerPlugin extends Plugin {
      */
     // `override` required: `Plugin.settings?: unknown` exists in the 1.13+
     // typings, so redeclaring it without the modifier is a TS4114 error.
-    override settings: PluginSettings = produce(DEFAULT_SETTINGS, () => DEFAULT_SETTINGS)
+    override settings: PluginSettings = produce(createDefaultSettings(), () => {})
     /**
      * The API of the Dataview plugin
      */
@@ -668,7 +668,7 @@ export class DataviewSerializerPlugin extends Plugin {
 
         if (!loadedSettings) {
             log('Using default settings', 'debug')
-            loadedSettings = produce(DEFAULT_SETTINGS, () => DEFAULT_SETTINGS)
+            loadedSettings = produce(createDefaultSettings(), () => {})
         }
 
         let needToSaveSettings = false
