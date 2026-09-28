@@ -62,7 +62,8 @@ export class SettingsTab extends PluginSettingTab {
                         text: ' The plugin is inert here: no automatic serialization, file events, refresh buttons, or commands. This choice is device-local and is not synced to your other devices.'
                     })
                     // update() (folder list edits) re-runs this hook on the
-                    // SAME row and only resets its control area
+                    // SAME row and only resets its name, description and
+                    // control area
                     return () => banner.remove()
                 }
             },
@@ -144,8 +145,9 @@ export class SettingsTab extends PluginSettingTab {
                             // would lay heading, buttons and badge side by side.
                             setting.settingEl.addClass('dvs-settings-embed')
                             // In a wrapper removed by the returned cleanup: update() re-runs
-                            // this hook on the SAME row and only resets its control area, so
-                            // content appended straight to settingEl would pile up.
+                            // this hook on the SAME row and only resets its name, description
+                            // and control area, so content appended straight to settingEl
+                            // would pile up.
                             const blockEl = setting.settingEl.createDiv()
                             renderSupportSection(blockEl, (el) => {
                                 this.renderBuyMeACoffeeBadge(el)
