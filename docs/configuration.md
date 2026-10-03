@@ -19,7 +19,7 @@ In the settings of the plugin, you can configure:
 
 - **Show refresh button**: When enabled, a refresh button will be displayed next to each serialized Dataview query in the editor. Clicking this button will refresh only that specific query.
 
-- **Hide query text**: When enabled, single-line query definitions are hidden in Live Preview, leaving only the query type badge and the refresh button. Place the cursor on the line to show and edit the query. Source mode and Reading view are unaffected. Disabled by default.
+- **Hide query text**: When enabled, single-line query definitions are hidden in Live Preview, leaving only the query type badge and the refresh button. Place the cursor on the line to show and edit the query. Source mode and Reading view are unaffected. Enabled by default.
 
 - **Show error notifications**: When enabled, a notification popup will be displayed when a query fails to serialize. This helps you identify and fix invalid queries. Errors show the problematic query and the error message from Dataview.
 

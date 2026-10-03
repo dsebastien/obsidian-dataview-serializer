@@ -423,6 +423,10 @@ describe('setControlValue', () => {
 })
 
 describe('default settings', () => {
+    test('hides query text by default', () => {
+        expect(createDefaultSettings().hideQueryText).toBe(true)
+    })
+
     test('constructing the plugin never freezes the shared defaults', () => {
         const plugin = new DataviewSerializerPlugin({} as App, {} as PluginManifest)
         expect(Object.isFrozen(plugin.settings)).toBe(true)

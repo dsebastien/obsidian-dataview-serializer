@@ -15,7 +15,7 @@ export interface PluginSettings {
      * In Live Preview, hide the text of query definition lines and keep only
      * the badge and refresh button. The query shows again while the cursor is
      * on its line.
-     * Default: false
+     * Default: true
      */
     hideQueryText: boolean
     /**
@@ -67,7 +67,7 @@ export function createDefaultSettings(): PluginSettings {
         ignoredFolders: [],
         disableAutomaticUpdates: false,
         showRefreshButton: true,
-        hideQueryText: false,
+        hideQueryText: true,
         foldersToForceUpdate: [],
         showErrorNotifications: true,
         debugLogging: false,
