@@ -83,6 +83,11 @@ export class SettingsTab extends PluginSettingTab {
                 control: { type: 'toggle', key: 'showRefreshButton' }
             },
             {
+                name: 'Hide query text',
+                desc: 'When enabled, single-line query definitions are hidden in Live Preview, leaving only the query type badge and the refresh button. Place the cursor on the line to show and edit the query.',
+                control: { type: 'toggle', key: 'hideQueryText' }
+            },
+            {
                 name: 'Enable DataviewJS serialization',
                 desc: 'When enabled, JavaScript-based Dataview queries can be serialized to static Markdown. Note: JavaScript code cannot contain "--" due to HTML comment limitations.',
                 control: { type: 'toggle', key: 'enableDataviewJS' }
@@ -328,6 +333,8 @@ export class SettingsTab extends PluginSettingTab {
                 return this.plugin.settings.disableAutomaticUpdates
             case 'showRefreshButton':
                 return this.plugin.settings.showRefreshButton
+            case 'hideQueryText':
+                return this.plugin.settings.hideQueryText
             case 'enableDataviewJS':
                 return this.plugin.settings.enableDataviewJS
             case 'showErrorNotifications':
@@ -381,6 +388,14 @@ export class SettingsTab extends PluginSettingTab {
                 await this.plugin.updateSettings((draft) => {
                     draft.showRefreshButton = next
                 })
+                return
+            }
+            case 'hideQueryText': {
+                const next = this.expectBoolean(key, value)
+                await this.plugin.updateSettings((draft) => {
+                    draft.hideQueryText = next
+                })
+                this.plugin.applyQueryTextVisibility()
                 return
             }
             case 'enableDataviewJS': {

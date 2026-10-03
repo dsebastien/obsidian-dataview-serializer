@@ -356,6 +356,10 @@ When enabled in settings, a refresh button (🔄) appears next to each serialize
 
 This is useful when you want to quickly update a single query without waiting for automatic updates or running a command. It also provides a way to manually refresh `QueryToSerializeManual` and `QueryToSerializeOnce` queries.
 
+### Hide query text
+
+Long query definitions can clutter Live Preview. Enable **Hide query text** in the plugin settings to collapse each single-line query down to its badge and refresh button. Place the cursor on the line (click just before the badge, or move to it with the arrow keys) and the full query shows again so you can edit it. Multi-line queries are never hidden.
+
 ## DataviewJS Queries
 
 In addition to standard Dataview DQL queries, this plugin supports **DataviewJS queries**. DataviewJS allows you to write JavaScript code that uses the Dataview API to create complex, dynamic outputs.

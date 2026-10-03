@@ -344,6 +344,12 @@ function createRefreshButton(onClick: () => void | Promise<void>): HTMLButtonEle
 
 // Line decoration classes
 const queryLineDecoration = Decoration.line({ class: 'dvs-query-line' })
+// Single-line block queries also get this class: the "Hide query text"
+// setting collapses only those. Hiding a multi-line query line by line would
+// leave just the cursor's line readable while editing it.
+const singleLineQueryDecoration = Decoration.line({
+    class: 'dvs-query-line dvs-query-line-single'
+})
 const resultsStartDecoration = Decoration.line({ class: 'dvs-results-start-line' })
 const resultsEndDecoration = Decoration.line({ class: 'dvs-results-end-line' })
 const inlineQueryDecoration = Decoration.mark({ class: 'dvs-inline-query' })
@@ -731,7 +737,7 @@ export const refreshButtonExtension = (
                                     decorations.push({
                                         from: line.from,
                                         to: line.from,
-                                        decoration: queryLineDecoration
+                                        decoration: singleLineQueryDecoration
                                     })
 
                                     // Add widget with badge and refresh button

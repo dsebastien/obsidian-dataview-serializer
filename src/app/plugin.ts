@@ -90,6 +90,7 @@ import {
 } from './utils/find-dataviewjs-queries.fn'
 import { serializeDataviewJSQuery } from './utils/serialize-dataviewjs-query.fn'
 import { isDisabledOnDevice, setDisabledOnDevice } from './utils/device-disabled'
+import { applyQueryTextVisibility } from './utils/query-text-visibility'
 
 /** The insert query block command; it used to repeat the plugin id. */
 const INSERT_QUERY_BLOCK_COMMAND_ID = 'insert-query-block'
@@ -655,9 +656,37 @@ export class DataviewSerializerPlugin extends Plugin {
                 () => this.isDisabledOnDevice()
             )
         )
+
+        this.applyQueryTextVisibility()
+        // Popout windows get their own body, so they need the class too
+        this.registerEvent(
+            this.app.workspace.on('window-open', (win) => {
+                applyQueryTextVisibility([win.doc.body], this.settings.hideQueryText)
+            })
+        )
     }
 
-    override onunload() {}
+    override onunload() {
+        applyQueryTextVisibility(this.getWindowBodies(), false)
+    }
+
+    /**
+     * Applies the "Hide query text" setting to every open window.
+     */
+    applyQueryTextVisibility(): void {
+        applyQueryTextVisibility(this.getWindowBodies(), this.settings.hideQueryText)
+    }
+
+    /**
+     * The body of every open window: the main one and each popout.
+     */
+    private getWindowBodies(): Set<HTMLElement> {
+        const bodies = new Set<HTMLElement>([activeDocument.body])
+        this.app.workspace.iterateAllLeaves((leaf) => {
+            bodies.add(leaf.view.containerEl.doc.body)
+        })
+        return bodies
+    }
 
     /**
      * Load the plugin settings
@@ -715,6 +744,17 @@ export class DataviewSerializerPlugin extends Plugin {
                 draft.showRefreshButton = loadedSettings.showRefreshButton
             } else {
                 log('The loaded settings miss the [showRefreshButton] property', 'debug')
+                needToSaveSettings = true
+            }
+
+            if (
+                loadedSettings.hideQueryText !== undefined &&
+                loadedSettings.hideQueryText !== null &&
+                typeof loadedSettings.hideQueryText === 'boolean'
+            ) {
+                draft.hideQueryText = loadedSettings.hideQueryText
+            } else {
+                log('The loaded settings miss the [hideQueryText] property', 'debug')
                 needToSaveSettings = true
             }
 

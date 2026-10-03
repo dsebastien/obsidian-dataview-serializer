@@ -12,6 +12,13 @@ export interface PluginSettings {
     disableAutomaticUpdates: boolean
     showRefreshButton: boolean
     /**
+     * In Live Preview, hide the text of query definition lines and keep only
+     * the badge and refresh button. The query shows again while the cursor is
+     * on its line.
+     * Default: false
+     */
+    hideQueryText: boolean
+    /**
      * Folders containing files that should be updated when ANY file in the vault changes.
      * Useful for index files with queries that aggregate data from elsewhere in the vault.
      */
@@ -60,6 +67,7 @@ export function createDefaultSettings(): PluginSettings {
         ignoredFolders: [],
         disableAutomaticUpdates: false,
         showRefreshButton: true,
+        hideQueryText: false,
         foldersToForceUpdate: [],
         showErrorNotifications: true,
         debugLogging: false,

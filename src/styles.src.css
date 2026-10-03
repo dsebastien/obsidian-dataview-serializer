@@ -53,6 +53,29 @@
     @apply !pl-2;
 }
 
+/* "Hide query text" setting (body class, see src/app/utils/query-text-visibility.ts):
+   in Live Preview, collapse the text of single-line queries and keep only the
+   badge and refresh button. Multi-line queries stay visible. The line shows again while the cursor is on it (.cm-active).
+   font-size 0 hides the text nodes CodeMirror renders without a wrapper span;
+   the widgets restore the size. */
+.dvs-hide-query-text .markdown-source-view.is-live-preview .dvs-query-line-single:not(.cm-active) {
+    @apply text-[0px];
+}
+
+.dvs-hide-query-text
+    .markdown-source-view.is-live-preview
+    .dvs-query-line-single:not(.cm-active)
+    .dvs-query-widgets {
+    font-size: var(--font-text-size);
+}
+
+.dvs-hide-query-text
+    .markdown-source-view.is-live-preview
+    .dvs-query-line-single:not(.cm-active)
+    .dvs-refresh-button {
+    @apply ml-0;
+}
+
 /* Line decorations for serialized results boundaries - faded in source mode */
 /* Doubled class names bump specificity to override CodeMirror's line color without using !important */
 .dvs-results-start-line.dvs-results-start-line,

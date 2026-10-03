@@ -52,6 +52,7 @@ function createHarness(options?: {
     })
     const setupEventHandlers = mock(() => {})
     const unregisterEventHandlers = mock(() => {})
+    const applyQueryTextVisibility = mock(() => {})
 
     const plugin = Object.create(DataviewSerializerPlugin.prototype) as DataviewSerializerPlugin
     const internals = plugin as unknown as Record<string, unknown>
@@ -60,6 +61,7 @@ function createHarness(options?: {
     internals['saveData'] = saveData
     internals['setupEventHandlers'] = setupEventHandlers
     internals['unregisterEventHandlers'] = unregisterEventHandlers
+    internals['applyQueryTextVisibility'] = applyQueryTextVisibility
     internals['isDisabledOnDevice'] = () => options?.disabledOnDevice ?? false
 
     const tab = Object.create(SettingsTab.prototype) as SettingsTab
@@ -382,6 +384,7 @@ describe('setControlValue', () => {
         const { tab, plugin } = createHarness()
 
         await tab.setControlValue('showRefreshButton', !DEFAULT_SETTINGS.showRefreshButton)
+        await tab.setControlValue('hideQueryText', !DEFAULT_SETTINGS.hideQueryText)
         await tab.setControlValue('enableDataviewJS', !DEFAULT_SETTINGS.enableDataviewJS)
         await tab.setControlValue(
             'showErrorNotifications',
@@ -392,6 +395,7 @@ describe('setControlValue', () => {
 
         expect(plugin.settings).toMatchObject({
             showRefreshButton: !DEFAULT_SETTINGS.showRefreshButton,
+            hideQueryText: !DEFAULT_SETTINGS.hideQueryText,
             enableDataviewJS: !DEFAULT_SETTINGS.enableDataviewJS,
             showErrorNotifications: !DEFAULT_SETTINGS.showErrorNotifications,
             addTrailingNewline: !DEFAULT_SETTINGS.addTrailingNewline,
@@ -408,6 +412,7 @@ describe('setControlValue', () => {
             settings.disableAutomaticUpdates
         )
         expect(tab.getControlValue('showRefreshButton')).toBe(settings.showRefreshButton)
+        expect(tab.getControlValue('hideQueryText')).toBe(settings.hideQueryText)
         expect(tab.getControlValue('enableDataviewJS')).toBe(settings.enableDataviewJS)
         expect(tab.getControlValue('showErrorNotifications')).toBe(settings.showErrorNotifications)
         expect(tab.getControlValue('addTrailingNewline')).toBe(settings.addTrailingNewline)
