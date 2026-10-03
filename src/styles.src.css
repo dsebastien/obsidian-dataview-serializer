@@ -76,6 +76,15 @@
     @apply ml-0;
 }
 
+/* Same setting: collapse the serialized results' start and end marker lines,
+   so a serialized block shows only its output. The marker shows again while
+   the cursor is on it. Outranks the faded marker styling below. */
+.dvs-hide-query-text
+    .markdown-source-view.is-live-preview
+    .dvs-results-line-single:not(.cm-active) {
+    @apply text-[0px];
+}
+
 /* Line decorations for serialized results boundaries - faded in source mode */
 /* Doubled class names bump specificity to override CodeMirror's line color without using !important */
 .dvs-results-start-line.dvs-results-start-line,

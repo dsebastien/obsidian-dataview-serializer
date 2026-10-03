@@ -351,7 +351,15 @@ const singleLineQueryDecoration = Decoration.line({
     class: 'dvs-query-line dvs-query-line-single'
 })
 const resultsStartDecoration = Decoration.line({ class: 'dvs-results-start-line' })
-const resultsEndDecoration = Decoration.line({ class: 'dvs-results-end-line' })
+// Markers that fit on one line also get the class the "Hide query text" setting
+// collapses. A start marker whose query spans several lines is left visible:
+// hiding only its first line would leave the rest of the query dangling.
+const resultsStartSingleLineDecoration = Decoration.line({
+    class: 'dvs-results-start-line dvs-results-line-single'
+})
+const resultsEndDecoration = Decoration.line({
+    class: 'dvs-results-end-line dvs-results-line-single'
+})
 const inlineQueryDecoration = Decoration.mark({ class: 'dvs-inline-query' })
 
 export const refreshButtonExtension = (
@@ -937,7 +945,9 @@ export const refreshButtonExtension = (
                             decorations.push({
                                 from: line.from,
                                 to: line.from,
-                                decoration: resultsStartDecoration
+                                decoration: text.includes('-->')
+                                    ? resultsStartSingleLineDecoration
+                                    : resultsStartDecoration
                             })
                         }
 
@@ -966,7 +976,9 @@ export const refreshButtonExtension = (
                             decorations.push({
                                 from: line.from,
                                 to: line.from,
-                                decoration: resultsStartDecoration
+                                decoration: text.includes('-->')
+                                    ? resultsStartSingleLineDecoration
+                                    : resultsStartDecoration
                             })
                         }
 
