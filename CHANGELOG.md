@@ -2,6 +2,14 @@
 
 All notable changes to this project will be documented in this file.
 
+## [3.2.0](https://github.com/dsebastien/obsidian-dataview-serializer/compare/3.1.4...3.2.0) (2026-10-03)
+
+### Hide query text in Live Preview
+
+Long query definitions no longer have to clutter your notes. Turn on **Hide query text** in the plugin settings and, in Live Preview, each single-line query collapses to its query type badge and refresh button.
+
+Place the cursor on the line (arrow keys, or click just before the badge) and the full query shows again so you can edit it. Multi-line queries, Source mode and Reading view are unchanged. The setting is off by default.
+
 ## [3.1.4](https://github.com/dsebastien/obsidian-dataview-serializer/compare/3.1.3...3.1.4) (2026-09-28)
 
 ### Bug Fixes
@@ -329,6 +337,7 @@ six command ids unchanged, and data.json byte-identical afterwards.
 ## [1.0.2](https://github.com/dsebastien/obsidian-dataview-serializer/compare/1.0.1...1.0.2) (2024-05-14)
 ## [1.0.1](https://github.com/dsebastien/obsidian-dataview-serializer/compare/1.0.0...1.0.1) (2024-05-14)
 ## 1.0.0 (2024-05-13)
+
 
 
 
