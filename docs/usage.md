@@ -587,6 +587,8 @@ This provides several benefits:
 
 The plugin includes a command you can use to scan and update all the Dataview queries to serialize in the entire vault: Hit CTRL/CMD + P then type "Scan and serialize all Dataview queries" to invoke it.
 
+This command only acts on queries that already use the serializer markers (e.g., `<!-- QueryToSerialize: ... -->`, `<!-- DataviewJSToSerialize: ... -->`, their Manual/Once/OnceAndEject variants and the alternative syntax). Raw ` ```dataview ``` ` codeblocks, inline `` `= expression` `` queries and ` ```dataviewjs ``` ` codeblocks are ignored: they are rendered by Dataview itself, not serialized. To serialize existing DQL queries, convert them first (see [Convert existing Dataview queries](#convert-existing-dataview-queries)). DataviewJS codeblocks have no conversion command: wrap their code in `<!-- DataviewJSToSerialize: ... -->` manually, keeping the [known limitations](#known-limitations) in mind.
+
 While the scan runs, a notice shows the live progress (e.g., `scanning 240/1300 files...`). Once it completes, a summary notice reports how many files were scanned, how many were updated, and how many errors occurred. This makes it easy to know when the scan is actually done (e.g., before committing the changes to a repository).
 
 #### Scan current file
@@ -629,6 +631,7 @@ Both commands:
 - Only convert supported query types (LIST, TABLE, and TASK). Unsupported types (CALENDAR) are skipped and reported
 - Preserve indentation from the original query
 - Normalize multi-line queries to single-line format in the serialized output
+- Do not convert ` ```dataviewjs ``` ` codeblocks (see [DataviewJS Queries](#dataviewjs-queries) for the manual syntax)
 
 #### Remove all queries from current file
 
