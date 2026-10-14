@@ -1,5 +1,11 @@
 # Release Notes
 
+## 3.5.1 (2026-10-14)
+
+### Bug Fixes
+
+* **deps:** clear the handlebars and source-map-js advisories
+
 ## 3.5.0 (2026-10-14)
 
 ### Periodic full serialization
