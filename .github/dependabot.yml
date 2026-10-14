@@ -47,6 +47,17 @@ updates:
           - dependency-name: '@commitlint/*'
             update-types:
                 - version-update:semver-major
+          # ESLint majors are held until eslint-plugin-obsidianmd supports them.
+          # Its 0.4.x line requires @eslint/js ^9, and the community catalog
+          # reviewer lints with that preset. Under ESLint 10, `bun run lint`
+          # crashes with "Class extends value undefined". Lift this once a
+          # preset release declares ESLint 10 support.
+          - dependency-name: 'eslint'
+            update-types:
+                - version-update:semver-major
+          - dependency-name: '@eslint/js'
+            update-types:
+                - version-update:semver-major
 
     # Keeps the action pins in .github/workflows current. Nothing else watches
     # these: they are outside every package manifest in the repo.
