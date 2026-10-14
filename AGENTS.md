@@ -572,7 +572,7 @@ The community-plugin reviewer runs a fixed set of lint rules against every submi
 - Attach only `main.js`, `manifest.json`, and `styles.css` (if present) — never a zip. The CI release workflow in this template already does this; don't add zip-upload steps back.
 - Build in CI; don't post-edit `main.js`.
 - `bun-version-file: package.json` (already wired) keeps Bun pinned across CI and release. Update `packageManager` in `package.json` to bump.
-- `actions/attest-build-provenance@v3` (already wired) attaches provenance to release artifacts.
+- `actions/attest-build-provenance@v4` (already wired) attaches provenance to release artifacts.
 
 ## Mobile
 
