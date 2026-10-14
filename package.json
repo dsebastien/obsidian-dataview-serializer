@@ -93,7 +93,7 @@
     "overrides": {
         "svelte": "^4.2.19",
         "@conventional-changelog/git-client": "2.7.0",
-        "handlebars": "4.7.9",
+        "handlebars": "4.7.10",
         "lodash": "4.18.1",
         "fast-uri": "3.1.7",
         "flatted": "3.4.2",
@@ -102,6 +102,7 @@
         "tmp": "0.2.7",
         "brace-expansion": "2.1.7",
         "minimatch": "3.1.5",
-        "picomatch": "2.3.2"
+        "picomatch": "2.3.2",
+        "source-map-js": "1.2.2"
     }
 }
