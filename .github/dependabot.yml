@@ -58,6 +58,14 @@ updates:
           - dependency-name: '@eslint/js'
             update-types:
                 - version-update:semver-major
+          # conventional-changelog-conventionalcommits 10+ needs
+          # conventional-changelog-writer 9 (conventional-changelog 8+). With
+          # conventional-changelog-cli 5, changelog generation fails with
+          # "Missing helper", which would break the release workflow. Upgrade
+          # together with the changelog tooling, by hand.
+          - dependency-name: 'conventional-changelog-conventionalcommits'
+            update-types:
+                - version-update:semver-major
 
     # Keeps the action pins in .github/workflows current. Nothing else watches
     # these: they are outside every package manifest in the repo.
