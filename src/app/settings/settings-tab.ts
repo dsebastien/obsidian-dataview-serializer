@@ -123,7 +123,7 @@ export class SettingsTab extends PluginSettingTab {
             ...this.folderListDefinitions(
                 'foldersToScan',
                 'Folders to scan',
-                'Folders to scan when looking for queries to serialize.'
+                'Folders covered by the "Scan and serialize all Dataview queries" command. Leave empty to scan the whole vault.'
             ),
             ...this.folderListDefinitions(
                 'ignoredFolders',

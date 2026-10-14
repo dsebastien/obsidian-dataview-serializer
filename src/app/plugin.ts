@@ -83,6 +83,7 @@ import {
 } from './utils/find-inline-queries.fn'
 import { serializeInlineQuery, isInsideTable } from './utils/serialize-inline-query.fn'
 import { processInBatches } from './utils/batch-processor'
+import { isInScanScope } from './utils/is-in-scan-scope.fn'
 import { removeAllQueries } from './utils/remove-all-queries.fn'
 import {
     findDataviewJSQueries,
@@ -114,6 +115,23 @@ interface FileProcessingResult {
      * Whether the file content was actually modified and saved.
      */
     updated?: boolean
+}
+
+/**
+ * A query error, with the file it occurred in
+ */
+interface BatchError {
+    filePath: string
+    error: { message: string; query: string }
+}
+
+/**
+ * Outcome of a vault-wide serialization run
+ */
+interface FullScanSummary {
+    scannedCount: number
+    updatedCount: number
+    errors: BatchError[]
 }
 
 export class DataviewSerializerPlugin extends Plugin {
@@ -181,6 +199,78 @@ export class DataviewSerializerPlugin extends Plugin {
             error.query.length > 50 ? error.query.substring(0, 50) + '...' : error.query
         const message = `Dataview Serializer: Query error in ${fileName}:\n"${truncatedQuery}"\n${error.message}`
         new Notice(message, NOTICE_TIMEOUT * 2)
+    }
+
+    /**
+     * Show error notices for a batch run, if enabled: up to
+     * MAX_ERROR_NOTIFICATIONS individual errors, then a summary of the rest.
+     */
+    private showBatchErrorNotices(errors: BatchError[]): void {
+        if (!this.settings.showErrorNotifications || errors.length === 0) {
+            return
+        }
+
+        for (const { filePath, error } of errors.slice(0, MAX_ERROR_NOTIFICATIONS)) {
+            this.createQueryErrorNotice(error, filePath)
+        }
+
+        if (errors.length > MAX_ERROR_NOTIFICATIONS) {
+            new Notice(
+                `${errors.length - MAX_ERROR_NOTIFICATIONS} more query error(s) occurred. Check console for details.`,
+                NOTICE_TIMEOUT
+            )
+        }
+    }
+
+    /**
+     * Serialize the queries of every Markdown file in the "Folders to scan"
+     * scope (the whole vault when that list is empty).
+     *
+     * Each file still goes through processFile, so ignored folders, the
+     * per-note ignore flag, the per-device disable and the per-file cooldown
+     * all apply, and a file is written only when its serialized output changed.
+     *
+     * @param isManualTrigger true for the command (Manual queries run, Once
+     *                        queries re-run), false for automatic callers
+     * @param onProgress optional progress callback, invoked synchronously with
+     *                   0/total before any work, then after each batch
+     */
+    async serializeAllFiles(
+        isManualTrigger: boolean,
+        onProgress?: (processed: number, total: number) => void
+    ): Promise<FullScanSummary> {
+        const filesToScan = this.app.vault
+            .getMarkdownFiles()
+            .filter((file) => isInScanScope(file.path, this.settings.foldersToScan))
+        onProgress?.(0, filesToScan.length)
+
+        const results = await processInBatches(
+            filesToScan,
+            (file) => this.processFile(file, false, undefined, isManualTrigger),
+            5, // Process 5 files concurrently
+            onProgress
+        )
+
+        const summary: FullScanSummary = {
+            scannedCount: filesToScan.length,
+            updatedCount: 0,
+            errors: []
+        }
+        for (const result of results) {
+            if (result.updated) {
+                summary.updatedCount++
+            }
+            for (const error of result.errors) {
+                summary.errors.push({ filePath: result.filePath, error })
+            }
+        }
+
+        log(
+            `Finished scanning ${summary.scannedCount} file(s): ${summary.updatedCount} updated, ${summary.errors.length} error(s)`,
+            'info'
+        )
+
+        return summary
     }
 
     /**
@@ -334,74 +424,32 @@ export class DataviewSerializerPlugin extends Plugin {
                     return
                 }
                 log('Scanning and serializing all Dataview queries', 'debug')
-                const allVaultFiles = this.app.vault.getMarkdownFiles()
-                const allErrors: Array<{
-                    filePath: string
-                    error: { message: string; query: string }
-                }> = []
 
                 // Persistent notice (timeout 0) reporting progress across the whole vault.
                 // Large vaults can take a while; without this the command looks like it
                 // does nothing until it is done.
-                const progressNotice = new Notice(
-                    `Dataview Serializer: scanning 0/${allVaultFiles.length} files...`,
-                    0
-                )
+                // Empty until serializeAllFiles reports 0/total, synchronously, before any work
+                const progressNotice = new Notice('', 0)
 
-                let results: FileProcessingResult[] = []
+                let summary: FullScanSummary
                 try {
-                    results = await processInBatches(
-                        allVaultFiles,
-                        (vaultFile) => this.processFile(vaultFile, false, undefined, true),
-                        5, // Process 5 files concurrently
-                        (processed, total) => {
-                            progressNotice.setMessage(
-                                `Dataview Serializer: scanning ${processed}/${total} files...`
-                            )
-                        }
-                    )
+                    summary = await this.serializeAllFiles(true, (processed, total) => {
+                        progressNotice.setMessage(
+                            `Dataview Serializer: scanning ${processed}/${total} files...`
+                        )
+                    })
                 } finally {
                     progressNotice.hide()
                 }
 
-                let updatedFilesCount = 0
-                for (const result of results) {
-                    if (result.updated) {
-                        updatedFilesCount++
-                    }
-                    for (const error of result.errors) {
-                        allErrors.push({ filePath: result.filePath, error })
-                    }
-                }
-
-                log(
-                    `Finished scanning ${allVaultFiles.length} file(s): ${updatedFilesCount} updated, ${allErrors.length} error(s)`,
-                    'info'
-                )
-
                 new Notice(
-                    `Dataview Serializer: scanned ${allVaultFiles.length} file(s), updated ${updatedFilesCount}${
-                        allErrors.length > 0 ? `, ${allErrors.length} error(s)` : ''
+                    `Dataview Serializer: scanned ${summary.scannedCount} file(s), updated ${summary.updatedCount}${
+                        summary.errors.length > 0 ? `, ${summary.errors.length} error(s)` : ''
                     }`,
                     NOTICE_TIMEOUT
                 )
 
-                // Show error notifications if enabled
-                if (this.settings.showErrorNotifications && allErrors.length > 0) {
-                    // Show up to MAX_ERROR_NOTIFICATIONS individual errors
-                    const errorsToShow = allErrors.slice(0, MAX_ERROR_NOTIFICATIONS)
-                    for (const { filePath, error } of errorsToShow) {
-                        this.createQueryErrorNotice(error, filePath)
-                    }
-
-                    // Show summary if there are more errors
-                    if (allErrors.length > MAX_ERROR_NOTIFICATIONS) {
-                        new Notice(
-                            `${allErrors.length - MAX_ERROR_NOTIFICATIONS} more query error(s) occurred. Check console for details.`,
-                            NOTICE_TIMEOUT
-                        )
-                    }
-                }
+                this.showBatchErrorNotices(summary.errors)
             }
         })
 

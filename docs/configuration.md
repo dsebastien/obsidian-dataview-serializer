@@ -38,7 +38,7 @@ In the settings of the plugin, you can configure:
 
 ## Folder Settings
 
-- **Folders to scan**: The folders that should be scanned when the "Scan and serialize all Dataview queries" command is executed.
+- **Folders to scan**: The folders that should be scanned when the "Scan and serialize all Dataview queries" command is executed. Leave empty to scan the whole vault. Automatic updates triggered by file changes are not limited by this list: they process the file that changed, wherever it is.
 
 - **Folders to ignore**: The folders that should be excluded when processing files. Files in these folders will not have their queries serialized.
 
