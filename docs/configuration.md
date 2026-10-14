@@ -13,9 +13,36 @@ In the settings of the plugin, you can configure:
 
   Unlike every other setting, this one is **stored locally on the device** and is **never synced** to your other devices (it is not written to the plugin's `data.json`). Flip it on wherever you want the plugin to stay inert; your other devices are unaffected. The change takes effect immediately — no reload required.
 
+- **Periodic full serialization**: When enabled, the plugin re-serializes every query in your [Folders to scan](#folder-settings) on a timer, without you touching anything. Off by default. See [Periodic full serialization](#periodic-full-serialization) below.
+
+- **Interval (minutes)**: How often the periodic full serialization runs. Shown only while the timer is enabled. Whole minutes, minimum 5, default 30.
+
+Both timer settings are **stored locally on the device** and **never synced**, like "Disable on this device".
+
+### Periodic full serialization
+
+Automatic updates are event-driven: when a note changes, only that note is re-serialized. An index note or MoC whose queries read _other_ notes goes stale until you edit it, use [Folders to force update](#understanding-folders-to-force-update), or run "Scan and serialize all Dataview queries". The timer runs that same full scan for you every X minutes.
+
+Each run behaves like an automatic update, applied to every file in scope:
+
+- **Scope**: the files in "Folders to scan", or the whole vault when that list is empty. Folders listed in "Folders to force update" are covered whenever they fall inside that scope.
+- **Skipped**: files in "Folders to ignore", notes with the [`dataview_serializer_ignore`](#per-note-ignore-flag) flag, empty files, Excalidraw and `Canvas.md` files, and files serialized in the last 5 seconds.
+- **Query modes**: [manual-only](usage.md#manual-only-updates) queries are not run, and [write-once](usage.md#write-once-updates) queries are not run again once serialized. The timer is not a manual trigger.
+- **Writes**: a file is rewritten only when its serialized output actually changed, so sync tools see no churn from unchanged notes.
+- **Silent**: no progress notice. Query errors are shown only when "Show error notifications" is on.
+- **No pile-up**: if a run is still going when the next one is due, that tick is skipped.
+- **Independent of "Disable automatic updates"**: the timer is its own opt-in. With event-driven updates off, the timer can be your only automatic path, for example to update notes every 30 minutes instead of on every edit.
+- **"Disable on this device" wins**: while the plugin is disabled on a device, its timer does nothing.
+
+Changes apply immediately: no reload needed. The first run happens one interval after Obsidian starts or after you enable the timer.
+
+**Multi-device vaults:** enable the timer on one device only (typically your desktop). If several devices run it against a synced vault, they all rewrite the same notes and can cause sync conflicts. Since the setting is device-local, enabling it on your desktop leaves your phone and laptop unaffected.
+
+**Large vaults:** a full scan runs Dataview for every query in scope. If runs feel heavy, raise the interval or narrow "Folders to scan" to the folders holding your index notes.
+
 ## General Settings
 
-- **Disable automatic updates**: When enabled, the plugin will not automatically serialize queries when files are created, modified, or renamed. You can still manually serialize queries using the command palette. This is useful if you prefer full control over when queries are updated.
+- **Disable automatic updates**: When enabled, the plugin will not automatically serialize queries when files are created, modified, or renamed. You can still manually serialize queries using the command palette. This is useful if you prefer full control over when queries are updated. The [periodic full serialization](#periodic-full-serialization) timer is not affected by this setting.
 
 - **Show refresh button**: When enabled, a refresh button will be displayed next to each serialized Dataview query in the editor. Clicking this button will refresh only that specific query.
 
@@ -38,7 +65,7 @@ In the settings of the plugin, you can configure:
 
 ## Folder Settings
 
-- **Folders to scan**: The folders that should be scanned when the "Scan and serialize all Dataview queries" command is executed. Leave empty to scan the whole vault. Automatic updates triggered by file changes are not limited by this list: they process the file that changed, wherever it is.
+- **Folders to scan**: The folders that should be scanned when the "Scan and serialize all Dataview queries" command or the [periodic full serialization](#periodic-full-serialization) timer runs. Leave empty to scan the whole vault. Automatic updates triggered by file changes are not limited by this list: they process the file that changed, wherever it is.
 
 - **Folders to ignore**: The folders that should be excluded when processing files. Files in these folders will not have their queries serialized.
 

@@ -84,6 +84,12 @@ import {
 import { serializeInlineQuery, isInsideTable } from './utils/serialize-inline-query.fn'
 import { processInBatches } from './utils/batch-processor'
 import { isInScanScope } from './utils/is-in-scan-scope.fn'
+import {
+    loadPeriodicSerializationConfig,
+    savePeriodicSerializationConfig,
+    type PeriodicSerializationConfig
+} from './utils/periodic-serialization-config'
+import { PeriodicSerializer } from './utils/periodic-serializer'
 import { removeAllQueries } from './utils/remove-all-queries.fn'
 import {
     findDataviewJSQueries,
@@ -167,6 +173,19 @@ export class DataviewSerializerPlugin extends Plugin {
      * Used to prevent infinite loops or unwanted side effects when the plugin modifies a file.
      */
     private filesToIgnoreFileEvents: Set<string> = new Set()
+
+    /**
+     * Optional timer re-serializing every file in scope every N minutes.
+     * Configured from device-local storage; silent apart from error notices.
+     */
+    private periodicSerializer = new PeriodicSerializer({
+        registerInterval: (id) => this.registerInterval(id),
+        isDisabledOnDevice: () => this.isDisabledOnDevice(),
+        run: async () => {
+            const summary = await this.serializeAllFiles(false)
+            this.showBatchErrorNotices(summary.errors)
+        }
+    })
 
     /**
      * Debounce file updates
@@ -411,6 +430,10 @@ export class DataviewSerializerPlugin extends Plugin {
         if (!this.settings.disableAutomaticUpdates && !this.isDisabledOnDevice()) {
             this.setupEventHandlers()
         }
+
+        // Independent of "Disable automatic updates": the timer is its own opt-in.
+        // Armed here, once the Dataview API is known to be available.
+        this.periodicSerializer.configure(this.getPeriodicSerializationConfig())
 
         // Add a settings screen for the plugin
         this.addSettingTab(new SettingsTab(this.app, this))
@@ -973,8 +996,21 @@ export class DataviewSerializerPlugin extends Plugin {
     }
 
     /**
-     * Add the event handlers
+     * The periodic serialization config of this device (device-local, never synced).
      */
+    getPeriodicSerializationConfig(): PeriodicSerializationConfig {
+        return loadPeriodicSerializationConfig(this.app)
+    }
+
+    /**
+     * Persist the periodic serialization config of this device and re-arm the
+     * timer with it. No reload required. Throws on an invalid interval.
+     */
+    setPeriodicSerializationConfig(config: PeriodicSerializationConfig): void {
+        savePeriodicSerializationConfig(this.app, config)
+        this.periodicSerializer.configure(config)
+    }
+
     /**
      * Moves what users attached to a renamed command (custom hotkeys, the
      * mobile toolbar, pinned palette commands) from its old full id to its new
@@ -998,6 +1034,9 @@ export class DataviewSerializerPlugin extends Plugin {
         }
     }
 
+    /**
+     * Add the event handlers
+     */
     setupEventHandlers() {
         // Only register if not already registered
         if (this.createEventRef || this.modifyEventRef || this.renameEventRef) {

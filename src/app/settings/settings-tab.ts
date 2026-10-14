@@ -11,6 +11,11 @@ import {
 import { setDebugMode } from '../../utils/log'
 import { BUY_ME_A_COFFEE_BADGE_DATA_URL } from '../assets/buy-me-a-coffee'
 import { renderSupportSection } from '../ui/support-links'
+import { validateIntervalMinutes } from '../utils/periodic-serialization-config'
+import {
+    PERIODIC_SERIALIZATION_DEFAULT_MINUTES,
+    PERIODIC_SERIALIZATION_MIN_MINUTES
+} from '../constants'
 
 /** The three folder lists, keyed by the settings field each one edits. */
 type FolderListKey = 'foldersToScan' | 'ignoredFolders' | 'foldersToForceUpdate'
@@ -76,6 +81,24 @@ export class SettingsTab extends PluginSettingTab {
                 name: 'Disable automatic updates',
                 desc: 'When enabled, the plugin will not automatically serialize queries when files are created, modified, or renamed. You can still manually serialize queries using the command palette.',
                 control: { type: 'toggle', key: 'disableAutomaticUpdates' }
+            },
+            {
+                name: 'Periodic full serialization',
+                desc: 'When enabled, every query in the folders to scan is re-serialized on a timer, so notes whose queries read other notes stay up to date. Folders to ignore, the per-note ignore flag, and manual-only queries are respected. Files are only rewritten when their output changed. Stored on this device only and never synced: turn it on on one device to avoid sync conflicts. Works even when automatic updates are disabled.',
+                control: { type: 'toggle', key: 'periodicSerializationEnabled' }
+            },
+            {
+                name: 'Interval (minutes)',
+                desc: `How often the periodic full serialization runs. Minimum ${PERIODIC_SERIALIZATION_MIN_MINUTES} minutes.`,
+                visible: (): boolean => this.plugin.getPeriodicSerializationConfig().enabled,
+                control: {
+                    type: 'number',
+                    key: 'periodicSerializationIntervalMinutes',
+                    min: PERIODIC_SERIALIZATION_MIN_MINUTES,
+                    step: 1,
+                    defaultValue: PERIODIC_SERIALIZATION_DEFAULT_MINUTES,
+                    validate: (value: number): string | undefined => validateIntervalMinutes(value)
+                }
             },
             {
                 name: 'Show refresh button',
@@ -329,6 +352,10 @@ export class SettingsTab extends PluginSettingTab {
         switch (key) {
             case 'disabledOnDevice':
                 return this.plugin.isDisabledOnDevice()
+            case 'periodicSerializationEnabled':
+                return this.plugin.getPeriodicSerializationConfig().enabled
+            case 'periodicSerializationIntervalMinutes':
+                return this.plugin.getPeriodicSerializationConfig().intervalMinutes
             case 'disableAutomaticUpdates':
                 return this.plugin.settings.disableAutomaticUpdates
             case 'showRefreshButton':
@@ -367,6 +394,31 @@ export class SettingsTab extends PluginSettingTab {
                 this.plugin.setDisabledOnDevice(next)
                 // Re-render so the banner appears or disappears with it.
                 this.update()
+                return
+            }
+            case 'periodicSerializationEnabled': {
+                const next = this.expectBoolean(key, value)
+                // Device-local, like disabledOnDevice. Re-arms the timer at once.
+                this.plugin.setPeriodicSerializationConfig({
+                    ...this.plugin.getPeriodicSerializationConfig(),
+                    enabled: next
+                })
+                // Show or hide the interval row
+                this.update()
+                return
+            }
+            case 'periodicSerializationIntervalMinutes': {
+                if (typeof value !== 'number') {
+                    throw new Error(`Setting "${key}" expects a number.`)
+                }
+                const error = validateIntervalMinutes(value)
+                if (error) {
+                    throw new Error(error)
+                }
+                this.plugin.setPeriodicSerializationConfig({
+                    ...this.plugin.getPeriodicSerializationConfig(),
+                    intervalMinutes: value
+                })
                 return
             }
             case 'disableAutomaticUpdates': {

@@ -83,6 +83,8 @@ The plugin does not serialize on every keystroke. Three separate delays sit betw
 | Force-update debounce | 10 seconds | Re-serializing the folders listed in **Folders to force update** |
 | Per-file cooldown | 5 seconds | Minimum time before the same file is allowed to be serialized again |
 
+Optionally, a timer can also re-serialize every file in scope every X minutes (5 minimum, 30 by default), so index notes stay current even when nothing touches them. It is off by default and set per device. See [Periodic full serialization](configuration.md#periodic-full-serialization).
+
 ### Why the 500 ms event debounce exists
 
 Obsidian fires `modify` events constantly: every autosave while you type, every write from a sync tool, every change made by another plugin. Serializing on each of those would mean reading the file, running Dataview, and rewriting the file dozens of times a minute, in the middle of your edit.
@@ -121,7 +123,7 @@ This is the standard behavior. The query is automatically re-serialized whenever
 <!-- QueryToSerializeManual: LIST FROM #archive -->
 ```
 
-Manual queries are **skipped during automatic updates**. They will only be updated when you:
+Manual queries are **skipped during automatic updates**, including the periodic full serialization timer. They will only be updated when you:
 - Use the "Scan and serialize all Dataview queries" command
 - Use the "Scan and serialize Dataview queries in current file" command
 - Click the inline refresh button next to the query

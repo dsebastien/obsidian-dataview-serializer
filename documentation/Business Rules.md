@@ -24,6 +24,12 @@ The per-device "Disable on this device" flag MUST be stored only in device-local
 
 When the flag is set on a device, the plugin MUST be fully inert there: no file-event listeners registered, `processFile` short-circuits immediately (covering schedulers and any programmatic caller), all commands no-op with a notice, and the per-query refresh buttons render nothing. The flag is orthogonal to the synced `disableAutomaticUpdates` setting; when the device flag is cleared, event handlers are re-registered only if `disableAutomaticUpdates` is false.
 
+## Periodic full serialization
+
+The timer config (enabled flag and interval) MUST be stored only in device-local storage (key `PERIODIC_SERIALIZATION_STORAGE_KEY`), never in `PluginSettings` or `data.json`: several devices running it against a synced vault produce sync conflicts, so each device opts in on its own. Off by default; interval in whole minutes, at least `PERIODIC_SERIALIZATION_MIN_MINUTES` (5).
+
+A tick is an automatic run over the "Folders to scan" scope (whole vault when empty), through `processFile` with `force=false` and `isManualTrigger=false`: ignored folders, the per-note ignore flag, the per-file cooldown, and manual/once query modes all apply, and only changed output is written. It is silent apart from error notices gated by `showErrorNotifications`, skips while the previous run is in progress, does nothing while the device-local disable is set, and is independent of `disableAutomaticUpdates`.
+
 ## Blockquote and callout integrity
 
 When a query's indentation contains a blockquote marker, everything the plugin writes for that query MUST carry the same prefix: the result start and end markers, the serialized content, and the blank separator lines (written as a bare `>`, without trailing whitespace). A single unprefixed line terminates the blockquote and breaks the enclosing callout, which is the bug this rule exists to prevent.

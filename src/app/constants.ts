@@ -26,6 +26,22 @@ export const IGNORE_FRONTMATTER_KEY = 'dataview_serializer_ignore'
  */
 export const DEVICE_DISABLED_STORAGE_KEY = 'dataview-serializer:disabled-on-device'
 
+/**
+ * Key used to persist the periodic serialization timer config (enabled + interval).
+ *
+ * Device-local for the same reason as DEVICE_DISABLED_STORAGE_KEY: several
+ * devices rewriting the same synced notes on a timer produce sync conflicts, so
+ * each device opts in on its own. MUST NEVER be part of the synced settings.
+ */
+export const PERIODIC_SERIALIZATION_STORAGE_KEY = 'dataview-serializer:periodic-serialization'
+
+/**
+ * Bounds of the periodic serialization interval, in minutes. The minimum keeps
+ * a full scan of a large vault from running back to back.
+ */
+export const PERIODIC_SERIALIZATION_MIN_MINUTES = 5
+export const PERIODIC_SERIALIZATION_DEFAULT_MINUTES = 30
+
 // Legacy syntax (original)
 export const QUERY_FLAG_OPEN = `<!-- QueryToSerialize: `
 export const QUERY_FLAG_MANUAL_OPEN = `<!-- QueryToSerializeManual: `
