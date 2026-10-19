@@ -83,7 +83,7 @@
         "obsidian-dataview": "0.5.68",
         "prettier": "^3.9.10",
         "tailwindcss": "4.3.3",
-        "typescript": "^5.9.3",
+        "typescript": "^7.0.2",
         "typescript-eslint": "8.71.1"
     },
     "dependencies": {
