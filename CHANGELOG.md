@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented in this file.
 
+## [3.7.1](https://github.com/dsebastien/obsidian-dataview-serializer/compare/3.7.0...3.7.1) (2026-10-23)
+
+### Bug Fixes
+
+* **plugin:** ignore queries inside fenced code blocks and inline code ([3e50adb](https://github.com/dsebastien/obsidian-dataview-serializer/commit/3e50adbf078dd53edf676bffc6f4aa002e38a959)), closes [#91](https://github.com/dsebastien/obsidian-dataview-serializer/issues/91)
+
 ## [3.7.0](https://github.com/dsebastien/obsidian-dataview-serializer/compare/3.6.0...3.7.0) (2026-10-23)
 
 ### Features
@@ -382,6 +388,7 @@ six command ids unchanged, and data.json byte-identical afterwards.
 ## [1.0.2](https://github.com/dsebastien/obsidian-dataview-serializer/compare/1.0.1...1.0.2) (2024-05-14)
 ## [1.0.1](https://github.com/dsebastien/obsidian-dataview-serializer/compare/1.0.0...1.0.1) (2024-05-14)
 ## 1.0.0 (2024-05-13)
+
 
 
 

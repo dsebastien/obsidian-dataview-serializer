@@ -1,5 +1,11 @@
 # Release Notes
 
+## 3.7.1 (2026-10-23)
+
+### Bug Fixes
+
+* **plugin:** ignore queries inside fenced code blocks and inline code
+
 ## 3.7.0 (2026-10-23)
 
 ### Features
