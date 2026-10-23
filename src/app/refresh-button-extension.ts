@@ -1,6 +1,6 @@
 import { Decoration, EditorView, ViewPlugin, ViewUpdate, WidgetType } from '@codemirror/view'
 import type { DecorationSet } from '@codemirror/view'
-import { RangeSetBuilder } from '@codemirror/state'
+import { RangeSetBuilder, type Text } from '@codemirror/state'
 import { App, MarkdownView, Notice, setIcon, TFile } from 'obsidian'
 import {
     IGNORE_FRONTMATTER_KEY,
@@ -49,6 +49,7 @@ import {
     type SkippedQuery
 } from './utils/unresolved-reference-notices'
 import { getBlockquotePrefix, stripBlockquoteMarkers } from './utils/blockquote.fn'
+import { findCodeRanges, isInsideCode, type CodeRange } from './utils/code-ranges.fn'
 
 type QueryType = 'auto' | 'manual' | 'once' | 'eject'
 
@@ -590,9 +591,28 @@ export const refreshButtonExtension = (
     return ViewPlugin.fromClass(
         class {
             decorations: DecorationSet
+            // Code ranges of the last document they were computed for. Text is
+            // immutable, so identity tells whether they are still valid.
+            private codeRangesDoc: Text | null = null
+            private codeRanges: CodeRange[] = []
 
             constructor(view: EditorView) {
                 this.decorations = this.buildDecorations(view)
+            }
+
+            /**
+             * True when the document offset sits in fenced code or inline code: query
+             * markers there are examples and get no badge, button or line class.
+             * Ranges are computed on first use per document version, so notes
+             * without markers in view never pay for it.
+             * Reference: https://github.com/dsebastien/obsidian-dataview-serializer/issues/91
+             */
+            isInCode(doc: Text, offset: number): boolean {
+                if (this.codeRangesDoc !== doc) {
+                    this.codeRanges = findCodeRanges(doc.toString())
+                    this.codeRangesDoc = doc
+                }
+                return isInsideCode(this.codeRanges, offset)
             }
 
             update(update: ViewUpdate): void {
@@ -610,6 +630,20 @@ export const refreshButtonExtension = (
 
                 const settings = getSettings()
                 const decorations: Array<{ from: number; to: number; decoration: Decoration }> = []
+                const doc = view.state.doc
+                // True when the first of the markers found in the line is outside code
+                const hasLiveMarker = (
+                    lineFrom: number,
+                    text: string,
+                    markers: string[]
+                ): boolean => {
+                    const offsets = markers
+                        .map((marker) => text.indexOf(marker))
+                        .filter((index) => index !== -1)
+                    return (
+                        offsets.length > 0 && !this.isInCode(doc, lineFrom + Math.min(...offsets))
+                    )
+                }
 
                 // State for tracking multi-line query parsing in decorations
                 interface MultiLineDecorationState {
@@ -743,7 +777,7 @@ export const refreshButtonExtension = (
                         } else {
                             // Check for query definition line
                             const flagInfo = detectQueryFlagInLine(text)
-                            if (flagInfo) {
+                            if (flagInfo && !this.isInCode(doc, line.from + flagInfo.openIdx)) {
                                 const { flagOpen, openIdx, queryType } = flagInfo
                                 const closeIdx = text.indexOf(QUERY_FLAG_CLOSE, openIdx)
                                 const closeIdxTrimmed = text.indexOf(
@@ -894,7 +928,10 @@ export const refreshButtonExtension = (
                         } else if (!multiLineState.isCapturing && settings.enableDataviewJS) {
                             // Check for DataviewJS query definition
                             const dvjsFlagInfo = detectDataviewJSFlagInLine(text)
-                            if (dvjsFlagInfo) {
+                            if (
+                                dvjsFlagInfo &&
+                                !this.isInCode(doc, line.from + dvjsFlagInfo.openIdx)
+                            ) {
                                 const { flagOpen, openIdx, queryType } = dvjsFlagInfo
 
                                 // Check if closing flag is on the same line (rare for DataviewJS)
@@ -955,7 +992,11 @@ export const refreshButtonExtension = (
                             !multiLineState.isCapturing &&
                             !dvjsMultiLineState.isCapturing &&
                             (text.includes(SERIALIZED_QUERY_START) ||
-                                text.includes(SERIALIZED_QUERY_START_ALT))
+                                text.includes(SERIALIZED_QUERY_START_ALT)) &&
+                            hasLiveMarker(line.from, text, [
+                                SERIALIZED_QUERY_START,
+                                SERIALIZED_QUERY_START_ALT
+                            ])
                         ) {
                             decorations.push({
                                 from: line.from,
@@ -972,7 +1013,11 @@ export const refreshButtonExtension = (
                             !multiLineState.isCapturing &&
                             !dvjsMultiLineState.isCapturing &&
                             (text.includes(SERIALIZED_QUERY_END) ||
-                                text.includes(SERIALIZED_QUERY_END_ALT))
+                                text.includes(SERIALIZED_QUERY_END_ALT)) &&
+                            hasLiveMarker(line.from, text, [
+                                SERIALIZED_QUERY_END,
+                                SERIALIZED_QUERY_END_ALT
+                            ])
                         ) {
                             decorations.push({
                                 from: line.from,
@@ -986,7 +1031,11 @@ export const refreshButtonExtension = (
                             !multiLineState.isCapturing &&
                             !dvjsMultiLineState.isCapturing &&
                             (text.includes(SERIALIZED_DATAVIEWJS_START) ||
-                                text.includes(SERIALIZED_DATAVIEWJS_START_ALT))
+                                text.includes(SERIALIZED_DATAVIEWJS_START_ALT)) &&
+                            hasLiveMarker(line.from, text, [
+                                SERIALIZED_DATAVIEWJS_START,
+                                SERIALIZED_DATAVIEWJS_START_ALT
+                            ])
                         ) {
                             decorations.push({
                                 from: line.from,
@@ -1001,7 +1050,11 @@ export const refreshButtonExtension = (
                             !multiLineState.isCapturing &&
                             !dvjsMultiLineState.isCapturing &&
                             (text.includes(SERIALIZED_DATAVIEWJS_END) ||
-                                text.includes(SERIALIZED_DATAVIEWJS_END_ALT))
+                                text.includes(SERIALIZED_DATAVIEWJS_END_ALT)) &&
+                            hasLiveMarker(line.from, text, [
+                                SERIALIZED_DATAVIEWJS_END,
+                                SERIALIZED_DATAVIEWJS_END_ALT
+                            ])
                         ) {
                             decorations.push({
                                 from: line.from,
@@ -1011,7 +1064,9 @@ export const refreshButtonExtension = (
                         }
 
                         // Check for inline queries (<!-- IQ: =expr -->result<!-- /IQ -->)
-                        const inlineQueries = detectInlineQueriesInLine(text)
+                        const inlineQueries = detectInlineQueriesInLine(text).filter(
+                            (iq) => !this.isInCode(doc, line.from + iq.openIdx)
+                        )
                         for (const iq of inlineQueries) {
                             // Add mark decoration for the entire inline query
                             decorations.push({

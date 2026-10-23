@@ -20,6 +20,7 @@ import {
     SERIALIZED_QUERY_START_ALT
 } from '../constants'
 import { findQueryReferences, type QueryReference } from './extract-from-sources.fn'
+import { findCodeRanges, isInsideCode, type CodeRange } from './code-ranges.fn'
 
 /**
  * Location of the DQL query comments of a note, and in-place rewriting of
@@ -30,7 +31,9 @@ import { findQueryReferences, type QueryReference } from './extract-from-sources
  * definitions (`<!-- IQ: … -->` and variants), and the result header
  * (`<!-- SerializedQuery: … -->` / `<!-- dataview-serializer-result: … -->`)
  * that repeats the query. DataviewJS is out of scope: its references live in
- * JavaScript strings that cannot be parsed reliably.
+ * JavaScript strings that cannot be parsed reliably. Comments inside fenced code
+ * blocks or inline code are examples, never queries, and are skipped
+ * (https://github.com/dsebastien/obsidian-dataview-serializer/issues/91).
  *
  * Pure: no Obsidian API.
  */
@@ -95,15 +98,23 @@ export function mayContainQueryComment(content: string): boolean {
 
 /**
  * Every query comment of a note, in document order. An opener without a
- * closing `-->` is ignored, like the query parsers do.
+ * closing `-->` is ignored, like the query parsers do; so is one inside code.
  */
 export function findQueryComments(content: string): QueryComment[] {
     const comments: QueryComment[] = []
+    // Computed on the first query comment only: most notes have none
+    let codeRanges: CodeRange[] | undefined
     let position = content.indexOf(COMMENT_OPENER)
 
     while (position !== -1) {
         const match = OPENERS.find(({ opener }) => content.startsWith(opener, position))
         if (!match) {
+            position = content.indexOf(COMMENT_OPENER, position + COMMENT_OPENER.length)
+            continue
+        }
+
+        codeRanges ??= findCodeRanges(content)
+        if (isInsideCode(codeRanges, position)) {
             position = content.indexOf(COMMENT_OPENER, position + COMMENT_OPENER.length)
             continue
         }

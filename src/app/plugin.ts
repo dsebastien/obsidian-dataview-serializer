@@ -93,6 +93,13 @@ import {
 import { PeriodicSerializer } from './utils/periodic-serializer'
 import { removeAllQueries } from './utils/remove-all-queries.fn'
 import {
+    findCodeRanges,
+    indexOfOutsideCode,
+    type CodeRange,
+    matchOutsideCode,
+    replaceOutsideCode
+} from './utils/code-ranges.fn'
+import {
     findDataviewJSQueries,
     type DataviewJSQueryWithContext
 } from './utils/find-dataviewjs-queries.fn'
@@ -1398,6 +1405,11 @@ export class DataviewSerializerPlugin extends Plugin {
             // Process the modified file
             let updatedText = `${text}` // To ensure we have access to replaceAll...
 
+            // Query comments and result blocks inside fenced code or inline code are
+            // examples: every match below skips them, so they are never rewritten.
+            // Reference: https://github.com/dsebastien/obsidian-dataview-serializer/issues/91
+            const textCodeRanges = findCodeRanges(text)
+
             // Every query in this file resolves its links against the same vault
             // state, so the file-name index is built at most once per file (and
             // not at all when no link needs shortening) instead of once per query.
@@ -1458,7 +1470,11 @@ export class DataviewSerializerPlugin extends Plugin {
                     flagClose,
                     indentation
                 }
-                const isAlreadySerialized = !!text.match(buildAlreadySerializedRegex(regexParams))
+                const isAlreadySerialized = !!matchOutsideCode(
+                    text,
+                    buildAlreadySerializedRegex(regexParams),
+                    textCodeRanges
+                )
                 log(`[DEBUG] isAlreadySerialized: ${isAlreadySerialized}`, 'debug')
 
                 // Skip queries based on update mode during automatic updates
@@ -1510,7 +1526,11 @@ export class DataviewSerializerPlugin extends Plugin {
                 // Look for a serialized block that immediately follows THIS query definition
                 // We match ANY query text in the SerializedQuery marker (not the exact query)
                 // because the user may have modified the query since it was last serialized
-                const existingBlock = matchExistingSerializedBlock(text, regexParams)
+                const existingBlock = matchExistingSerializedBlock(
+                    text,
+                    regexParams,
+                    textCodeRanges
+                )
                 log(`[DEBUG] Idempotency check - existingMatch found: ${!!existingBlock}`, 'debug')
                 if (existingBlock) {
                     // Inside a blockquote, the prefix carried by every line (including the
@@ -1620,7 +1640,8 @@ export class DataviewSerializerPlugin extends Plugin {
                     )
 
                     const textLengthBefore = updatedText.length
-                    updatedText = updatedText.replace(
+                    updatedText = replaceOutsideCode(
+                        updatedText,
                         queryToSerializeRegex,
                         () => queryAndSerializedQuery
                     )
@@ -1650,7 +1671,8 @@ export class DataviewSerializerPlugin extends Plugin {
                     result,
                     foundDataviewJSQueries,
                     targetQuery,
-                    isManualTrigger
+                    isManualTrigger,
+                    textCodeRanges
                 )
             }
 
@@ -1866,6 +1888,7 @@ export class DataviewSerializerPlugin extends Plugin {
      * @param foundDataviewJSQueries The DataviewJS queries found in the text
      * @param targetQuery Optional specific query to process
      * @param isManualTrigger Whether this is a manual trigger (vs automatic)
+     * @param originalCodeRanges Code ranges of `originalText` (matches inside code are skipped)
      * @returns The updated text with serialized DataviewJS queries
      */
     private async processDataviewJSQueries(
@@ -1875,7 +1898,8 @@ export class DataviewSerializerPlugin extends Plugin {
         result: FileProcessingResult,
         foundDataviewJSQueries: DataviewJSQueryWithContext[],
         targetQuery?: string,
-        isManualTrigger = false
+        isManualTrigger = false,
+        originalCodeRanges: CodeRange[] = findCodeRanges(originalText)
     ): Promise<string> {
         log(
             `[DEBUG] Processing ${foundDataviewJSQueries.length} DataviewJS queries in file [${filePath}]`,
@@ -1909,7 +1933,11 @@ export class DataviewSerializerPlugin extends Plugin {
 
             // Check if query is already serialized (for 'once' mode check)
             // Check if there's already a result block after this query definition
-            const queryDefIndex = originalText.indexOf(originalQueryDefinition)
+            const queryDefIndex = indexOfOutsideCode(
+                originalText,
+                originalQueryDefinition,
+                originalCodeRanges
+            )
             const textAfterQuery =
                 queryDefIndex !== -1
                     ? originalText.substring(queryDefIndex + originalQueryDefinition.length)
@@ -1963,7 +1991,11 @@ export class DataviewSerializerPlugin extends Plugin {
             // Idempotency check: compare new result with existing serialized content
             // Find existing serialized block for this query
             const dataviewJSRegexParams = { originalQueryDefinition, indentation }
-            const existingBlock = matchExistingDataviewJSBlock(originalText, dataviewJSRegexParams)
+            const existingBlock = matchExistingDataviewJSBlock(
+                originalText,
+                dataviewJSRegexParams,
+                originalCodeRanges
+            )
             if (existingBlock) {
                 // Strip the blockquote prefix before comparing so structural markers
                 // never make identical results look different
@@ -2014,7 +2046,11 @@ export class DataviewSerializerPlugin extends Plugin {
                     })
                 }
 
-                updatedText = updatedText.replace(queryToSerializeRegex, () => replacement)
+                updatedText = replaceOutsideCode(
+                    updatedText,
+                    queryToSerializeRegex,
+                    () => replacement
+                )
             }
         }
 

@@ -1,6 +1,7 @@
 import { QUERY_FLAG_CLOSE, QUERY_FLAG_OPEN } from '../constants'
 import { isSupportedQueryType } from './is-supported-query-type.fn'
 import { convertRawToSerializedFormat } from './find-inline-queries.fn'
+import { findCodeRanges, isNestedInCode, type CodeRange } from './code-ranges.fn'
 
 /**
  * Represents a detected Dataview query in the document
@@ -52,7 +53,10 @@ const DATAVIEW_INLINE_REGEX = /`=\s*([^`]+)`/g
 /**
  * Find all Dataview codeblocks in the given text
  */
-export function findDataviewCodeblocks(text: string): DetectedDataviewQuery[] {
+export function findDataviewCodeblocks(
+    text: string,
+    codeRanges: readonly CodeRange[] = findCodeRanges(text)
+): DetectedDataviewQuery[] {
     const results: DetectedDataviewQuery[] = []
     // Reset lastIndex for reuse of pre-compiled regex
     DATAVIEW_CODEBLOCK_REGEX.lastIndex = 0
@@ -61,6 +65,13 @@ export function findDataviewCodeblocks(text: string): DetectedDataviewQuery[] {
     while ((match = DATAVIEW_CODEBLOCK_REGEX.exec(text)) !== null) {
         const indentation = match[1] ?? ''
         const queryContent = match[2]?.trim() ?? ''
+
+        // A block nested in another fence (e.g. inside a ````markdown example) is an example
+        // Reference: https://github.com/dsebastien/obsidian-dataview-serializer/issues/91
+        if (isNestedInCode(codeRanges, match.index)) {
+            DATAVIEW_CODEBLOCK_REGEX.lastIndex = match.index + 1
+            continue
+        }
 
         if (queryContent) {
             results.push({
@@ -79,7 +90,10 @@ export function findDataviewCodeblocks(text: string): DetectedDataviewQuery[] {
 /**
  * Find all Dataview inline queries in the given text
  */
-export function findDataviewInlineQueries(text: string): DetectedDataviewQuery[] {
+export function findDataviewInlineQueries(
+    text: string,
+    codeRanges: readonly CodeRange[] = findCodeRanges(text)
+): DetectedDataviewQuery[] {
     const results: DetectedDataviewQuery[] = []
     // Reset lastIndex for reuse of pre-compiled regex
     DATAVIEW_INLINE_REGEX.lastIndex = 0
@@ -87,6 +101,11 @@ export function findDataviewInlineQueries(text: string): DetectedDataviewQuery[]
     let match: RegExpExecArray | null
     while ((match = DATAVIEW_INLINE_REGEX.exec(text)) !== null) {
         const queryContent = match[1]?.trim() ?? ''
+
+        // The span is code itself; one inside a fence or a longer span is an example
+        if (isNestedInCode(codeRanges, match.index)) {
+            continue
+        }
 
         if (queryContent) {
             // Find the indentation by looking backwards for the start of the line
@@ -115,8 +134,9 @@ export function findDataviewInlineQueries(text: string): DetectedDataviewQuery[]
  * Find all Dataview queries (both codeblocks and inline) in the given text
  */
 export function findAllDataviewQueries(text: string): DetectedDataviewQuery[] {
-    const codeblocks = findDataviewCodeblocks(text)
-    const inlineQueries = findDataviewInlineQueries(text)
+    const codeRanges = findCodeRanges(text)
+    const codeblocks = findDataviewCodeblocks(text, codeRanges)
+    const inlineQueries = findDataviewInlineQueries(text, codeRanges)
 
     // Combine and sort by position
     return [...codeblocks, ...inlineQueries].sort((a, b) => a.startOffset - b.startOffset)

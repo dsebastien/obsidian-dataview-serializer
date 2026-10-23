@@ -11,6 +11,7 @@ import {
 } from '../constants'
 import { buildBlockquotePrefixPattern } from './blockquote.fn'
 import { escapeRegExp } from './escape-reg-exp.fn'
+import { matchOutsideCode, type CodeRange } from './code-ranges.fn'
 
 /**
  * Regexes used to locate an existing serialized block so it can be detected,
@@ -24,6 +25,11 @@ import { escapeRegExp } from './escape-reg-exp.fn'
  * Outside of one, the patterns stay exactly as strict as they have always been.
  *
  * Reference: https://github.com/dsebastien/obsidian-dataview-serializer/issues/64
+ *
+ * Matches starting inside fenced code or inline code are examples, never the
+ * block of a live query: callers match through `matchOutsideCode` /
+ * `replaceOutsideCode` (`code-ranges.fn.ts`), as the two `match*` helpers below do.
+ * Reference: https://github.com/dsebastien/obsidian-dataview-serializer/issues/91
  */
 
 /** Either result start marker (legacy or alternative syntax) */
@@ -82,11 +88,13 @@ export interface ExistingSerializedBlock {
  *
  * @param text The document text
  * @param params The query context
+ * @param codeRanges Code ranges of `text`, computed when omitted
  * @returns The existing block, or null when there is none
  */
 export const matchExistingSerializedBlock = (
     text: string,
-    params: BlockQueryRegexParams
+    params: BlockQueryRegexParams,
+    codeRanges?: readonly CodeRange[]
 ): ExistingSerializedBlock | null => {
     const prefix = buildBlockquotePrefixPattern(params.indentation)
     const regex = new RegExp(
@@ -94,7 +102,7 @@ export const matchExistingSerializedBlock = (
         'm'
     )
 
-    const match = text.match(regex)
+    const match = matchOutsideCode(text, regex, codeRanges)
     if (!match) {
         return null
     }
@@ -162,11 +170,13 @@ export interface DataviewJSRegexParams {
  *
  * @param text The document text
  * @param params The query context
+ * @param codeRanges Code ranges of `text`, computed when omitted
  * @returns The existing block, or null when there is none
  */
 export const matchExistingDataviewJSBlock = (
     text: string,
-    params: DataviewJSRegexParams
+    params: DataviewJSRegexParams,
+    codeRanges?: readonly CodeRange[]
 ): ExistingSerializedBlock | null => {
     const prefix = buildBlockquotePrefixPattern(params.indentation)
     const regex = new RegExp(
@@ -174,7 +184,7 @@ export const matchExistingDataviewJSBlock = (
         'm'
     )
 
-    const match = text.match(regex)
+    const match = matchOutsideCode(text, regex, codeRanges)
     if (!match) {
         return null
     }

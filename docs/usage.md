@@ -244,6 +244,14 @@ The same applies to DataviewJS: the markers are removed before the JavaScript is
 - **In Live Preview, the raw comments appear when your cursor is inside the block.** That is standard Obsidian behavior for the block being edited, and it applies to the query line too. In Reading mode the comments are invisible.
 - **Removing queries works too.** "Remove all queries in current file" removes quoted query definitions and their result blocks, leaving the callout itself in place.
 
+## Queries in Code Blocks Are Examples
+
+A query written inside a fenced code block (` ``` ` or `~~~`, any length, any language, nested fences included) or inside inline code (`` `<!-- QueryToSerialize: ... -->` ``) is an example, not a query. The plugin ignores it everywhere: it is never serialized, gets no badge or refresh button, is not validated, and is not rewritten when a note it mentions is renamed. The "Convert Dataview query…" commands and "Remove all queries from current file" leave such examples alone too, including a ```` ```dataview ```` block nested in a ```` ````markdown ```` example.
+
+A result block (`SerializedQuery`) already sitting inside a code block is left as it is: it becomes a static example.
+
+Code blocks inside callouts count too. Indentation alone (four spaces) does not make a code block here, so a query indented in a list item stays live.
+
 ## Alternative Syntax
 
 In addition to the original syntax documented above, the plugin supports an alternative, more descriptive syntax using the `dataview-serializer-` prefix. This alternative syntax is designed to be more discoverable for newcomers who might encounter these queries in shared vaults.

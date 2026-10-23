@@ -426,3 +426,65 @@ describe('DataviewSerializerPlugin.processFile with unresolved FROM references',
         expect(state.content).toContain('- [[Fresh]]')
     })
 })
+
+describe('DataviewSerializerPlugin.processFile with queries inside code (#91)', () => {
+    beforeAll(() => {
+        const proto = String.prototype as unknown as {
+            contains?: (this: string, search: string) => boolean
+        }
+        proto.contains ??= function (this: string, search: string): boolean {
+            return this.includes(search)
+        }
+        const scope = self as unknown as { window?: unknown }
+        scope.window ??= self
+    })
+
+    const docs = createFile('Docs.md')
+    const query = 'LIST FROM [[]]'
+    const fencedExample = [
+        '````markdown',
+        `<!-- QueryToSerialize: ${query} -->`,
+        `<!-- SerializedQuery: ${query} -->`,
+        '- [[Stale example output]]',
+        '<!-- SerializedQuery END -->',
+        '```dataview',
+        'LIST',
+        '```',
+        '````'
+    ].join('\n')
+    const inlineExample = `Write \`<!-- QueryToSerialize: ${query} -->\` to add a query.`
+
+    it('serializes the live query and leaves the identical examples untouched', async () => {
+        const content = `${fencedExample}\n${inlineExample}\n<!-- QueryToSerialize: ${query} -->\n`
+        const { plugin, state, tryQueryMarkdown } = createProcessor({ content })
+
+        await plugin.processFile(docs, true, undefined, true)
+
+        expect(tryQueryMarkdown).toHaveBeenCalledTimes(1)
+        expect(state.content).toBe(
+            `${fencedExample}\n${inlineExample}\n<!-- QueryToSerialize: ${query} -->\n<!-- SerializedQuery: ${query} -->\n- [[Fresh]]\n\n<!-- SerializedQuery END -->\n`
+        )
+    })
+
+    it('updates the live block, not the example block written before it', async () => {
+        const content = `${fencedExample}\n${previousBlock(query)}`
+        const { plugin, state } = createProcessor({ content })
+
+        await plugin.processFile(docs, true, undefined, true)
+
+        expect(state.content).toBe(
+            `${fencedExample}\n${previousBlock(query).replace('- [[Previous]]', '- [[Fresh]]\n')}`
+        )
+    })
+
+    it('does nothing for a note whose queries are all examples', async () => {
+        const content = `${fencedExample}\n${inlineExample}\n`
+        const { plugin, state, process, tryQueryMarkdown } = createProcessor({ content })
+
+        await plugin.processFile(docs, true, undefined, true)
+
+        expect(tryQueryMarkdown).not.toHaveBeenCalled()
+        expect(process).not.toHaveBeenCalled()
+        expect(state.content).toBe(content)
+    })
+})

@@ -11,6 +11,7 @@ import {
 } from '../constants'
 import { isSupportedQueryType } from './is-supported-query-type.fn'
 import { getBlockquotePrefix, stripBlockquoteMarkers } from './blockquote.fn'
+import { findCodeRanges, isInsideCode } from './code-ranges.fn'
 
 /**
  * Update mode for a query
@@ -252,17 +253,24 @@ function extractMultiLineQuery(
  * Multi-line queries are detected when the opening flag is found but the closing
  * flag is not on the same line. Lines are accumulated until the closing flag is found.
  *
+ * Queries inside fenced code blocks or inline code are examples and are ignored.
+ * Reference: https://github.com/dsebastien/obsidian-dataview-serializer/issues/91
+ *
  * @param text The document text to search for queries
  * @returns Array of queries with their context information
  */
 export const findQueries = (text: string): QueryWithContext[] => {
     const retVal: QueryWithContext[] = []
     const lines: string[] = text.split('\n')
+    const codeRanges = findCodeRanges(text)
     let multiLineState = createInitialMultiLineState()
+    let nextLineStart = 0
 
     for (let i = 0; i < lines.length; i++) {
         const line = lines[i]!
         const trimmedLine = line.trim()
+        const lineStart = nextLineStart
+        nextLineStart += line.length + 1
 
         if (multiLineState.isCapturing) {
             // We're in the middle of capturing a multi-line query
@@ -305,7 +313,10 @@ export const findQueries = (text: string): QueryWithContext[] => {
             // Not currently capturing, look for a new query
             const flagInfo = detectQueryFlag(trimmedLine, line)
 
-            if (flagInfo) {
+            if (
+                flagInfo &&
+                !isInsideCode(codeRanges, lineStart + line.indexOf(flagInfo.flagOpen.trim()))
+            ) {
                 const { flagOpen, updateMode, syntaxVariant } = flagInfo
 
                 // Check for closing flag (with or without leading space)

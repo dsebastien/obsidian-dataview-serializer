@@ -33,6 +33,7 @@ import {
 } from '../constants'
 import type { QueryUpdateMode, SyntaxVariant } from './find-queries.fn'
 import { getBlockquotePrefix, stripBlockquoteMarkers } from './blockquote.fn'
+import { findCodeRanges, isInsideCode } from './code-ranges.fn'
 
 /**
  * Interface to represent a DataviewJS query with its context
@@ -214,6 +215,8 @@ function extractJSCode(accumulatedLines: string[], flagOpen: string, indentation
  *
  * DataviewJS queries are always multi-line (JavaScript code spans lines).
  * The opening marker starts with `<!-- DataviewJSToSerialize:` and ends with `-->`.
+ * Queries inside fenced code blocks or inline code are examples and are ignored
+ * (https://github.com/dsebastien/obsidian-dataview-serializer/issues/91).
  *
  * @param text The document text to search for queries
  * @returns Array of DataviewJS queries with their context information
@@ -221,11 +224,15 @@ function extractJSCode(accumulatedLines: string[], flagOpen: string, indentation
 export function findDataviewJSQueries(text: string): DataviewJSQueryWithContext[] {
     const retVal: DataviewJSQueryWithContext[] = []
     const lines: string[] = text.split('\n')
+    const codeRanges = findCodeRanges(text)
     let multiLineState = createInitialMultiLineState()
+    let nextLineStart = 0
 
     for (let i = 0; i < lines.length; i++) {
         const line = lines[i]!
         const trimmedLine = line.trim()
+        const lineStart = nextLineStart
+        nextLineStart += line.length + 1
 
         if (multiLineState.isCapturing) {
             // We're in the middle of capturing a multi-line query
@@ -269,7 +276,10 @@ export function findDataviewJSQueries(text: string): DataviewJSQueryWithContext[
             // Not currently capturing, look for a new DataviewJS query
             const flagInfo = detectDataviewJSFlag(trimmedLine, line)
 
-            if (flagInfo) {
+            if (
+                flagInfo &&
+                !isInsideCode(codeRanges, lineStart + line.indexOf(flagInfo.flagOpen.trim()))
+            ) {
                 const { flagOpen, updateMode, syntaxVariant } = flagInfo
 
                 // Check if the closing flag is on the same line (single-line query)

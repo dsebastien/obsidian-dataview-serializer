@@ -12,6 +12,7 @@ import {
     INLINE_QUERY_END_ALT
 } from '../constants'
 import type { QueryUpdateMode, SyntaxVariant } from './find-queries.fn'
+import { findCodeRanges, isInsideCode, isNestedInCode } from './code-ranges.fn'
 
 /**
  * Interface to represent a serialized inline query with its context
@@ -188,6 +189,9 @@ export function hasInlineQueryMarker(text: string): boolean {
 
 export function findInlineQueries(text: string): InlineQueryWithContext[] {
     const results: InlineQueryWithContext[] = []
+    // Queries inside code are examples, never live
+    // Reference: https://github.com/dsebastien/obsidian-dataview-serializer/issues/91
+    let codeRanges: ReturnType<typeof findCodeRanges> | undefined
 
     for (const { regex, flag, updateMode, syntaxVariant } of COMPILED_INLINE_PATTERNS) {
         // Reset lastIndex for reuse of pre-compiled regex
@@ -206,6 +210,12 @@ export function findInlineQueries(text: string): InlineQueryWithContext[] {
             // Skip if this position was already matched by a more specific flag
             // (e.g., IQManual is more specific than IQ)
             const startOffset = match.index
+            codeRanges ??= findCodeRanges(text)
+            if (isInsideCode(codeRanges, startOffset)) {
+                // A lazy match starting in code may run over a live query: rescan from here
+                regex.lastIndex = startOffset + 1
+                continue
+            }
             const alreadyMatched = results.some(
                 (r) => r.startOffset === startOffset && r.flagOpen !== flag
             )
@@ -257,12 +267,20 @@ export function findRawInlineQueries(text: string): RawInlineQuery[] {
     // Reset lastIndex for reuse of pre-compiled regex
     RAW_INLINE_QUERY_REGEX.lastIndex = 0
 
+    let codeRanges: ReturnType<typeof findCodeRanges> | undefined
     let match: RegExpExecArray | null
     while ((match = RAW_INLINE_QUERY_REGEX.exec(text)) !== null) {
         const expression = match[1]?.trim() ?? ''
 
         // Skip if no expression found
         if (!expression) {
+            continue
+        }
+
+        // The span is code itself; one inside other code (a fence, a longer span) is an example
+        // Reference: https://github.com/dsebastien/obsidian-dataview-serializer/issues/91
+        codeRanges ??= findCodeRanges(text)
+        if (isNestedInCode(codeRanges, match.index)) {
             continue
         }
 
