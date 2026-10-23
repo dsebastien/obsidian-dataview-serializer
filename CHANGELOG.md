@@ -2,6 +2,13 @@
 
 All notable changes to this project will be documented in this file.
 
+## [3.7.0](https://github.com/dsebastien/obsidian-dataview-serializer/compare/3.6.0...3.7.0) (2026-10-23)
+
+### Features
+
+* **plugin:** add a "Validate all queries" command and API ([e8fb3e8](https://github.com/dsebastien/obsidian-dataview-serializer/commit/e8fb3e86132f660775a6051de9f7d52dcb3808e0)), closes [#87](https://github.com/dsebastien/obsidian-dataview-serializer/issues/87) [#88](https://github.com/dsebastien/obsidian-dataview-serializer/issues/88) [87/#88](https://github.com/87/obsidian-dataview-serializer/issues/88) [#89](https://github.com/dsebastien/obsidian-dataview-serializer/issues/89)
+* **plugin:** rewrite query references when notes or folders are renamed ([a390a7b](https://github.com/dsebastien/obsidian-dataview-serializer/commit/a390a7b681c3068e9404f3e2ab56325e5f26a688)), closes [#88](https://github.com/dsebastien/obsidian-dataview-serializer/issues/88) [#87](https://github.com/dsebastien/obsidian-dataview-serializer/issues/87)
+
 ## [3.6.0](https://github.com/dsebastien/obsidian-dataview-serializer/compare/3.5.1...3.6.0) (2026-10-23)
 
 ### Features
@@ -375,6 +382,7 @@ six command ids unchanged, and data.json byte-identical afterwards.
 ## [1.0.2](https://github.com/dsebastien/obsidian-dataview-serializer/compare/1.0.1...1.0.2) (2024-05-14)
 ## [1.0.1](https://github.com/dsebastien/obsidian-dataview-serializer/compare/1.0.0...1.0.1) (2024-05-14)
 ## 1.0.0 (2024-05-13)
+
 
 
 

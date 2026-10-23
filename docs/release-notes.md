@@ -1,5 +1,12 @@
 # Release Notes
 
+## 3.7.0 (2026-10-23)
+
+### Features
+
+* **plugin:** add a "Validate all queries" command and API [#88](https://github.com/dsebastien/obsidian-dataview-serializer/issues/88) [87/#88](https://github.com/87/obsidian-dataview-serializer/issues/88) [#89](https://github.com/dsebastien/obsidian-dataview-serializer/issues/89)
+* **plugin:** rewrite query references when notes or folders are renamed [#87](https://github.com/dsebastien/obsidian-dataview-serializer/issues/87)
+
 ## 3.6.0 (2026-10-23)
 
 ### Features
