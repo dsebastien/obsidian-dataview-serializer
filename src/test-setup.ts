@@ -26,6 +26,14 @@ void mock.module('obsidian', () => ({
         close(): void {}
     },
     SearchComponent: class SearchComponent {},
+    // Pulled in by the "Validate all queries" modal; never opened under test
+    Modal: class Modal {},
+    ButtonComponent: class ButtonComponent {},
+    Keymap: class Keymap {
+        static isModEvent(): boolean {
+            return false
+        }
+    },
     // Pulled in transitively by the plugin entry point and the What's new view.
     // Only their identity matters here; nothing calls into them under test.
     ItemView: class ItemView {},

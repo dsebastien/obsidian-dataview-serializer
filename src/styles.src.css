@@ -339,3 +339,60 @@
 .dataview-serializer-whats-new-body .dataview-serializer-whats-new-links .setting-item-description {
     @apply pr-3;
 }
+
+/* ============================================
+   "Validate all queries" modal
+   ============================================ */
+.dvs-validation-modal {
+    width: min(900px, 90vw);
+}
+
+.dvs-validation-summary {
+    @apply mb-3;
+    color: var(--text-muted);
+}
+
+.dvs-validation-actions {
+    @apply mb-4 flex flex-wrap gap-2;
+}
+
+.dvs-validation-note {
+    @apply mb-4 pb-3 border-b border-solid;
+    border-color: var(--background-modifier-border);
+}
+
+.dvs-validation-note-link {
+    @apply font-semibold;
+}
+
+.dvs-validation-query {
+    @apply mt-2 ml-3;
+}
+
+.dvs-validation-query-header {
+    @apply flex items-start gap-2;
+}
+
+.dvs-validation-query-header code {
+    @apply flex-1;
+    white-space: pre-wrap;
+    word-break: break-word;
+}
+
+.dvs-validation-problems {
+    @apply mt-1 mb-0;
+}
+
+.dvs-validation-problem-type {
+    @apply font-semibold;
+}
+
+.dvs-validation-unresolved-link,
+.dvs-validation-unresolved-path,
+.dvs-validation-dataview-error {
+    color: var(--text-error);
+}
+
+.dvs-validation-self-reference {
+    color: var(--color-orange);
+}

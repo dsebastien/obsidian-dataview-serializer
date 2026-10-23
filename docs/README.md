@@ -24,6 +24,7 @@ Turning Dataview queries into Markdown also ensures that the generated content a
 - **Idempotency protection**: Prevents unnecessary file modifications and infinite update loops
 - **Rename-aware queries**: Renaming or moving a note or folder rewrites the links and `FROM` paths that referenced it in every query, which Obsidian's own link updater skips
 - **Rename protection**: A query whose `FROM` links to a note or folder that no longer exists keeps its previous result instead of being emptied, and you get notified
+- **Query validation**: The "Validate all queries" command lists missing notes and folders, self-references that should be `[[]]` (with one-click fixes) and, on demand, Dataview errors; also available to scripts and AI agents through the plugin API
 - **Manual mode**: Option to disable automatic updates and only serialize queries on demand
 - **Command palette integration**: Commands to serialize all queries, current file queries, or insert new query blocks
 

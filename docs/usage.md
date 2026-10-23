@@ -597,6 +597,17 @@ While the scan runs, a notice shows the live progress (e.g., `scanning 240/1300 
 
 To serialize only the queries in the currently open file, use the command "Scan and serialize Dataview queries in current file". This is useful when you want to refresh a specific file without processing the entire vault.
 
+#### Validate all queries
+
+The command "Validate all queries" (shown as **Dataview Serializer: Validate all queries**) audits every query in scope (same scope as the full scan: "Folders to scan", minus ignored folders and notes with the per-note ignore flag) and lists, per note and per query:
+
+- **Missing note**: a `[[link]]` in a positive `FROM` source that does not resolve
+- **Missing folder or file**: a quoted `FROM` path (`"Projects/Active"`) that does not exist
+- **Self-reference by name**: a link to the note itself written by name or path (`[[My note]]` inside `My note`). It breaks when the note is renamed; `[[]]` means the same and never breaks. A **Fix** button replaces it with `[[]]` for one query, **Fix all self-references** for the whole report (the `SerializedQuery` header is updated too, then the query is re-serialized). Links with a `#heading` or `#^block` part are reported but not fixed.
+- **Dataview error**: only after clicking **Also check Dataview errors (slow)**. Dataview cannot check a query without running it, so this runs every query once (minutes on very large vaults). Queries with missing references are not run.
+
+Click a note name to open it (Ctrl/Cmd-click: new tab). Block and inline queries are checked, in both syntaxes; DataviewJS is not. The same validation is available to scripts through the [API](api.md).
+
 #### Add a new Dataview Serializer query
 
 The plugin includes a command called "Insert query block" (shown as **Dataview Serializer: Insert query block** in the command palette) that can be used to quickly add a new Dataview Serializer query to the current note.
@@ -663,7 +674,7 @@ When a query fails to serialize (due to invalid syntax or other Dataview errors)
 
 Obsidian does not update links inside HTML comments when you rename a note or folder, so a query's `FROM` clause can end up pointing at something that no longer exists. Dataview then returns nothing.
 
-By default, the plugin detects this before serializing: when a note linked in `FROM` (`[[Note]]`) or a folder/file named in it (`"Folder/Sub"`) cannot be found, the query is skipped. Its previous result stays in place (a never-serialized query stays empty, a `QueryToSerializeOnceAndEject` query is not ejected), and a notification names the note and the missing references. Fix the query, then refresh it. With **Update queries when notes or folders are renamed** on (default), renames made inside Obsidian are followed automatically, so this mostly catches renames made outside Obsidian or before that setting existed.
+By default, the plugin detects this before serializing: when a note linked in `FROM` (`[[Note]]`) or a folder/file named in it (`"Folder/Sub"`) cannot be found, the query is skipped. Its previous result stays in place (a never-serialized query stays empty, a `QueryToSerializeOnceAndEject` query is not ejected), and a notification names the note and the missing references. Fix the query, then refresh it. To find every such query at once, run [Validate all queries](#validate-all-queries). With **Update queries when notes or folders are renamed** on (default), renames made inside Obsidian are followed automatically, so this mostly catches renames made outside Obsidian or before that setting existed.
 
 This applies to every query type (auto, manual, once, once-and-eject) and to inline queries. Negated sources, tags, `[[]]` and `""` are not checked. See **Skip queries that reference missing notes or folders** in the [configuration](configuration.md) to turn it off.
 

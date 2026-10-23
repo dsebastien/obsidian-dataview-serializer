@@ -101,6 +101,9 @@ import { isDisabledOnDevice, setDisabledOnDevice } from './utils/device-disabled
 import { applyQueryTextVisibility } from './utils/query-text-visibility'
 import { findUnresolvedFromSources } from './utils/extract-from-sources.fn'
 import { RenameQueryUpdater } from './rename-query-updater'
+import { QueryValidator } from './query-validator'
+import { QueryValidationModal } from './ui/query-validation-modal'
+import type { DataviewSerializerApi } from './api'
 import {
     buildUnresolvedReferencesNotice,
     UnresolvedReferenceNoticeThrottle,
@@ -204,14 +207,37 @@ export class DataviewSerializerPlugin extends Plugin {
     private renameQueryUpdater = new RenameQueryUpdater({
         app: this.app,
         registerEvent: (eventRef) => this.registerEvent(eventRef),
-        isNoteExcluded: (file) =>
-            isExcalidrawFile(file) ||
-            this.isFileIgnoredByFrontmatter(file) ||
-            this.settings.ignoredFolders.some((folder) => file.path.startsWith(folder)),
+        isNoteExcluded: (file) => this.isNoteExcludedFromProcessing(file),
         beforeWrite: (file) => this.markAsPluginWrite(file.path),
-        afterRewrite: (files) => this.refreshAfterRenameRewrite(files),
+        afterRewrite: (files) => this.refreshAfterQueryRewrite(files),
         showErrorNotifications: () => this.settings.showErrorNotifications
     })
+
+    /**
+     * Vault-wide query validation and the self-reference fix (#89).
+     */
+    private queryValidator = new QueryValidator({
+        app: this.app,
+        getDataviewApi: () => this.dataviewApi,
+        getFoldersToScan: () => this.settings.foldersToScan,
+        isNoteExcluded: (file) => this.isNoteExcludedFromProcessing(file),
+        isWritingBlocked: () => this.isDisabledOnDevice(),
+        beforeWrite: (file) => this.markAsPluginWrite(file.path),
+        afterFix: (files) => this.refreshAfterQueryRewrite(files)
+    })
+
+    /**
+     * Public API, for scripts and AI agents:
+     * `app.plugins.plugins['dataview-serializer'].api`. See `docs/api.md`.
+     */
+    readonly api: DataviewSerializerApi = {
+        validateQueries: (options) =>
+            this.queryValidator.validate({
+                ...(options?.runQueries !== undefined ? { runQueries: options.runQueries } : {}),
+                ...(options?.paths !== undefined ? { paths: options.paths } : {})
+            }),
+        fixSelfReferences: (path, query) => this.queryValidator.fixSelfReferences(path, query)
+    }
 
     /**
      * Optional timer re-serializing every file in scope every N minutes.
@@ -639,6 +665,21 @@ export class DataviewSerializerPlugin extends Plugin {
             }
         })
 
+        this.addCommand({
+            id: 'validate-all-queries',
+            name: 'Validate all queries',
+            callback: () => {
+                if (this.blockedByDeviceDisable()) {
+                    return
+                }
+                new QueryValidationModal(
+                    this.app,
+                    this.queryValidator,
+                    () => !this.isDisabledOnDevice()
+                ).open()
+            }
+        })
+
         // Add command to insert dataview serializer block
         this.addCommand({
             // Renamed from 'insert-dataview-serializer-block' (it repeated the
@@ -889,12 +930,24 @@ export class DataviewSerializerPlugin extends Plugin {
     }
 
     /**
-     * Re-serialize the notes whose queries were just rewritten after a
-     * rename, like an automatic update would (skipped when automatic updates
-     * are disabled). Forced, so the cooldown of a note serialized moments ago
-     * does not leave its rewritten queries stale.
+     * Whether the plugin never touches this note: Excalidraw, per-note ignore
+     * flag, or an ignored folder. Metadata only, no content read.
      */
-    private async refreshAfterRenameRewrite(files: TFile[]): Promise<void> {
+    private isNoteExcludedFromProcessing(file: TFile): boolean {
+        return (
+            isExcalidrawFile(file) ||
+            this.isFileIgnoredByFrontmatter(file) ||
+            this.settings.ignoredFolders.some((folder) => file.path.startsWith(folder))
+        )
+    }
+
+    /**
+     * Re-serialize the notes whose query text the plugin just rewrote (rename
+     * follow-up, self-reference fix), like an automatic update would (skipped
+     * when automatic updates are disabled). Forced, so the cooldown of a note
+     * serialized moments ago does not leave its rewritten queries stale.
+     */
+    private async refreshAfterQueryRewrite(files: TFile[]): Promise<void> {
         if (this.settings.disableAutomaticUpdates || this.isDisabledOnDevice()) {
             return
         }

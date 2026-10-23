@@ -27,3 +27,10 @@ How the plugin reads the links and paths written in queries, and keeps them righ
 Rename events (a folder rename fires one per descendant plus one for the folder) are queued; after `RENAME_BATCH_DELAY_MS` of quiet the queue is collapsed (`A→B, B→C` = `A→C`, no-ops dropped) and processed as one batch, serialized after any previous batch. Per affected note, only the renames concerning it are applied, inside one `vault.process` call (reads the latest content, so Obsidian's own link updates are kept). The note is marked via `filesToIgnoreFileEvents` before the write, then re-serialized with `processFile(file, force=true)` unless automatic updates are disabled.
 
 `RENAME_SETTLE_RECHECK_MS` later, the batch is reapplied to the notes it wrote (idempotent), in case a concurrent writer (e.g. Obsidian's link updater working from older content) overwrote the change. Skipped if another rename happened since, so renaming back is never undone.
+
+## Validation (#89)
+
+- Pure: `src/app/utils/validate-queries.fn.ts`: `findValidatableQueries` (block queries of a supported type and inline expressions, whitespace-normalized like `findQueries`, blockquote markers stripped), `validateQuery` (unresolved positive FROM sources via `findUnresolvedFromSources`, self-references via `findQueryReferences`), `fixSelfReferences` (via `rewriteQueryComments`, optionally limited to one query).
+- Runtime: `src/app/query-validator.ts` (`QueryValidator`): reads notes with `cachedRead` in chunks, resolves with `metadataCache.getFirstLinkpathDest` / `vault.getAbstractFileByPath`. `runQueries` adds Dataview errors: `dataviewApi.query` for block queries, `serializeInlineQuery` for inline ones, one note at a time. Dataview's public API has no parse-only entry point (bundling its parser would add ~300 KB), so errors cannot be detected without running queries; hence opt-in.
+- UI: `src/app/ui/query-validation-modal.ts`; styles in `src/styles.src.css` (`dvs-validation-*`).
+- API: `src/app/api.ts` (`DataviewSerializerApi`), exposed as `plugin.api`; user docs in `docs/api.md`.
