@@ -1,7 +1,8 @@
-import { describe, expect, it, mock } from 'bun:test'
+import { beforeAll, describe, expect, it, mock } from 'bun:test'
 import { add, sub } from 'date-fns'
 import { DataviewSerializerPlugin } from './plugin'
 import { TFile } from 'obsidian'
+import { createDefaultSettings } from './types/plugin-settings.intf'
 
 /**
  * Harness for `shouldFileBeIgnored`.
@@ -236,5 +237,192 @@ describe('DataviewSerializerPlugin.saveSerializedContent', () => {
         ).saveSerializedContent(writerFile, 'before', 'serialized')
 
         expect(process).toHaveBeenCalledTimes(1)
+    })
+})
+
+/**
+ * Harness for `processFile` and the unresolved FROM reference rule (#88).
+ *
+ * The vault holds one note, written through a fake `Vault.process`. Dataview
+ * is a stub returning a fixed result, so a test can tell "serialized" from
+ * "skipped" by whether the note changed and whether Dataview was asked.
+ */
+interface ProcessHarnessOptions {
+    content: string
+    existingLinks?: string[]
+    existingPaths?: string[]
+    queryResult?: string
+    skipQueriesWithUnresolvedReferences?: boolean
+}
+
+const createProcessor = (options: ProcessHarnessOptions) => {
+    const state = { content: options.content }
+    const existingLinks = options.existingLinks ?? []
+    const existingPaths = options.existingPaths ?? []
+
+    const process = mock((_file: TFile, fn: (data: string) => string) => {
+        state.content = fn(state.content)
+        return Promise.resolve(state.content)
+    })
+    const tryQueryMarkdown = mock(() => Promise.resolve(options.queryResult ?? '- [[Fresh]]\n'))
+    const getFirstLinkpathDest = mock((linkpath: string) =>
+        existingLinks.includes(linkpath) ? createFile(`${linkpath}.md`) : null
+    )
+
+    const plugin = Object.create(DataviewSerializerPlugin.prototype) as DataviewSerializerPlugin
+    Object.assign(plugin, {
+        app: {
+            vault: {
+                cachedRead: () => Promise.resolve(state.content),
+                process,
+                getFiles: () => [createFile('Fresh.md')],
+                getAbstractFileByPath: (path: string) =>
+                    existingPaths.includes(path) ? createFile(path) : null
+            },
+            metadataCache: {
+                getFileCache: () => ({ frontmatter: undefined }),
+                getFirstLinkpathDest
+            }
+        },
+        settings: {
+            ...createDefaultSettings(),
+            skipQueriesWithUnresolvedReferences: options.skipQueriesWithUnresolvedReferences ?? true
+        },
+        dataviewApi: { tryQueryMarkdown },
+        nextPossibleUpdates: new Map<string, Date>(),
+        filesToIgnoreFileEvents: new Set<string>(),
+        isDisabledOnDevice: () => false
+    })
+
+    return { plugin, state, process, tryQueryMarkdown, getFirstLinkpathDest }
+}
+
+const previousBlock = (query: string): string =>
+    `<!-- QueryToSerialize: ${query} -->\n<!-- SerializedQuery: ${query} -->\n- [[Previous]]\n<!-- SerializedQuery END -->\n`
+
+describe('DataviewSerializerPlugin.processFile with unresolved FROM references', () => {
+    beforeAll(() => {
+        // Obsidian extends String with contains(); processFile schedules a
+        // cleanup through window.setTimeout
+        const proto = String.prototype as unknown as {
+            contains?: (this: string, search: string) => boolean
+        }
+        proto.contains ??= function (this: string, search: string): boolean {
+            return this.includes(search)
+        }
+        // `self` is Bun's global object (the same object as `globalThis`)
+        const scope = self as unknown as { window?: unknown }
+        scope.window ??= self
+    })
+
+    const goal = createFile('Goals/Teach Organizing (Goal).md')
+
+    it('keeps the previous output when a linked note is missing', async () => {
+        const query = 'LIST FROM #type/plan AND [[Teach Organization (Goal)]]'
+        const content = `# Plans\n${previousBlock(query)}`
+        const { plugin, state, process, tryQueryMarkdown } = createProcessor({ content })
+
+        const result = await plugin.processFile(goal, true)
+
+        expect(state.content).toBe(content)
+        expect(process).not.toHaveBeenCalled()
+        expect(tryQueryMarkdown).not.toHaveBeenCalled()
+        expect(result.skipped).toEqual([
+            {
+                filePath: goal.path,
+                query,
+                unresolved: ['[[Teach Organization (Goal)]]']
+            }
+        ])
+    })
+
+    it('writes nothing for a never-serialized query with a missing folder', async () => {
+        const content = '<!-- QueryToSerialize: LIST FROM "Gone/Folder" -->\n'
+        const { plugin, state } = createProcessor({ content })
+
+        const result = await plugin.processFile(goal, true)
+
+        expect(state.content).toBe(content)
+        expect(result.skipped[0]?.unresolved).toEqual(['"Gone/Folder"'])
+    })
+
+    it('does not eject a once-and-eject query that was skipped', async () => {
+        const content = '<!-- QueryToSerializeOnceAndEject: LIST FROM [[Gone]] -->\n'
+        const { plugin, state } = createProcessor({ content })
+
+        await plugin.processFile(goal, true, undefined, true)
+
+        expect(state.content).toBe(content)
+    })
+
+    it('skips manual and once queries on manual runs too', async () => {
+        const content = [
+            '<!-- QueryToSerializeManual: LIST FROM [[Gone]] -->',
+            '<!-- QueryToSerializeOnce: LIST FROM "Gone" -->',
+            ''
+        ].join('\n')
+        const { plugin, state, tryQueryMarkdown } = createProcessor({ content })
+
+        const result = await plugin.processFile(goal, true, undefined, true)
+
+        expect(state.content).toBe(content)
+        expect(tryQueryMarkdown).not.toHaveBeenCalled()
+        expect(result.skipped).toHaveLength(2)
+    })
+
+    it('serializes when every positive source resolves', async () => {
+        const query = 'LIST FROM [[Goal|g]] AND "Plans" AND "Notes/Index"'
+        const { plugin, state, getFirstLinkpathDest } = createProcessor({
+            content: previousBlock(query),
+            existingLinks: ['Goal'],
+            existingPaths: ['Plans', 'Notes/Index.md']
+        })
+
+        const result = await plugin.processFile(goal, true)
+
+        expect(result.skipped).toEqual([])
+        expect(state.content).toContain('- [[Fresh]]')
+        expect(state.content).not.toContain('[[Previous]]')
+        expect(getFirstLinkpathDest).toHaveBeenCalledWith('Goal', goal.path)
+    })
+
+    it('serializes when only negated sources are missing', async () => {
+        const query = 'LIST FROM "Plans" AND !"Archive" AND -[[Gone]]'
+        const { plugin, state } = createProcessor({
+            content: previousBlock(query),
+            existingPaths: ['Plans']
+        })
+
+        const result = await plugin.processFile(goal, true)
+
+        expect(result.skipped).toEqual([])
+        expect(state.content).toContain('- [[Fresh]]')
+    })
+
+    it('keeps the old behavior when the setting is off', async () => {
+        const query = 'LIST FROM [[Gone]]'
+        const { plugin, state } = createProcessor({
+            content: previousBlock(query),
+            skipQueriesWithUnresolvedReferences: false
+        })
+
+        const result = await plugin.processFile(goal, true)
+
+        expect(result.skipped).toEqual([])
+        expect(state.content).toContain('- [[Fresh]]')
+    })
+
+    it('only skips the broken query of a note', async () => {
+        const broken = 'LIST FROM [[Gone]]'
+        const fine = 'LIST FROM [[]]'
+        const { plugin, state } = createProcessor({
+            content: `${previousBlock(broken)}\n${previousBlock(fine)}`
+        })
+
+        const result = await plugin.processFile(goal, true)
+
+        expect(result.skipped.map((s) => s.query)).toEqual([broken])
+        expect(state.content).toContain(`${previousBlock(broken)}`)
+        expect(state.content).toContain('- [[Fresh]]')
     })
 })

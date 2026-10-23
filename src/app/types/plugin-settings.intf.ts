@@ -49,6 +49,14 @@ export interface PluginSettings {
      * Default: true
      */
     enableDataviewJS: boolean
+    /**
+     * Leave a DQL query's previous output untouched when a positive source of
+     * its FROM clause (`[[note]]`, `"folder"`) does not exist, e.g. after a
+     * rename: Obsidian does not update links inside the HTML comments that
+     * hold queries, so the query would silently serialize to nothing.
+     * Default: true
+     */
+    skipQueriesWithUnresolvedReferences: boolean
 }
 
 /**
@@ -73,7 +81,8 @@ export function createDefaultSettings(): PluginSettings {
         debugLogging: false,
         addTrailingNewline: false,
         linkFormat: 'shortest',
-        enableDataviewJS: true
+        enableDataviewJS: true,
+        skipQueriesWithUnresolvedReferences: true
     }
 }
 

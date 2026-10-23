@@ -1,6 +1,6 @@
 import { migrateCommandReferences, type AppLike } from './utils/migrate-command-references.fn'
 import { registerWhatsNewView } from './whats-new'
-import { App, debounce, Notice, Plugin, TAbstractFile, TFile } from 'obsidian'
+import { App, debounce, normalizePath, Notice, Plugin, TAbstractFile, TFile } from 'obsidian'
 import type { EventRef } from 'obsidian'
 import { createDefaultSettings, type PluginSettings } from './types/plugin-settings.intf'
 import { SettingsTab } from './settings/settings-tab'
@@ -17,6 +17,7 @@ import {
     MINIMUM_MS_BETWEEN_EVENTS,
     MINIMUM_SECONDS_BETWEEN_UPDATES,
     NOTICE_TIMEOUT,
+    UNRESOLVED_REFERENCE_NOTICE_COOLDOWN_MS,
     QUERY_FLAG_CLOSE,
     QUERY_FLAG_OPEN,
     SERIALIZED_QUERY_END,
@@ -98,6 +99,12 @@ import {
 import { serializeDataviewJSQuery } from './utils/serialize-dataviewjs-query.fn'
 import { isDisabledOnDevice, setDisabledOnDevice } from './utils/device-disabled'
 import { applyQueryTextVisibility } from './utils/query-text-visibility'
+import { findUnresolvedFromSources } from './utils/extract-from-sources.fn'
+import {
+    buildUnresolvedReferencesNotice,
+    UnresolvedReferenceNoticeThrottle,
+    type SkippedQuery
+} from './utils/unresolved-reference-notices'
 
 /** The insert query block command; it used to repeat the plugin id. */
 const INSERT_QUERY_BLOCK_COMMAND_ID = 'insert-query-block'
@@ -121,6 +128,11 @@ interface FileProcessingResult {
      * Whether the file content was actually modified and saved.
      */
     updated?: boolean
+    /**
+     * Queries left untouched because their FROM clause references a missing
+     * note or folder (see `skipQueriesWithUnresolvedReferences`).
+     */
+    skipped: SkippedQuery[]
 }
 
 /**
@@ -138,6 +150,7 @@ interface FullScanSummary {
     scannedCount: number
     updatedCount: number
     errors: BatchError[]
+    skipped: SkippedQuery[]
 }
 
 export class DataviewSerializerPlugin extends Plugin {
@@ -175,6 +188,14 @@ export class DataviewSerializerPlugin extends Plugin {
     private filesToIgnoreFileEvents: Set<string> = new Set()
 
     /**
+     * Keeps automatic runs from repeating the same "unresolved references"
+     * notice on every edit or timer tick.
+     */
+    private unresolvedReferenceNoticeThrottle = new UnresolvedReferenceNoticeThrottle(
+        UNRESOLVED_REFERENCE_NOTICE_COOLDOWN_MS
+    )
+
+    /**
      * Optional timer re-serializing every file in scope every N minutes.
      * Configured from device-local storage; silent apart from error notices.
      */
@@ -184,6 +205,7 @@ export class DataviewSerializerPlugin extends Plugin {
         run: async () => {
             const summary = await this.serializeAllFiles(false)
             this.showBatchErrorNotices(summary.errors)
+            this.reportSkippedQueries(summary.skipped, false)
         }
     })
 
@@ -242,6 +264,70 @@ export class DataviewSerializerPlugin extends Plugin {
     }
 
     /**
+     * Report the queries a run skipped because of unresolved FROM references,
+     * in a single notice. Automatic runs respect "Show error notifications" and
+     * report a given skip once per cooldown; manual runs always report.
+     */
+    private reportSkippedQueries(skipped: SkippedQuery[], isManualTrigger: boolean): void {
+        if (skipped.length === 0) {
+            return
+        }
+        if (!isManualTrigger && !this.settings.showErrorNotifications) {
+            return
+        }
+
+        const toReport = this.unresolvedReferenceNoticeThrottle.select(skipped, isManualTrigger)
+        if (toReport.length === 0) {
+            return
+        }
+
+        new Notice(buildUnresolvedReferencesNotice(toReport), NOTICE_TIMEOUT * 2)
+    }
+
+    /**
+     * The positive FROM sources of a DQL query that do not exist in the vault,
+     * as written in the query. Empty when the check is disabled.
+     */
+    private findUnresolvedReferences(query: string, originFilePath: string): string[] {
+        if (!this.settings.skipQueriesWithUnresolvedReferences) {
+            return []
+        }
+
+        const { metadataCache, vault } = this.app
+        return findUnresolvedFromSources(query, {
+            linkExists: (linkpath) =>
+                metadataCache.getFirstLinkpathDest(linkpath, originFilePath) !== null,
+            pathExists: (path) => {
+                const normalized = normalizePath(path)
+                return (
+                    vault.getAbstractFileByPath(normalized) !== null ||
+                    vault.getAbstractFileByPath(`${normalized}.md`) !== null
+                )
+            }
+        })
+    }
+
+    /**
+     * When the query references missing notes or folders, record it as
+     * skipped and log why. The caller must then leave the query untouched.
+     *
+     * @returns true when the query must be skipped
+     */
+    private skipIfUnresolved(query: string, result: FileProcessingResult): boolean {
+        const unresolved = this.findUnresolvedReferences(query, result.filePath)
+        if (unresolved.length === 0) {
+            return false
+        }
+
+        result.skipped.push({ filePath: result.filePath, query, unresolved })
+        log(
+            `Skipped a query in [${result.filePath}]: unresolved references ${unresolved.join(', ')}. The previous result was kept. Query: "${query}"`,
+            'warn'
+        )
+        return true
+    }
+
+    /**
      * Serialize the queries of every Markdown file in the "Folders to scan"
      * scope (the whole vault when that list is empty).
      *
@@ -273,19 +359,21 @@ export class DataviewSerializerPlugin extends Plugin {
         const summary: FullScanSummary = {
             scannedCount: filesToScan.length,
             updatedCount: 0,
-            errors: []
+            errors: [],
+            skipped: []
         }
         for (const result of results) {
             if (result.updated) {
                 summary.updatedCount++
             }
+            summary.skipped.push(...result.skipped)
             for (const error of result.errors) {
                 summary.errors.push({ filePath: result.filePath, error })
             }
         }
 
         log(
-            `Finished scanning ${summary.scannedCount} file(s): ${summary.updatedCount} updated, ${summary.errors.length} error(s)`,
+            `Finished scanning ${summary.scannedCount} file(s): ${summary.updatedCount} updated, ${summary.errors.length} error(s), ${summary.skipped.length} query(ies) skipped for unresolved references`,
             'info'
         )
 
@@ -306,11 +394,14 @@ export class DataviewSerializerPlugin extends Plugin {
             5 // Process 5 files concurrently
         )
 
+        const skipped: SkippedQuery[] = []
         for (const result of results) {
+            skipped.push(...result.skipped)
             for (const error of result.errors) {
                 allErrors.push({ filePath: result.filePath, error })
             }
         }
+        this.reportSkippedQueries(skipped, false)
 
         // Show error notifications if enabled for automatic updates
         if (this.settings.showErrorNotifications && allErrors.length > 0) {
@@ -367,11 +458,14 @@ export class DataviewSerializerPlugin extends Plugin {
             5 // Process 5 files concurrently
         )
 
+        const skipped: SkippedQuery[] = []
         for (const result of results) {
+            skipped.push(...result.skipped)
             for (const error of result.errors) {
                 allErrors.push({ filePath: result.filePath, error })
             }
         }
+        this.reportSkippedQueries(skipped, false)
 
         // Show error notifications if enabled for automatic updates
         if (this.settings.showErrorNotifications && allErrors.length > 0) {
@@ -468,11 +562,16 @@ export class DataviewSerializerPlugin extends Plugin {
                 new Notice(
                     `Dataview Serializer: scanned ${summary.scannedCount} file(s), updated ${summary.updatedCount}${
                         summary.errors.length > 0 ? `, ${summary.errors.length} error(s)` : ''
+                    }${
+                        summary.skipped.length > 0
+                            ? `, ${summary.skipped.length} skipped (unresolved references)`
+                            : ''
                     }`,
                     NOTICE_TIMEOUT
                 )
 
                 this.showBatchErrorNotices(summary.errors)
+                this.reportSkippedQueries(summary.skipped, true)
             }
         })
 
@@ -505,13 +604,14 @@ export class DataviewSerializerPlugin extends Plugin {
 
                 log(`Scanning and serializing Dataview queries in: ${activeFile.path}`, 'debug')
                 const result = await this.processFile(activeFile, true, undefined, true)
+                this.reportSkippedQueries(result.skipped, true)
 
                 // Show error notifications if enabled
                 if (this.settings.showErrorNotifications && result.errors.length > 0) {
                     for (const error of result.errors) {
                         this.createQueryErrorNotice(error, result.filePath)
                     }
-                } else {
+                } else if (result.skipped.length === 0) {
                     new Notice(`Dataview queries serialized in: ${activeFile.name}`)
                 }
             }
@@ -896,6 +996,17 @@ export class DataviewSerializerPlugin extends Plugin {
                 log('The loaded settings miss the [enableDataviewJS] property', 'debug')
                 needToSaveSettings = true
             }
+
+            if (typeof loadedSettings.skipQueriesWithUnresolvedReferences === 'boolean') {
+                draft.skipQueriesWithUnresolvedReferences =
+                    loadedSettings.skipQueriesWithUnresolvedReferences
+            } else {
+                log(
+                    'The loaded settings miss the [skipQueriesWithUnresolvedReferences] property',
+                    'debug'
+                )
+                needToSaveSettings = true
+            }
         })
 
         // Initialize debug mode from settings
@@ -1109,7 +1220,7 @@ export class DataviewSerializerPlugin extends Plugin {
         targetQuery?: string,
         isManualTrigger = false
     ): Promise<FileProcessingResult> {
-        const emptyResult: FileProcessingResult = { filePath: '', errors: [] }
+        const emptyResult: FileProcessingResult = { filePath: '', errors: [], skipped: [] }
 
         // Fully inert when disabled on this device, regardless of how we got here
         // (file events, schedulers, or any programmatic caller).
@@ -1123,7 +1234,7 @@ export class DataviewSerializerPlugin extends Plugin {
 
         // Safe from here on
         const file = _file
-        const result: FileProcessingResult = { filePath: file.path, errors: [] }
+        const result: FileProcessingResult = { filePath: file.path, errors: [], skipped: [] }
 
         const shouldBeIgnored = await this.shouldFileBeIgnored(file, force)
         if (shouldBeIgnored) {
@@ -1221,6 +1332,14 @@ export class DataviewSerializerPlugin extends Plugin {
                 // Skip queries based on update mode during automatic updates
                 if (shouldSkipQuery({ updateMode, isManualTrigger, isAlreadySerialized })) {
                     log(`[DEBUG] Skipping query due to shouldSkipQuery`, 'debug')
+                    continue
+                }
+
+                // A FROM pointing at a missing note or folder (renamed, usually)
+                // serializes to nothing: keep the previous output instead, and
+                // never eject a once-and-eject query on that basis.
+                // Reference: https://github.com/dsebastien/obsidian-dataview-serializer/issues/88
+                if (this.skipIfUnresolved(foundQuery, result)) {
                     continue
                 }
 
@@ -1534,6 +1653,12 @@ export class DataviewSerializerPlugin extends Plugin {
 
             // Skip queries based on update mode during automatic updates
             if (shouldSkipQuery({ updateMode, isManualTrigger, isAlreadySerialized })) {
+                continue
+            }
+
+            // Same rule as block queries: an expression with a FROM clause
+            // referencing a missing note or folder keeps its previous output
+            if (this.skipIfUnresolved(expression, result)) {
                 continue
             }
 

@@ -35,6 +35,8 @@ void mock.module('obsidian', () => ({
             return Promise.resolve()
         }
     },
+    // Close enough to Obsidian's: collapse and trim slashes
+    normalizePath: (path: string) => path.replace(/\/+/g, '/').replace(/^\/|\/$/g, '') || '/',
     debounce: (fn: (...args: unknown[]) => unknown) => fn,
     setIcon: () => {}
 }))

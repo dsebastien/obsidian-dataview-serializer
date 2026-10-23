@@ -30,6 +30,10 @@ The timer config (enabled flag and interval) MUST be stored only in device-local
 
 A tick is an automatic run over the "Folders to scan" scope (whole vault when empty), through `processFile` with `force=false` and `isManualTrigger=false`: ignored folders, the per-note ignore flag, the per-file cooldown, and manual/once query modes all apply, and only changed output is written. It is silent apart from error notices gated by `showErrorNotifications`, skips while the previous run is in progress, does nothing while the device-local disable is set, and is independent of `disableAutomaticUpdates`.
 
+## Unresolved FROM references keep the previous output
+
+When `skipQueriesWithUnresolvedReferences` is on (default), a DQL query (block or inline, every update mode) whose FROM clause has a positive source that does not resolve — `[[link]]` via `metadataCache.getFirstLinkpathDest` from the query's note, `"path"` via `vault.getAbstractFileByPath` as folder or file (also with `.md`) — MUST NOT be serialized: no Dataview call, previous output kept, nothing written for a never-serialized query, once-and-eject not ejected. Negated sources, tags, `[[]]` and `""` are never checked; DataviewJS is out of scope. Each run reports skips in one notice: manual runs always, automatic runs only with `showErrorNotifications` and once per skip per `UNRESOLVED_REFERENCE_NOTICE_COOLDOWN_MS`. Parsing lives in `extract-from-sources.fn.ts`. See [#88](https://github.com/dsebastien/obsidian-dataview-serializer/issues/88).
+
 ## Blockquote and callout integrity
 
 When a query's indentation contains a blockquote marker, everything the plugin writes for that query MUST carry the same prefix: the result start and end markers, the serialized content, and the blank separator lines (written as a bare `>`, without trailing whitespace). A single unprefixed line terminates the blockquote and breaks the enclosing callout, which is the bug this rule exists to prevent.

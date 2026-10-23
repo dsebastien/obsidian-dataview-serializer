@@ -391,6 +391,10 @@ describe('setControlValue', () => {
             !DEFAULT_SETTINGS.showErrorNotifications
         )
         await tab.setControlValue('addTrailingNewline', !DEFAULT_SETTINGS.addTrailingNewline)
+        await tab.setControlValue(
+            'skipQueriesWithUnresolvedReferences',
+            !DEFAULT_SETTINGS.skipQueriesWithUnresolvedReferences
+        )
         await tab.setControlValue('linkFormat', 'absolute')
 
         expect(plugin.settings).toMatchObject({
@@ -399,6 +403,8 @@ describe('setControlValue', () => {
             enableDataviewJS: !DEFAULT_SETTINGS.enableDataviewJS,
             showErrorNotifications: !DEFAULT_SETTINGS.showErrorNotifications,
             addTrailingNewline: !DEFAULT_SETTINGS.addTrailingNewline,
+            skipQueriesWithUnresolvedReferences:
+                !DEFAULT_SETTINGS.skipQueriesWithUnresolvedReferences,
             linkFormat: 'absolute'
         })
     })
@@ -416,6 +422,9 @@ describe('setControlValue', () => {
         expect(tab.getControlValue('enableDataviewJS')).toBe(settings.enableDataviewJS)
         expect(tab.getControlValue('showErrorNotifications')).toBe(settings.showErrorNotifications)
         expect(tab.getControlValue('addTrailingNewline')).toBe(settings.addTrailingNewline)
+        expect(tab.getControlValue('skipQueriesWithUnresolvedReferences')).toBe(
+            settings.skipQueriesWithUnresolvedReferences
+        )
         expect(tab.getControlValue('linkFormat')).toBe(settings.linkFormat)
         expect(tab.getControlValue('debugLogging')).toBe(settings.debugLogging)
         expect(tab.getControlValue('nope')).toBeUndefined()
@@ -425,6 +434,10 @@ describe('setControlValue', () => {
 describe('default settings', () => {
     test('hides query text by default', () => {
         expect(createDefaultSettings().hideQueryText).toBe(true)
+    })
+
+    test('skips queries with unresolved references by default', () => {
+        expect(createDefaultSettings().skipQueriesWithUnresolvedReferences).toBe(true)
     })
 
     test('constructing the plugin never freezes the shared defaults', () => {

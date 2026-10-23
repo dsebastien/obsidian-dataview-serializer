@@ -22,6 +22,7 @@ Turning Dataview queries into Markdown also ensures that the generated content a
 - **Inline refresh button**: Refresh individual queries directly from the editor
 - **Force update folders**: Configure specific folders (like index files) to update when any file in your vault changes, with optional date placeholders (e.g. `Daily/{{year}}/{{month}}`) for periodic notes
 - **Idempotency protection**: Prevents unnecessary file modifications and infinite update loops
+- **Rename protection**: A query whose `FROM` links to a note or folder that no longer exists keeps its previous result instead of being emptied, and you get notified
 - **Manual mode**: Option to disable automatic updates and only serialize queries on demand
 - **Command palette integration**: Commands to serialize all queries, current file queries, or insert new query blocks
 

@@ -659,6 +659,14 @@ When a query fails to serialize (due to invalid syntax or other Dataview errors)
 
 - **Refresh button errors**: When clicking the inline refresh button on a query with an error, you'll see a specific error message for that query.
 
+### Queries referencing missing notes or folders
+
+Obsidian does not update links inside HTML comments when you rename a note or folder, so a query's `FROM` clause can end up pointing at something that no longer exists. Dataview then returns nothing.
+
+By default, the plugin detects this before serializing: when a note linked in `FROM` (`[[Note]]`) or a folder/file named in it (`"Folder/Sub"`) cannot be found, the query is skipped. Its previous result stays in place (a never-serialized query stays empty, a `QueryToSerializeOnceAndEject` query is not ejected), and a notification names the note and the missing references. Fix the query, then refresh it.
+
+This applies to every query type (auto, manual, once, once-and-eject) and to inline queries. Negated sources, tags, `[[]]` and `""` are not checked. See **Skip queries that reference missing notes or folders** in the [configuration](configuration.md) to turn it off.
+
 ### TASK Query Behavior
 
 When serializing TASK queries, the plugin **strips the checkbox markers** (`[ ]`, `[x]`, etc.) from the output. This means:
@@ -694,7 +702,8 @@ If you're experiencing issues with the plugin:
 
 2. **Check for query errors**: Enable "Show error notifications" to see when queries fail. Common issues include:
    - Invalid Dataview syntax
-   - References to non-existent fields or folders
+   - References to non-existent fields
+   - Links or folders in `FROM` that no longer exist (see [Queries referencing missing notes or folders](#queries-referencing-missing-notes-or-folders))
    - Queries that depend on other plugins not being loaded
 
 3. **Console warnings**: Warnings and errors are only written to the console when debug logging is enabled. Turn it on before reproducing an issue, then check the console for what the plugin encountered.

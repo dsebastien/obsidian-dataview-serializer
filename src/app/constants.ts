@@ -3,6 +3,13 @@
  */
 export const NOTICE_TIMEOUT = 5000
 
+/**
+ * Automatic runs report a query skipped for unresolved FROM references
+ * (missing note or folder) at most once per this many milliseconds.
+ * Manual runs always report.
+ */
+export const UNRESOLVED_REFERENCE_NOTICE_COOLDOWN_MS = 10 * 60 * 1000
+
 export const DEFAULT_CANVAS_FILE_NAME = 'Canvas.md'
 export const MARKDOWN_FILE_EXTENSION = 'md'
 

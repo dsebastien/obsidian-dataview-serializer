@@ -116,6 +116,11 @@ export class SettingsTab extends PluginSettingTab {
                 control: { type: 'toggle', key: 'enableDataviewJS' }
             },
             {
+                name: 'Skip queries that reference missing notes or folders',
+                desc: 'When enabled, a query whose FROM clause links to a note or names a folder that does not exist (for example after a rename, since Obsidian does not update links inside the comments holding queries) is not serialized: its previous result is kept and a notification lists the missing references. When disabled, such queries are serialized as usual, usually to an empty result.',
+                control: { type: 'toggle', key: 'skipQueriesWithUnresolvedReferences' }
+            },
+            {
                 name: 'Show error notifications',
                 desc: 'When enabled, a notification popup will be displayed when a query fails to serialize.',
                 control: { type: 'toggle', key: 'showErrorNotifications' }
@@ -368,6 +373,8 @@ export class SettingsTab extends PluginSettingTab {
                 return this.plugin.settings.showErrorNotifications
             case 'addTrailingNewline':
                 return this.plugin.settings.addTrailingNewline
+            case 'skipQueriesWithUnresolvedReferences':
+                return this.plugin.settings.skipQueriesWithUnresolvedReferences
             case 'linkFormat':
                 return this.plugin.settings.linkFormat
             case 'debugLogging':
@@ -468,6 +475,13 @@ export class SettingsTab extends PluginSettingTab {
                 const next = this.expectBoolean(key, value)
                 await this.plugin.updateSettings((draft) => {
                     draft.addTrailingNewline = next
+                })
+                return
+            }
+            case 'skipQueriesWithUnresolvedReferences': {
+                const next = this.expectBoolean(key, value)
+                await this.plugin.updateSettings((draft) => {
+                    draft.skipQueriesWithUnresolvedReferences = next
                 })
                 return
             }

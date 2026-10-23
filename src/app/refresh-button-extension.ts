@@ -44,6 +44,10 @@ import {
 } from './constants'
 import type { PluginSettings } from './types/plugin-settings.intf'
 import { log } from '../utils/log'
+import {
+    buildUnresolvedReferencesNotice,
+    type SkippedQuery
+} from './utils/unresolved-reference-notices'
 import { getBlockquotePrefix, stripBlockquoteMarkers } from './utils/blockquote.fn'
 
 type QueryType = 'auto' | 'manual' | 'once' | 'eject'
@@ -292,6 +296,7 @@ interface FileProcessingResult {
         message: string
         query: string
     }>
+    skipped: SkippedQuery[]
 }
 
 /**
@@ -448,6 +453,11 @@ export const refreshButtonExtension = (
                                 `Query failed:\n"${truncatedQuery}"\n${firstError.message}`,
                                 NOTICE_TIMEOUT * 2
                             )
+                        } else if (result.skipped.length > 0) {
+                            new Notice(
+                                buildUnresolvedReferencesNotice(result.skipped),
+                                NOTICE_TIMEOUT * 2
+                            )
                         } else {
                             new Notice('Dataview query serialized')
                         }
@@ -553,6 +563,11 @@ export const refreshButtonExtension = (
                                         : firstError.query
                                 new Notice(
                                     `Inline query failed:\n"${truncatedExpr}"\n${firstError.message}`,
+                                    NOTICE_TIMEOUT * 2
+                                )
+                            } else if (result.skipped.length > 0) {
+                                new Notice(
+                                    buildUnresolvedReferencesNotice(result.skipped),
                                     NOTICE_TIMEOUT * 2
                                 )
                             } else {
