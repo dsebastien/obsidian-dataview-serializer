@@ -1,5 +1,11 @@
 # Release Notes
 
+## 3.6.0 (2026-10-23)
+
+### Features
+
+* **plugin:** skip queries that reference missing notes or folders
+
 ## 3.5.1 (2026-10-14)
 
 ### Bug Fixes

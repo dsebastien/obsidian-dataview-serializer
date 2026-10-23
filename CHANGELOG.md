@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented in this file.
 
+## [3.6.0](https://github.com/dsebastien/obsidian-dataview-serializer/compare/3.5.1...3.6.0) (2026-10-23)
+
+### Features
+
+* **plugin:** skip queries that reference missing notes or folders ([b14ccff](https://github.com/dsebastien/obsidian-dataview-serializer/commit/b14ccfffca6797b04bb3aa0754bdbf6dcae86219)), closes [#88](https://github.com/dsebastien/obsidian-dataview-serializer/issues/88)
+
 ## [3.5.1](https://github.com/dsebastien/obsidian-dataview-serializer/compare/3.5.0...3.5.1) (2026-10-14)
 
 ### Bug Fixes
@@ -369,6 +375,7 @@ six command ids unchanged, and data.json byte-identical afterwards.
 ## [1.0.2](https://github.com/dsebastien/obsidian-dataview-serializer/compare/1.0.1...1.0.2) (2024-05-14)
 ## [1.0.1](https://github.com/dsebastien/obsidian-dataview-serializer/compare/1.0.0...1.0.1) (2024-05-14)
 ## 1.0.0 (2024-05-13)
+
 
 
 
