@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'bun:test'
 import {
     extractPositiveFromSources,
+    findQueryReferences,
     findUnresolvedFromSources,
     type FromSourceResolver
 } from './extract-from-sources.fn'
@@ -256,5 +257,44 @@ describe('findUnresolvedFromSources', () => {
                 pathExists: linkExists
             })
         ).toEqual([])
+    })
+})
+
+describe('findQueryReferences', () => {
+    it('returns links anywhere and paths in FROM only, with offsets', () => {
+        const query =
+            'LIST FROM "A" AND ![[B|b]] WHERE x = "not a path" AND contains(file.outlinks, [[C#h]])'
+        const references = findQueryReferences(query)
+        expect(
+            references.map(({ kind, target, inFrom, negated }) => ({
+                kind,
+                target,
+                inFrom,
+                negated
+            }))
+        ).toEqual([
+            { kind: 'path', target: 'A', inFrom: true, negated: false },
+            { kind: 'link', target: 'B', inFrom: true, negated: true },
+            { kind: 'link', target: 'C', inFrom: false, negated: false }
+        ])
+        for (const reference of references) {
+            expect(query.slice(reference.start, reference.end)).toBe(reference.raw)
+        }
+    })
+
+    it('returns negated groups and empty sources', () => {
+        expect(
+            findQueryReferences('LIST FROM "" AND -("x" OR [[]])').map((r) => [r.raw, r.negated])
+        ).toEqual([
+            ['""', false],
+            ['"x"', true],
+            ['[[]]', true]
+        ])
+    })
+
+    it('offsets point into multi-line text', () => {
+        const query = 'LIST\n> FROM [[A]]\n> SORT x'
+        const [reference] = findQueryReferences(query)
+        expect(query.slice(reference!.start, reference!.end)).toBe('[[A]]')
     })
 })

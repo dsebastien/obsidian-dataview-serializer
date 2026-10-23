@@ -663,9 +663,23 @@ When a query fails to serialize (due to invalid syntax or other Dataview errors)
 
 Obsidian does not update links inside HTML comments when you rename a note or folder, so a query's `FROM` clause can end up pointing at something that no longer exists. Dataview then returns nothing.
 
-By default, the plugin detects this before serializing: when a note linked in `FROM` (`[[Note]]`) or a folder/file named in it (`"Folder/Sub"`) cannot be found, the query is skipped. Its previous result stays in place (a never-serialized query stays empty, a `QueryToSerializeOnceAndEject` query is not ejected), and a notification names the note and the missing references. Fix the query, then refresh it.
+By default, the plugin detects this before serializing: when a note linked in `FROM` (`[[Note]]`) or a folder/file named in it (`"Folder/Sub"`) cannot be found, the query is skipped. Its previous result stays in place (a never-serialized query stays empty, a `QueryToSerializeOnceAndEject` query is not ejected), and a notification names the note and the missing references. Fix the query, then refresh it. With **Update queries when notes or folders are renamed** on (default), renames made inside Obsidian are followed automatically, so this mostly catches renames made outside Obsidian or before that setting existed.
 
 This applies to every query type (auto, manual, once, once-and-eject) and to inline queries. Negated sources, tags, `[[]]` and `""` are not checked. See **Skip queries that reference missing notes or folders** in the [configuration](configuration.md) to turn it off.
+
+### Renaming notes and folders
+
+Obsidian's link updater skips HTML comments, so it never touches your queries. The plugin does it instead (setting **Update queries when notes or folders are renamed**, on by default). When you rename or move a note or a folder, every query referencing it is rewritten, then re-serialized:
+
+- Links, anywhere in the query: `[[Old name]]` becomes `[[New name]]`, `[[Folder/Old name]]` becomes `[[Folder/New name]]`. Aliases, `#headings` and `#^blocks` are kept. A link written as a basename stays a basename, unless another note shares the new name; then the full path is used.
+- Quoted paths in `FROM`: `"Projects"` becomes `"Work"` and `"Projects/Active"` becomes `"Work/Active"` when you rename the `Projects` folder; `"Folder/Old name.md"` follows a renamed note. Negated sources (`!"Projects"`) are updated too, so they keep excluding the same folder.
+- Every query flavor: block queries (all update modes), inline queries, the alternative `dataview-serializer-*` syntax, and the `SerializedQuery` header line. DataviewJS queries are not rewritten.
+
+A notification sums it up: "updated 3 queries in 2 notes after renaming …". Notes opted out with `dataview_serializer_ignore` and notes in ignored folders are left alone.
+
+Matching is exact: renaming `Projects` never touches `"Projects2"`. Links match case-insensitively (like Obsidian), quoted paths case-sensitively (like Dataview). A link that still leads to another existing note is left as is.
+
+For self-references, prefer `[[]]` (this note): it never needs rewriting.
 
 ### TASK Query Behavior
 

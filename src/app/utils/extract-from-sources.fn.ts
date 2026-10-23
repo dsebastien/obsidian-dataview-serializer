@@ -7,7 +7,11 @@
  * sources that MUST exist for the result to be meaningful, so the caller can
  * refuse to overwrite a good result with an empty one.
  *
- * Only *positive* sources are returned: a negated source (`!"x"`, `-[[x]]`,
+ * `findQueryReferences` is the general entry point: every link and FROM
+ * path, with offsets and negation, used to index and rewrite references
+ * after renames (#87) and to validate queries.
+ *
+ * `extractPositiveFromSources` only returns *positive* sources: a negated source (`!"x"`, `-[[x]]`,
  * `-("a" or "b")`) pointing at something missing excludes nothing, which is
  * harmless. Tags are never returned: an unused tag legitimately matches
  * nothing. `[[]]` (this file) and `""` (whole vault) always resolve.
@@ -33,8 +37,8 @@ export type FromSource =
       }
 
 type Token =
-    | { type: 'string'; value: string; raw: string }
-    | { type: 'link'; inner: string; raw: string }
+    | { type: 'string'; value: string; raw: string; start: number; end: number }
+    | { type: 'link'; inner: string; raw: string; start: number; end: number }
     | { type: 'tag' }
     | { type: 'word'; value: string }
     | { type: 'lparen' }
@@ -77,7 +81,7 @@ function tokenize(query: string): Token[] {
                 j++
             }
             const end = Math.min(j + 1, query.length)
-            tokens.push({ type: 'string', value, raw: query.slice(i, end) })
+            tokens.push({ type: 'string', value, raw: query.slice(i, end), start: i, end })
             i = end
             continue
         }
@@ -86,7 +90,7 @@ function tokenize(query: string): Token[] {
             const close = query.indexOf(']]', i + 2)
             const end = close === -1 ? query.length : close + 2
             const inner = query.slice(i + 2, close === -1 ? query.length : close)
-            tokens.push({ type: 'link', inner, raw: query.slice(i, end) })
+            tokens.push({ type: 'link', inner, raw: query.slice(i, end), start: i, end })
             i = end
             continue
         }
@@ -131,10 +135,11 @@ function tokenize(query: string): Token[] {
 }
 
 /**
- * Return the tokens of the FROM clause, or undefined when the query has none.
- * FROM is only recognized outside parentheses, strings and links.
+ * The token index range `[start, end)` of the FROM clause, or undefined when
+ * the query has none. FROM is only recognized outside parentheses, strings
+ * and links.
  */
-function fromClauseTokens(tokens: Token[]): Token[] | undefined {
+function fromClauseRange(tokens: Token[]): { start: number; end: number } | undefined {
     let depth = 0
     let start = -1
 
@@ -172,7 +177,7 @@ function fromClauseTokens(tokens: Token[]): Token[] | undefined {
         }
     }
 
-    return tokens.slice(start, end)
+    return { start, end }
 }
 
 /** `Target|alias`, `Target#heading`, `Target#^block` → `Target` */
@@ -187,26 +192,67 @@ function normalizeSourcePath(path: string): string {
 }
 
 /**
- * Extract the positive link and path sources of a DQL query's FROM clause.
- *
- * Returns an empty array for queries without FROM (including inline
- * expressions and DataviewJS), for tag-only sources, and for sources that
- * always resolve (`[[]]`, `""`).
+ * A link or quoted path written in a query, with its position in the query
+ * text, so that it can be reported, indexed, or rewritten in place.
  */
-export function extractPositiveFromSources(query: string): FromSource[] {
-    const clause = fromClauseTokens(tokenize(query))
-    if (!clause) {
-        return []
-    }
+export interface QueryReference {
+    kind: 'link' | 'path'
+    /**
+     * Links: the link path (no alias, heading, or block reference).
+     * Paths: the unescaped path, without leading/trailing slashes.
+     */
+    target: string
+    /** The reference as written, e.g. `[[Target|alias]]` or `"folder/sub"` */
+    raw: string
+    /** Offset of `raw` in the query text */
+    start: number
+    /** Offset just past `raw` in the query text */
+    end: number
+    /** True when the reference sits in the FROM clause */
+    inFrom: boolean
+    /** True when a FROM source is negated (`!"x"`, `-[[x]]`, `-("a" or "b")`) */
+    negated: boolean
+}
 
-    const sources: FromSource[] = []
+/**
+ * Every reference of a query, in order of appearance: links anywhere in the
+ * query (FROM, WHERE, fields…) and quoted paths of the FROM clause only (a
+ * string elsewhere is a plain value, not a path). `[[]]` and `""` are
+ * returned too, with an empty target.
+ *
+ * Works on raw query text, including multi-line definitions: line breaks are
+ * whitespace to the tokenizer, and offsets point into the given text.
+ */
+export function findQueryReferences(query: string): QueryReference[] {
+    const tokens = tokenize(query)
+    const range = fromClauseRange(tokens)
+    const references: QueryReference[] = []
+
     // Negation of each enclosing group; a negated group flips its content
     const negationStack: boolean[] = [false]
     // A `!` / `-` waiting for the atom or group it applies to
     let pendingNegation = false
     const currentNegation = (): boolean => negationStack[negationStack.length - 1] ?? false
 
-    for (const token of clause) {
+    for (let index = 0; index < tokens.length; index++) {
+        const token = tokens[index]!
+        const inFrom = range !== undefined && index >= range.start && index < range.end
+
+        if (!inFrom) {
+            if (token.type === 'link') {
+                references.push({
+                    kind: 'link',
+                    target: linkpathOf(token.inner),
+                    raw: token.raw,
+                    start: token.start,
+                    end: token.end,
+                    inFrom: false,
+                    negated: false
+                })
+            }
+            continue
+        }
+
         switch (token.type) {
             case 'op':
                 if (token.value === '!' || token.value === '-') {
@@ -237,25 +283,49 @@ export function extractPositiveFromSources(query: string): FromSource[] {
             case 'tag':
                 pendingNegation = false
                 break
-            case 'string': {
-                const negated = currentNegation() !== pendingNegation
-                pendingNegation = false
-                const path = normalizeSourcePath(token.value)
-                if (!negated && path !== '') {
-                    sources.push({ kind: 'path', path, raw: token.raw })
-                }
-                break
-            }
+            case 'string':
             case 'link': {
                 const negated = currentNegation() !== pendingNegation
                 pendingNegation = false
-                const linkpath = linkpathOf(token.inner)
-                if (!negated && linkpath !== '') {
-                    sources.push({ kind: 'link', linkpath, raw: token.raw })
-                }
+                references.push({
+                    kind: token.type === 'string' ? 'path' : 'link',
+                    target:
+                        token.type === 'string'
+                            ? normalizeSourcePath(token.value)
+                            : linkpathOf(token.inner),
+                    raw: token.raw,
+                    start: token.start,
+                    end: token.end,
+                    inFrom: true,
+                    negated
+                })
                 break
             }
         }
+    }
+
+    return references
+}
+
+/**
+ * Extract the positive link and path sources of a DQL query's FROM clause.
+ *
+ * Returns an empty array for queries without FROM (including inline
+ * expressions and DataviewJS), for tag-only sources, and for sources that
+ * always resolve (`[[]]`, `""`).
+ */
+export function extractPositiveFromSources(query: string): FromSource[] {
+    const sources: FromSource[] = []
+
+    for (const reference of findQueryReferences(query)) {
+        if (!reference.inFrom || reference.negated || reference.target === '') {
+            continue
+        }
+        sources.push(
+            reference.kind === 'link'
+                ? { kind: 'link', linkpath: reference.target, raw: reference.raw }
+                : { kind: 'path', path: reference.target, raw: reference.raw }
+        )
     }
 
     return sources

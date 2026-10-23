@@ -100,6 +100,7 @@ import { serializeDataviewJSQuery } from './utils/serialize-dataviewjs-query.fn'
 import { isDisabledOnDevice, setDisabledOnDevice } from './utils/device-disabled'
 import { applyQueryTextVisibility } from './utils/query-text-visibility'
 import { findUnresolvedFromSources } from './utils/extract-from-sources.fn'
+import { RenameQueryUpdater } from './rename-query-updater'
 import {
     buildUnresolvedReferencesNotice,
     UnresolvedReferenceNoticeThrottle,
@@ -194,6 +195,23 @@ export class DataviewSerializerPlugin extends Plugin {
     private unresolvedReferenceNoticeThrottle = new UnresolvedReferenceNoticeThrottle(
         UNRESOLVED_REFERENCE_NOTICE_COOLDOWN_MS
     )
+
+    /**
+     * Rewrites query references when notes or folders are renamed (#87).
+     * Runs while "Update queries when notes or folders are renamed" is on and
+     * the plugin is not disabled on this device.
+     */
+    private renameQueryUpdater = new RenameQueryUpdater({
+        app: this.app,
+        registerEvent: (eventRef) => this.registerEvent(eventRef),
+        isNoteExcluded: (file) =>
+            isExcalidrawFile(file) ||
+            this.isFileIgnoredByFrontmatter(file) ||
+            this.settings.ignoredFolders.some((folder) => file.path.startsWith(folder)),
+        beforeWrite: (file) => this.markAsPluginWrite(file.path),
+        afterRewrite: (files) => this.refreshAfterRenameRewrite(files),
+        showErrorNotifications: () => this.settings.showErrorNotifications
+    })
 
     /**
      * Optional timer re-serializing every file in scope every N minutes.
@@ -525,6 +543,10 @@ export class DataviewSerializerPlugin extends Plugin {
             this.setupEventHandlers()
         }
 
+        // Independent of "Disable automatic updates": keeping query text in
+        // sync with renames is its own setting.
+        this.applyRenameQueryUpdater()
+
         // Independent of "Disable automatic updates": the timer is its own opt-in.
         // Armed here, once the Dataview API is known to be available.
         this.periodicSerializer.configure(this.getPeriodicSerializationConfig())
@@ -839,6 +861,55 @@ export class DataviewSerializerPlugin extends Plugin {
 
     override onunload() {
         applyQueryTextVisibility(this.getWindowBodies(), false)
+        this.renameQueryUpdater.stop()
+    }
+
+    /**
+     * Start or stop rewriting query references on rename, following the
+     * setting and the device-local disable. Idempotent.
+     */
+    applyRenameQueryUpdater(): void {
+        if (this.settings.updateQueriesOnRename && !this.isDisabledOnDevice()) {
+            this.renameQueryUpdater.start()
+        } else {
+            this.renameQueryUpdater.stop()
+        }
+    }
+
+    /**
+     * Keep the plugin's own modify handler from reacting to a write the
+     * plugin is about to make (avoids update loops). Cleared by that modify
+     * event, or after a short delay if it never comes.
+     */
+    private markAsPluginWrite(path: string): void {
+        this.filesToIgnoreFileEvents.add(path)
+        window.setTimeout(() => {
+            this.filesToIgnoreFileEvents.delete(path)
+        }, 2000)
+    }
+
+    /**
+     * Re-serialize the notes whose queries were just rewritten after a
+     * rename, like an automatic update would (skipped when automatic updates
+     * are disabled). Forced, so the cooldown of a note serialized moments ago
+     * does not leave its rewritten queries stale.
+     */
+    private async refreshAfterRenameRewrite(files: TFile[]): Promise<void> {
+        if (this.settings.disableAutomaticUpdates || this.isDisabledOnDevice()) {
+            return
+        }
+
+        const results = await processInBatches(files, (file) => this.processFile(file, true), 5)
+        const errors: BatchError[] = []
+        const skipped: SkippedQuery[] = []
+        for (const result of results) {
+            skipped.push(...result.skipped)
+            for (const error of result.errors) {
+                errors.push({ filePath: result.filePath, error })
+            }
+        }
+        this.showBatchErrorNotices(errors)
+        this.reportSkippedQueries(skipped, false)
     }
 
     /**
@@ -997,6 +1068,13 @@ export class DataviewSerializerPlugin extends Plugin {
                 needToSaveSettings = true
             }
 
+            if (typeof loadedSettings.updateQueriesOnRename === 'boolean') {
+                draft.updateQueriesOnRename = loadedSettings.updateQueriesOnRename
+            } else {
+                log('The loaded settings miss the [updateQueriesOnRename] property', 'debug')
+                needToSaveSettings = true
+            }
+
             if (typeof loadedSettings.skipQueriesWithUnresolvedReferences === 'boolean') {
                 draft.skipQueriesWithUnresolvedReferences =
                     loadedSettings.skipQueriesWithUnresolvedReferences
@@ -1098,6 +1176,7 @@ export class DataviewSerializerPlugin extends Plugin {
      */
     setDisabledOnDevice(disabled: boolean): void {
         setDisabledOnDevice(this.app, disabled)
+        this.applyRenameQueryUpdater()
 
         if (disabled) {
             this.unregisterEventHandlers()

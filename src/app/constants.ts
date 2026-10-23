@@ -10,6 +10,21 @@ export const NOTICE_TIMEOUT = 5000
  */
 export const UNRESOLVED_REFERENCE_NOTICE_COOLDOWN_MS = 10 * 60 * 1000
 
+/**
+ * Renames are collected until the vault has been quiet this long, then
+ * processed as one batch (a folder rename fires one event per descendant).
+ */
+export const RENAME_BATCH_DELAY_MS = 1000
+
+/**
+ * After rewriting renamed references, the written notes are checked again
+ * this much later, in case a concurrent writer overwrote the change.
+ */
+export const RENAME_SETTLE_RECHECK_MS = 3000
+
+/** Notes read concurrently per step while building the query reference index */
+export const QUERY_REFERENCE_INDEX_CHUNK_SIZE = 200
+
 export const DEFAULT_CANVAS_FILE_NAME = 'Canvas.md'
 export const MARKDOWN_FILE_EXTENSION = 'md'
 

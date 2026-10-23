@@ -121,6 +121,11 @@ export class SettingsTab extends PluginSettingTab {
                 control: { type: 'toggle', key: 'skipQueriesWithUnresolvedReferences' }
             },
             {
+                name: 'Update queries when notes or folders are renamed',
+                desc: 'When enabled, renaming or moving a note or folder rewrites the links and FROM paths that pointed at it in every query, since Obsidian does not update links inside the comments holding queries. Self-references written as [[]] never need it.',
+                control: { type: 'toggle', key: 'updateQueriesOnRename' }
+            },
+            {
                 name: 'Show error notifications',
                 desc: 'When enabled, a notification popup will be displayed when a query fails to serialize.',
                 control: { type: 'toggle', key: 'showErrorNotifications' }
@@ -375,6 +380,8 @@ export class SettingsTab extends PluginSettingTab {
                 return this.plugin.settings.addTrailingNewline
             case 'skipQueriesWithUnresolvedReferences':
                 return this.plugin.settings.skipQueriesWithUnresolvedReferences
+            case 'updateQueriesOnRename':
+                return this.plugin.settings.updateQueriesOnRename
             case 'linkFormat':
                 return this.plugin.settings.linkFormat
             case 'debugLogging':
@@ -483,6 +490,14 @@ export class SettingsTab extends PluginSettingTab {
                 await this.plugin.updateSettings((draft) => {
                     draft.skipQueriesWithUnresolvedReferences = next
                 })
+                return
+            }
+            case 'updateQueriesOnRename': {
+                const next = this.expectBoolean(key, value)
+                await this.plugin.updateSettings((draft) => {
+                    draft.updateQueriesOnRename = next
+                })
+                this.plugin.applyRenameQueryUpdater()
                 return
             }
             case 'linkFormat': {

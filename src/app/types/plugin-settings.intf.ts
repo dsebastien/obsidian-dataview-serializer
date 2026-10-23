@@ -57,6 +57,13 @@ export interface PluginSettings {
      * Default: true
      */
     skipQueriesWithUnresolvedReferences: boolean
+    /**
+     * Rewrite the links and FROM paths of queries when the note or folder
+     * they reference is renamed. Obsidian's link updater skips the HTML
+     * comments that hold queries.
+     * Default: true
+     */
+    updateQueriesOnRename: boolean
 }
 
 /**
@@ -82,7 +89,8 @@ export function createDefaultSettings(): PluginSettings {
         addTrailingNewline: false,
         linkFormat: 'shortest',
         enableDataviewJS: true,
-        skipQueriesWithUnresolvedReferences: true
+        skipQueriesWithUnresolvedReferences: true,
+        updateQueriesOnRename: true
     }
 }
 
