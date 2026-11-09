@@ -19,10 +19,16 @@ export interface PluginSettings {
      */
     hideQueryText: boolean
     /**
-     * Folders containing files that should be updated when ANY file in the vault changes.
+     * Folders containing files that should be updated when ANY file in the vault changes,
+     * or only when one of `forceUpdateTriggers` changes if that list is not empty.
      * Useful for index files with queries that aggregate data from elsewhere in the vault.
      */
     foldersToForceUpdate: string[]
+    /**
+     * Notes or folders whose changes run the forced update. A folder entry
+     * matches every note under it. Empty: any change in the vault runs it.
+     */
+    forceUpdateTriggers: string[]
     /**
      * Show notification popups when queries fail to serialize.
      */
@@ -84,6 +90,7 @@ export function createDefaultSettings(): PluginSettings {
         showRefreshButton: true,
         hideQueryText: true,
         foldersToForceUpdate: [],
+        forceUpdateTriggers: [],
         showErrorNotifications: true,
         debugLogging: false,
         addTrailingNewline: false,

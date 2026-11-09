@@ -471,10 +471,32 @@ export class DataviewSerializerPlugin extends Plugin {
     }
 
     /**
+     * Whether a change to this path runs the forced update: always when no
+     * trigger is configured, otherwise when the path is a trigger note or sits
+     * under a trigger folder. Triggers take the same date placeholders as
+     * `foldersToForceUpdate`.
+     */
+    isForceUpdateTrigger(path: string): boolean {
+        const triggers = this.settings.forceUpdateTriggers
+            .map((trigger) => resolvePathPlaceholders(trigger))
+            .filter((trigger) => trigger.length > 0)
+
+        if (triggers.length === 0) {
+            return true
+        }
+
+        return triggers.some(
+            (trigger) =>
+                path === trigger || path.startsWith(trigger.endsWith('/') ? trigger : `${trigger}/`)
+        )
+    }
+
+    /**
      * Process updates for folders which are marked as forced updates.
-     * These files are updated on any modification, useful for scenarios
-     * where there's an index file that holds queries that could be impacted
-     * by file updates elsewhere.
+     * These files are updated after a change to any file, or only to a force
+     * update trigger when triggers are set (see `isForceUpdateTrigger`),
+     * useful for scenarios where there's an index file that holds queries
+     * that could be impacted by file updates elsewhere.
      *
      * Configured folders may contain date placeholders (e.g. `Daily/{{year}}/{{month}}`).
      * These are resolved on every run, against the current date, so that the set of
@@ -1071,6 +1093,13 @@ export class DataviewSerializerPlugin extends Plugin {
                 needToSaveSettings = true
             }
 
+            if (Array.isArray(loadedSettings.forceUpdateTriggers)) {
+                draft.forceUpdateTriggers = loadedSettings.forceUpdateTriggers
+            } else {
+                log('The loaded settings miss the [forceUpdateTriggers] property', 'debug')
+                needToSaveSettings = true
+            }
+
             if (
                 loadedSettings.showErrorNotifications !== undefined &&
                 loadedSettings.showErrorNotifications !== null &&
@@ -1299,16 +1328,21 @@ export class DataviewSerializerPlugin extends Plugin {
             this.createEventRef = this.app.vault.on('create', (file) => {
                 this.recentlyUpdatedFiles.add(file)
                 this.scheduleUpdate()
-                log(`Forced update triggered by create: ${file.path}`, 'debug')
-                this.scheduleForcedUpdate()
+                if (this.isForceUpdateTrigger(file.path)) {
+                    log(`Forced update triggered by create: ${file.path}`, 'debug')
+                    this.scheduleForcedUpdate()
+                }
             })
             this.registerEvent(this.createEventRef)
 
-            this.renameEventRef = this.app.vault.on('rename', (file) => {
+            this.renameEventRef = this.app.vault.on('rename', (file, oldPath) => {
                 this.recentlyUpdatedFiles.add(file)
                 this.scheduleUpdate()
-                log(`Forced update triggered by rename: ${file.path}`, 'debug')
-                this.scheduleForcedUpdate()
+                // Moving a trigger away changes what the indexes read, too
+                if (this.isForceUpdateTrigger(file.path) || this.isForceUpdateTrigger(oldPath)) {
+                    log(`Forced update triggered by rename: ${file.path}`, 'debug')
+                    this.scheduleForcedUpdate()
+                }
             })
             this.registerEvent(this.renameEventRef)
 
@@ -1324,8 +1358,10 @@ export class DataviewSerializerPlugin extends Plugin {
 
                 this.recentlyUpdatedFiles.add(file)
                 this.scheduleUpdate()
-                log(`Forced update triggered by modify: ${file.path}`, 'debug')
-                this.scheduleForcedUpdate()
+                if (this.isForceUpdateTrigger(file.path)) {
+                    log(`Forced update triggered by modify: ${file.path}`, 'debug')
+                    this.scheduleForcedUpdate()
+                }
             })
             this.registerEvent(this.modifyEventRef)
 
