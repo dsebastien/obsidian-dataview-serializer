@@ -172,9 +172,14 @@ export class DataviewSerializerPlugin extends Plugin {
     // typings, so redeclaring it without the modifier is a TS4114 error.
     override settings: PluginSettings = produce(createDefaultSettings(), () => {})
     /**
-     * The API of the Dataview plugin
+     * The API of the Dataview plugin, read from the plugin registry on every
+     * use. Disabling and re-enabling Dataview registers a new API object; a
+     * reference kept from startup keeps answering from the old index, which no
+     * longer sees edits, so serialized output silently stops changing.
      */
-    dataviewApi: DataviewApi | undefined
+    get dataviewApi(): DataviewApi | undefined {
+        return getDataviewApi(this.app)
+    }
     /**
      * When a recently updated file can be updated again
      */
@@ -555,9 +560,6 @@ export class DataviewSerializerPlugin extends Plugin {
      * This ensures that dependent plugins like Dataview have finished loading.
      */
     private async initializePlugin() {
-        // Retrieve the Dataview API
-        this.dataviewApi = getDataviewApi(this.app)
-
         if (!this.dataviewApi) {
             const errMessage =
                 'The Dataview plugin is not installed or enabled. Please make sure it is installed and enabled, then restart Obsidian'
@@ -1380,6 +1382,13 @@ export class DataviewSerializerPlugin extends Plugin {
             return result
         }
 
+        // Dataview disabled or mid-reload: nothing can answer the queries, and
+        // reporting each one as failed would only flood the error notices
+        if (!this.dataviewApi) {
+            log(`Dataview is not loaded, skipping: ${file.path}`, 'debug')
+            return result
+        }
+
         try {
             //log(`Processing file: ${file.path}`, 'debug');
 
@@ -1496,7 +1505,7 @@ export class DataviewSerializerPlugin extends Plugin {
                 const serializationResult: QuerySerializationResult = await serializeQuery({
                     query: foundQuery,
                     originFile: file.path,
-                    dataviewApi: this.dataviewApi!,
+                    dataviewApi: this.dataviewApi,
                     app: this.app,
                     indentation,
                     linkFormat: this.settings.linkFormat,
