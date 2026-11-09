@@ -73,13 +73,15 @@ Changes apply immediately: no reload needed. The first run happens one interval 
 
 - **Folders to ignore**: The folders that should be excluded when processing files. Files in these folders will not have their queries serialized.
 
-- **Folders to force update**: Folders containing files that should be updated when ANY file in the vault changes. This is useful for index files or dashboards that contain queries aggregating data from elsewhere in your vault.
+- **Folders to force update**: Folders containing files that should be updated when ANY file in the vault changes, or only when a [force update trigger](#limiting-what-runs-a-force-update) changes if any are set. This is useful for index files or dashboards that contain queries aggregating data from elsewhere in your vault.
+
+- **Force update triggers**: Notes or folders whose changes run the force update. Leave empty to keep the default: a change to any file runs it. See [Limiting what runs a force update](#limiting-what-runs-a-force-update).
 
 ### Understanding "Folders to force update"
 
 By default, when you modify a file, only that file's queries are re-serialized. However, if you have an "index" or "dashboard" file that contains queries like `LIST FROM #project` or `TABLE file.name FROM "Daily Notes"`, those queries depend on other files in your vault.
 
-By adding the folder containing your index files to "Folders to force update", those files will be re-processed whenever any file in your vault changes. This ensures your index files stay up-to-date.
+By adding the folder containing your index files to "Folders to force update", those files will be re-processed whenever any file in your vault changes, unless [force update triggers](#limiting-what-runs-a-force-update) are set. This ensures your index files stay up-to-date.
 
 **Example use case:**
 - You have a file at `Index/Projects.md` containing `<!-- QueryToSerialize: LIST FROM #project -->`
@@ -87,6 +89,14 @@ By adding the folder containing your index files to "Folders to force update", t
 - Now whenever you add the `#project` tag to any note, your `Projects.md` index will automatically update
 
 **Note:** Force updates are debounced by 10 seconds, much longer than the 500 ms used for regular updates. Since a change anywhere in the vault can trigger a rebuild of every dashboard, a bulk operation (a sync pulling down hundreds of notes, a rename cascade) would otherwise rebuild them hundreds of times over. See [Update timing](usage.md#update-timing) for the rest of the timing rules.
+
+### Limiting what runs a force update
+
+When the indexes only read a few notes, a change anywhere else rebuilds them for nothing. List those notes, or their folders, under "Force update triggers": the force update then runs only when one of them changes.
+
+**Example:** weekly notes in `Weekly/` show reminders computed from `Weekly/Reminders.md`. Add `Weekly` to "Folders to force update" and `Weekly/Reminders.md` to "Force update triggers". Editing the reminders refreshes every weekly note; typing in any other note no longer does.
+
+A trigger matches the note with that exact path, or every note inside the folder with that path. Triggers take the same date placeholders as "Folders to force update".
 
 ### Date placeholders in "Folders to force update"
 

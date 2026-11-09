@@ -17,8 +17,9 @@ import {
     PERIODIC_SERIALIZATION_MIN_MINUTES
 } from '../constants'
 
-/** The three folder lists, keyed by the settings field each one edits. */
-type FolderListKey = 'foldersToScan' | 'ignoredFolders' | 'foldersToForceUpdate'
+/** The path lists, keyed by the settings field each one edits. */
+type FolderListKey =
+    'foldersToScan' | 'ignoredFolders' | 'foldersToForceUpdate' | 'forceUpdateTriggers'
 
 /**
  * Settings tab, declared rather than rendered (Obsidian 1.13+).
@@ -169,6 +170,12 @@ export class SettingsTab extends PluginSettingTab {
                 this.buildFoldersToForceUpdateDescription(),
                 true
             ),
+            ...this.folderListDefinitions(
+                'forceUpdateTriggers',
+                'Force update triggers',
+                'Notes or folders whose changes run the force update. Leave empty to run it on a change to any file. Supports the same date placeholders as "Folders to force update".',
+                true
+            ),
             {
                 type: 'group',
                 // No heading: renderSupportSection draws its own.
@@ -310,7 +317,7 @@ export class SettingsTab extends PluginSettingTab {
         const fragment = new DocumentFragment()
 
         fragment.createSpan({
-            text: 'Folders containing files that should be updated when ANY file in the vault changes. Useful for index files with queries that aggregate data from elsewhere.'
+            text: 'Folders containing files that should be updated when ANY file in the vault changes, or, when force update triggers are set, only when one of them changes. Useful for index files with queries that aggregate data from elsewhere.'
         })
 
         fragment.createEl('br')
