@@ -42,6 +42,24 @@ const createMockDataviewApi = (): DataviewApi =>
         }
     }) as unknown as DataviewApi
 
+/**
+ * A Dataview API whose vault holds `files`. Links resolve the way
+ * Obsidian resolves them, reduced here to exact paths.
+ */
+const createApiWithFiles = (files: Record<string, string>): DataviewApi =>
+    ({
+        ...createMockDataviewApi(),
+        app: {
+            metadataCache: {
+                getFirstLinkpathDest: (linkpath: string) =>
+                    linkpath in files ? { path: linkpath } : null
+            },
+            vault: {
+                read: (file: { path: string }) => Promise.resolve(files[file.path])
+            }
+        }
+    }) as unknown as DataviewApi
+
 describe('serializeDataviewJSQuery', () => {
     describe('normal execution', () => {
         it('should reject empty JavaScript code', async () => {
@@ -98,6 +116,58 @@ describe('serializeDataviewJSQuery', () => {
 
             expect(result.success).toBe(true)
             expect(result.serializedContent).toContain('true')
+        })
+
+        it('should let the query declare its own input variable', async () => {
+            const result = await serializeDataviewJSQuery({
+                jsCode: 'const input = "mine"; dv.paragraph(input)',
+                originFile: 'origin.md',
+                dataviewApi: createMockDataviewApi()
+            })
+
+            expect(result.success).toBe(true)
+            expect(result.serializedContent).toContain('mine')
+        })
+    })
+
+    describe('dv.view()', () => {
+        it('should serialize the output of a view script, which receives the input', async () => {
+            const result = await serializeDataviewJSQuery({
+                jsCode: 'await dv.view("views/greet", { name: "Ada" })',
+                originFile: 'origin.md',
+                dataviewApi: createApiWithFiles({
+                    'views/greet.js': 'dv.paragraph("Hello " + input.name)'
+                })
+            })
+
+            expect(result.success).toBe(true)
+            expect(result.serializedContent).toBe('Hello Ada')
+        })
+
+        it('should fall back to view.js inside a folder named after the view', async () => {
+            const result = await serializeDataviewJSQuery({
+                jsCode: 'await dv.view("views/greet")',
+                originFile: 'origin.md',
+                dataviewApi: createApiWithFiles({
+                    'views/greet/view.js': 'await Promise.resolve(); dv.list(["a", "b"])'
+                })
+            })
+
+            expect(result.success).toBe(true)
+            expect(result.serializedContent).toBe('- a\n- b')
+        })
+
+        it('should fail when no view script exists', async () => {
+            const result = await serializeDataviewJSQuery({
+                jsCode: 'await dv.view("views/missing")',
+                originFile: 'origin.md',
+                dataviewApi: createApiWithFiles({})
+            })
+
+            expect(result.success).toBe(false)
+            expect(result.error?.message).toBe(
+                "custom view not found for 'views/missing.js' or 'views/missing/view.js'"
+            )
         })
     })
 
@@ -222,6 +292,36 @@ describe('serializeDataviewJSQuery', () => {
             expect(result.serializedContent).toBe('')
 
             await settleAbandonedExecutions()
+        })
+
+        it('should make a view script throw on its next dv access after the timeout', async () => {
+            const probe: { threw?: boolean; message?: string } = {}
+            globalScope.__dvProbe = probe
+
+            await serializeDataviewJSQuery({
+                jsCode: 'await dv.view("views/slow")',
+                originFile: 'origin.md',
+                dataviewApi: createApiWithFiles({
+                    'views/slow.js': `
+                        const probe = globalThis.__dvProbe
+                        await new Promise((r) => setTimeout(r, 30))
+                        try {
+                            dv.list(["late"])
+                            probe.threw = false
+                        } catch (e) {
+                            probe.threw = true
+                            probe.message = String(e)
+                        }
+                    `
+                })
+            })
+
+            await settleAbandonedExecutions()
+
+            expect(probe.threw).toBe(true)
+            expect(probe.message).toContain('timed out')
+
+            delete globalScope.__dvProbe
         })
     })
 })

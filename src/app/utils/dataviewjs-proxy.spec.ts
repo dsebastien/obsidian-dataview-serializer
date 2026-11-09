@@ -353,14 +353,6 @@ describe('createDataviewJSProxy', () => {
     })
 
     describe('unsupported methods', () => {
-        test('dv.view() should return rejected promise', async () => {
-            const mockApi = createMockDataviewApi()
-            const { proxy } = createDataviewJSProxy(mockApi, 'test.md')
-
-            const dvView = proxy['view'] as () => Promise<void>
-            await expectRejection(dvView(), 'dv.view() is not supported')
-        })
-
         test('dv.executeJs() should return rejected promise', async () => {
             const mockApi = createMockDataviewApi()
             const { proxy } = createDataviewJSProxy(mockApi, 'test.md')
