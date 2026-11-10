@@ -488,3 +488,137 @@ describe('DataviewSerializerPlugin.processFile with queries inside code (#91)', 
         expect(state.content).toBe(content)
     })
 })
+
+/**
+ * Harness for the vault event handlers that drive forced updates.
+ *
+ * `onLayoutReady` runs its callback at once and `vault.on` records each
+ * handler, so a test fires `modify` and `rename` the way Obsidian does.
+ * `scheduleForcedUpdate` is replaced so the forced update starts at once and
+ * can be awaited; `processFile` records which notes were re-serialized.
+ */
+const createForcedUpdateHarness = (settings: {
+    foldersToForceUpdate: string[]
+    forceUpdateTriggers?: string[]
+}) => {
+    const handlers = new Map<string, (file: TFile, oldPath?: string) => void>()
+    const files = ['Weeks/2030-12-30.md', 'Weeks/Recurring.md', 'Notes/Other.md'].map(createFile)
+    const processed: string[] = []
+
+    const plugin = Object.create(DataviewSerializerPlugin.prototype) as DataviewSerializerPlugin
+    Object.assign(plugin, {
+        app: {
+            workspace: { onLayoutReady: (callback: () => void) => callback() },
+            vault: {
+                on: (name: string, handler: (file: TFile, oldPath?: string) => void) => {
+                    handlers.set(name, handler)
+                    return { name }
+                },
+                getMarkdownFiles: () => files
+            }
+        },
+        settings: { ...createDefaultSettings(), showErrorNotifications: false, ...settings },
+        filesToIgnoreFileEvents: new Set<string>(),
+        recentlyUpdatedFiles: new Set<TFile>(),
+        registerEvent: () => {},
+        scheduleUpdate: () => {},
+        processFile: (file: TFile) => {
+            processed.push(file.path)
+            return Promise.resolve({ filePath: file.path, errors: [], skipped: [] })
+        }
+    })
+    let forcedUpdate: Promise<void> = Promise.resolve()
+    Object.assign(plugin, {
+        scheduleForcedUpdate: () => {
+            forcedUpdate = plugin.processForceUpdateFiles()
+        }
+    })
+    plugin.setupEventHandlers()
+
+    const fire = async (event: string, path: string, oldPath?: string): Promise<string[]> => {
+        processed.length = 0
+        forcedUpdate = Promise.resolve()
+        handlers.get(event)!(createFile(path), oldPath)
+        await forcedUpdate
+        return [...processed]
+    }
+
+    return {
+        modify: (path: string) => fire('modify', path),
+        rename: (path: string, oldPath: string) => fire('rename', path, oldPath)
+    }
+}
+
+describe('DataviewSerializerPlugin forced updates', () => {
+    it('re-serializes forced folders after a change to any note when no trigger is set', async () => {
+        const { modify } = createForcedUpdateHarness({ foldersToForceUpdate: ['Weeks/'] })
+
+        expect(await modify('Notes/Other.md')).toEqual([
+            'Weeks/2030-12-30.md',
+            'Weeks/Recurring.md'
+        ])
+    })
+
+    it('skips forced folders when the changed note is not a trigger', async () => {
+        const { modify } = createForcedUpdateHarness({
+            foldersToForceUpdate: ['Weeks/'],
+            forceUpdateTriggers: ['Weeks/Recurring.md']
+        })
+
+        expect(await modify('Notes/Other.md')).toEqual([])
+        expect(await modify('Weeks/2030-12-30.md')).toEqual([])
+    })
+
+    it('re-serializes forced folders when a trigger note changes', async () => {
+        const { modify } = createForcedUpdateHarness({
+            foldersToForceUpdate: ['Weeks/'],
+            forceUpdateTriggers: ['Weeks/Recurring.md']
+        })
+
+        expect(await modify('Weeks/Recurring.md')).toEqual([
+            'Weeks/2030-12-30.md',
+            'Weeks/Recurring.md'
+        ])
+    })
+
+    for (const trigger of ['Notes/', 'Notes']) {
+        it(`treats the trigger '${trigger}' as a folder`, async () => {
+            const { modify } = createForcedUpdateHarness({
+                foldersToForceUpdate: ['Weeks/'],
+                forceUpdateTriggers: [trigger]
+            })
+
+            expect(await modify('Notes/Other.md')).toEqual([
+                'Weeks/2030-12-30.md',
+                'Weeks/Recurring.md'
+            ])
+            expect(await modify('Notes-archive/Other.md')).toEqual([])
+        })
+    }
+
+    it('resolves date placeholders in triggers', async () => {
+        const { modify } = createForcedUpdateHarness({
+            foldersToForceUpdate: ['Weeks/'],
+            forceUpdateTriggers: ['Notes/{{year}}/']
+        })
+
+        expect(await modify(`Notes/${new Date().getFullYear()}/Other.md`)).toEqual([
+            'Weeks/2030-12-30.md',
+            'Weeks/Recurring.md'
+        ])
+        expect(await modify('Notes/1999/Other.md')).toEqual([])
+    })
+
+    it('re-serializes forced folders when a trigger note is moved away', async () => {
+        const { rename } = createForcedUpdateHarness({
+            foldersToForceUpdate: ['Weeks/'],
+            forceUpdateTriggers: ['Weeks/Recurring.md']
+        })
+
+        expect(await rename('Archive/Recurring.md', 'Weeks/Recurring.md')).toEqual([
+            'Weeks/2030-12-30.md',
+            'Weeks/Recurring.md'
+        ])
+        expect(await rename('Notes/Renamed.md', 'Notes/Other.md')).toEqual([])
+    })
+})
