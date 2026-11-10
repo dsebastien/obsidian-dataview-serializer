@@ -561,13 +561,20 @@ dv.table(
 -->
 ```
 
+### Custom Views
+
+`dv.view(path, input)` works as in Dataview: it runs `path.js`, or `path/view.js` when there is no `path.js`, with `dv` and `input` in scope. The view's rendering calls are serialized like the query's own, so a view that renders through `dv.list()`, `dv.paragraph()` and the other methods above serializes as is. A view that builds HTML through `dv.container` has nothing to render into here, and a `view.css` next to `view.js` is not applied. If neither script exists, the query fails and keeps its previous output, where Dataview would render the error in place.
+
+```markdown
+<!-- DataviewJSToSerialize: await dv.view("views/tasks-for-day", { date: "2026-01-05" }) -->
+```
+
 ### Not Supported
 
 The following methods are **not supported** in serialized DataviewJS:
 
 | Method | Reason |
 |--------|--------|
-| `dv.view(path)` | Requires external template files |
 | `dv.executeJs(code)` | Nested JavaScript execution not allowed |
 
 ### Known Limitations
