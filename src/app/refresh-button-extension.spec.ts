@@ -1,9 +1,13 @@
 import { describe, expect, it } from 'bun:test'
+import { EditorState } from '@codemirror/state'
+import type { DecorationSet } from '@codemirror/view'
 import {
     detectDataviewJSFlagInLine,
     detectInlineQueriesInLine,
-    detectQueryFlagInLine
+    detectQueryFlagInLine,
+    refreshButtonExtension
 } from './refresh-button-extension'
+import { createDefaultSettings } from './types/plugin-settings.intf'
 import {
     DATAVIEWJS_FLAG_MANUAL_OPEN,
     DATAVIEWJS_FLAG_MANUAL_OPEN_ALT,
@@ -180,5 +184,48 @@ describe('marker detection', () => {
         it('should ignore an inline query with no closing marker', () => {
             expect(detectInlineQueriesInLine('<!-- IQ: =this.field -->no end marker')).toEqual([])
         })
+    })
+})
+
+/**
+ * Line classes the Live Preview extension gives each line of `doc`.
+ *
+ * The extension is a CodeMirror view plugin; building it against an editor
+ * state is enough to compute its decorations, no DOM needed.
+ */
+const lineClasses = (doc: string): Map<number, string> => {
+    const plugin = refreshButtonExtension(
+        {} as never,
+        () => createDefaultSettings(),
+        () => Promise.resolve({ filePath: '', errors: [], skipped: [] }),
+        () => false,
+        () => false
+    ) as unknown as { create: (view: unknown) => { decorations: DecorationSet } }
+    const state = EditorState.create({ doc })
+    const { decorations } = plugin.create({ state, visibleRanges: [{ from: 0, to: doc.length }] })
+
+    const classes = new Map<number, string>()
+    for (const cursor = decorations.iter(); cursor.value; cursor.next()) {
+        const lineClass = (cursor.value.spec as { class?: string }).class
+        if (lineClass) {
+            classes.set(state.doc.lineAt(cursor.from).number, lineClass)
+        }
+    }
+    return classes
+}
+
+describe('Live Preview line classes', () => {
+    it('marks a one-line DataviewJS query as single-line, so "Hide query text" collapses it', () => {
+        const classes = lineClasses('<!-- DataviewJSToSerialize: dv.paragraph("x") -->\ntext')
+
+        expect(classes.get(1)).toBe('dvs-query-line dvs-query-line-single')
+    })
+
+    it('leaves the lines of a multi-line DataviewJS query visible', () => {
+        const classes = lineClasses('<!-- DataviewJSToSerialize:\ndv.paragraph("x")\n-->\ntext')
+
+        expect(classes.get(1)).toBe('dvs-query-line')
+        expect(classes.get(2)).toBe('dvs-query-line')
+        expect(classes.get(3)).toBe('dvs-query-line')
     })
 })
