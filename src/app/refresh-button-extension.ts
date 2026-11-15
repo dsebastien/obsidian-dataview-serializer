@@ -944,11 +944,15 @@ export const refreshButtonExtension = (
                                 const actualCloseFlag =
                                     closeIdx !== -1 ? QUERY_FLAG_CLOSE : QUERY_FLAG_CLOSE.trim()
 
-                                // Add line decoration
+                                // Add line decoration; single-line queries get the class
+                                // that "Hide query text" collapses
                                 decorations.push({
                                     from: line.from,
                                     to: line.from,
-                                    decoration: queryLineDecoration
+                                    decoration:
+                                        actualCloseIdx !== -1
+                                            ? singleLineQueryDecoration
+                                            : queryLineDecoration
                                 })
 
                                 if (actualCloseIdx !== -1) {
