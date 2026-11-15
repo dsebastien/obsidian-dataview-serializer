@@ -17,10 +17,11 @@ Turning Dataview queries into Markdown also ensures that the generated content a
 - **Automatic serialization**: Dataview queries are automatically serialized to Markdown when files are saved
 - **Block queries**: Support for LIST, TABLE, and TASK queries
 - **Inline expressions**: Support for inline Dataview expressions like `=this.name`, `=this.file.ctime`, `=embed(this.portrait)`
+- **DataviewJS queries**: Serialize the output of DataviewJS code, including custom views called with `dv.view()`
 - **Per-query update control**: Control when individual queries update using different query types (auto, manual-only, or write-once)
 - **Callouts and blockquotes**: Queries can live inside callouts or blockquotes; the serialized result keeps the `>` prefix so the block stays intact
 - **Inline refresh button**: Refresh individual queries directly from the editor
-- **Force update folders**: Configure specific folders (like index files) to update when any file in your vault changes, with optional date placeholders (e.g. `Daily/{{year}}/{{month}}`) for periodic notes
+- **Force update folders**: Configure specific folders (like index files) to update when any file in your vault changes, with optional date placeholders (e.g. `Daily/{{year}}/{{month}}`) for periodic notes. Optional force update triggers limit those runs to changes in the notes or folders you list
 - **Idempotency protection**: Prevents unnecessary file modifications and infinite update loops
 - **Rename-aware queries**: Renaming or moving a note or folder rewrites the links and `FROM` paths that referenced it in every query, which Obsidian's own link updater skips
 - **Rename protection**: A query whose `FROM` links to a note or folder that no longer exists keeps its previous result instead of being emptied, and you get notified
