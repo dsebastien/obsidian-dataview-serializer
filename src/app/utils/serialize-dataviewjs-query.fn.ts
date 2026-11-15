@@ -8,7 +8,7 @@
  */
 
 import type { DataviewApi } from 'obsidian-dataview/lib/api/plugin-api'
-import { createDataviewJSProxy } from './dataviewjs-proxy'
+import { createDataviewJSProxy, runDataviewJS } from './dataviewjs-proxy'
 import { log } from '../../utils/log'
 import { DATAVIEWJS_TIMEOUT_MS } from '../constants'
 import { applyIndentation } from './blockquote.fn'
@@ -174,22 +174,13 @@ export async function serializeDataviewJSQuery(
     }
 
     try {
-        // Create the proxy dv object
-        const { proxy: dv, getMarkdown } = createDataviewJSProxy(dataviewApi, originFile)
-
-        // Create an async function from the JavaScript code
-        // This allows the code to use await for async operations like dv.io.load()
-        const AsyncFunction = (
-            Object.getPrototypeOf(async function () {}) as {
-                constructor: new (
-                    ...parameterNamesThenBody: string[]
-                ) => (dv: Record<string, unknown>) => Promise<void>
-            }
-        ).constructor
-
-        // Create the function with 'dv' as the parameter
-        // The code can reference 'dv' directly
-        const executeCode = new AsyncFunction('dv', jsCode)
+        // Create the proxy dv object. Scripts run by dv.view() get the guarded
+        // proxy too, so the timeout stops them the same way.
+        const { proxy: dv, getMarkdown } = createDataviewJSProxy(
+            dataviewApi,
+            originFile,
+            () => guardedDv
+        )
 
         // Execute the code with timeout. Once the timeout fires the execution is
         // abandoned, and the guarded proxy makes its next `dv` access throw.
@@ -198,7 +189,7 @@ export async function serializeDataviewJSQuery(
 
         await withTimeout(
             async () => {
-                await executeCode(guardedDv)
+                await runDataviewJS(jsCode, { dv: guardedDv })
             },
             DATAVIEWJS_TIMEOUT_MS,
             () => {

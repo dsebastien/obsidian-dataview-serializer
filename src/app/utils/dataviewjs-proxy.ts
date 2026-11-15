@@ -294,6 +294,24 @@ function taskListToMarkdown(
 }
 
 /**
+ * Run DataviewJS code as an async function with the given variables in scope.
+ *
+ * @param code The JavaScript code; it may use `await`
+ * @param scope The variables the code receives: `dv` for a query, `dv` and `input`
+ * for a view. Only these are declared, so a query can still declare its own `input`.
+ */
+export function runDataviewJS(code: string, scope: Record<string, unknown>): Promise<void> {
+    const AsyncFunction = (
+        Object.getPrototypeOf(async function () {}) as {
+            constructor: new (
+                ...parameterNamesThenBody: string[]
+            ) => (...args: unknown[]) => Promise<void>
+        }
+    ).constructor
+    return new AsyncFunction(...Object.keys(scope), code)(...Object.values(scope))
+}
+
+/**
  * Result from creating a DataviewJS proxy
  */
 export interface DataviewJSProxyResult {
@@ -308,11 +326,13 @@ export interface DataviewJSProxyResult {
  *
  * @param dataviewApi The real Dataview API to delegate read operations to
  * @param originFile The file path where the query is located (for dv.current() context)
+ * @param viewDv Returns the `dv` that scripts run by `dv.view()` receive; defaults to the proxy
  * @returns The proxy object and a function to get captured markdown
  */
 export function createDataviewJSProxy(
     dataviewApi: DataviewApi,
-    originFile: string
+    originFile: string,
+    viewDv?: () => Record<string, unknown>
 ): DataviewJSProxyResult {
     const capturedOutputs: CapturedOutput[] = []
 
@@ -409,11 +429,24 @@ export function createDataviewJSProxy(
             }
         },
 
-        // view() is not supported - requires external template files
-        view: (): Promise<void> => {
-            return Promise.reject(
-                new Error('dv.view() is not supported in serialized DataviewJS queries.')
-            )
+        // view() finds its script the way Dataview does, then runs it with this
+        // proxy, so the script's rendering calls are captured like the query's
+        view: async (viewName: string, input?: unknown): Promise<void> => {
+            const { metadataCache, vault } = dataviewApi.app
+            const simpleViewPath = `${viewName}.js`
+            const complexViewPath = `${viewName}/view.js`
+            const viewFile =
+                metadataCache.getFirstLinkpathDest(simpleViewPath, originFile) ??
+                metadataCache.getFirstLinkpathDest(complexViewPath, originFile)
+            if (!viewFile) {
+                throw new Error(
+                    `custom view not found for '${simpleViewPath}' or '${complexViewPath}'`
+                )
+            }
+            await runDataviewJS(await vault.read(viewFile), {
+                dv: viewDv?.() ?? proxy,
+                input
+            })
         },
 
         // executeJs() is not supported - nested execution
