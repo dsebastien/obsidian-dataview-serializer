@@ -282,13 +282,13 @@ const createProcessor = (options: ProcessHarnessOptions) => {
             metadataCache: {
                 getFileCache: () => ({ frontmatter: undefined }),
                 getFirstLinkpathDest
-            }
+            },
+            plugins: { plugins: { dataview: { api: { tryQueryMarkdown } } } }
         },
         settings: {
             ...createDefaultSettings(),
             skipQueriesWithUnresolvedReferences: options.skipQueriesWithUnresolvedReferences ?? true
         },
-        dataviewApi: { tryQueryMarkdown },
         nextPossibleUpdates: new Map<string, Date>(),
         filesToIgnoreFileEvents: new Set<string>(),
         isDisabledOnDevice: () => false
@@ -484,6 +484,42 @@ describe('DataviewSerializerPlugin.processFile with queries inside code (#91)', 
         await plugin.processFile(docs, true, undefined, true)
 
         expect(tryQueryMarkdown).not.toHaveBeenCalled()
+        expect(process).not.toHaveBeenCalled()
+        expect(state.content).toBe(content)
+    })
+})
+
+describe('DataviewSerializerPlugin after Dataview reloads', () => {
+    it('queries the Dataview API loaded now, not the one it started with', async () => {
+        const { plugin, state, tryQueryMarkdown } = createProcessor({
+            content: '<!-- QueryToSerialize: LIST -->\n'
+        })
+        await plugin.processFile(createFile('Docs.md'), true, undefined, true)
+        expect(tryQueryMarkdown).toHaveBeenCalledTimes(1)
+
+        // Disabling and re-enabling Dataview registers a new API object; the
+        // previous one keeps answering from an index that no longer updates.
+        const reloaded = mock(() => Promise.resolve('- [[Reloaded]]\n'))
+        Object.assign(plugin.app, {
+            plugins: { plugins: { dataview: { api: { tryQueryMarkdown: reloaded } } } }
+        })
+        await plugin.processFile(createFile('Docs.md'), true, undefined, true)
+
+        expect(tryQueryMarkdown).toHaveBeenCalledTimes(1)
+        expect(reloaded).toHaveBeenCalledTimes(1)
+        expect(state.content).toBe(
+            '<!-- QueryToSerialize: LIST -->\n<!-- SerializedQuery: LIST -->\n- [[Reloaded]]\n\n<!-- SerializedQuery END -->\n'
+        )
+    })
+
+    it('leaves notes untouched while Dataview is disabled', async () => {
+        const content = '<!-- QueryToSerialize: LIST -->\n'
+        const { plugin, state, process } = createProcessor({ content })
+        Object.assign(plugin.app, { plugins: { plugins: {} } })
+
+        const result = await plugin.processFile(createFile('Docs.md'), true, undefined, true)
+
+        expect(result.errors).toEqual([])
         expect(process).not.toHaveBeenCalled()
         expect(state.content).toBe(content)
     })
