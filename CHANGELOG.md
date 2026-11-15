@@ -2,6 +2,30 @@
 
 All notable changes to this project will be documented in this file.
 
+## [3.8.0](https://github.com/dsebastien/obsidian-dataview-serializer/compare/3.7.1...3.8.0) (2026-11-15)
+
+### Force update triggers
+
+**Folders to force update** re-serializes your index notes after a change to any file in the vault. With the new **Force update triggers** setting, it runs only when one of the notes or folders you list (or a note inside those folders) is created, modified, renamed or moved. Notes that have nothing to do with your indexes no longer re-run their queries.
+
+Leave the list empty and nothing changes. Triggers take the same date placeholders, such as `{{year}}`.
+
+### Custom views with dv.view()
+
+Serialized DataviewJS queries can now call `dv.view(path, input)`, as in Dataview. What the view renders through `dv.list()`, `dv.table()` and the other supported methods is serialized like the query's own output. A `view.css` file is not applied, and a view that builds HTML through `dv.container` has nothing to render into.
+
+Also handy: a marker comment cannot contain `--`, but a view script can.
+
+### Results keep updating after Dataview reloads
+
+After Dataview was disabled and re-enabled, or updated, serialized results stopped changing until you restarted Obsidian. No more. The plugin now uses the Dataview that is loaded at that moment, and while Dataview is disabled, your notes are left untouched.
+
+### Hide query text covers single-line DataviewJS queries
+
+With **Hide query text** on, single-line DataviewJS queries now collapse in Live Preview, like single-line DQL queries.
+
+Thanks to @demrom, who contributed every change in this release.
+
 ## [3.7.1](https://github.com/dsebastien/obsidian-dataview-serializer/compare/3.7.0...3.7.1) (2026-10-23)
 
 ### Bug Fixes
@@ -388,6 +412,7 @@ six command ids unchanged, and data.json byte-identical afterwards.
 ## [1.0.2](https://github.com/dsebastien/obsidian-dataview-serializer/compare/1.0.1...1.0.2) (2024-05-14)
 ## [1.0.1](https://github.com/dsebastien/obsidian-dataview-serializer/compare/1.0.0...1.0.1) (2024-05-14)
 ## 1.0.0 (2024-05-13)
+
 
 
 
