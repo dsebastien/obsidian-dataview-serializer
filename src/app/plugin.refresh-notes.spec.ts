@@ -5,6 +5,8 @@ import { add } from 'date-fns'
 import { DataviewSerializerPlugin } from './plugin'
 import {
     DATAVIEWJS_OFF_SKIP_REASON,
+    DUPLICATE_QUERY_SKIP_REASON,
+    MAX_REFRESH_PASSES,
     UNSETTLED_MESSAGE,
     unresolvedSkipReason
 } from './refresh-notes'
@@ -213,9 +215,11 @@ const createRefresher = (
                                     : {
                                           successful: true,
                                           value:
-                                              'inlineValue' in options
-                                                  ? options.inlineValue
-                                                  : 'Fresh value'
+                                              typeof options.inlineValue === 'function'
+                                                  ? (options.inlineValue as () => unknown)()
+                                                  : 'inlineValue' in options
+                                                    ? options.inlineValue
+                                                    : 'Fresh value'
                                       }
                         }
                     }
@@ -277,6 +281,7 @@ describe('DataviewSerializerPlugin.refreshNotes', () => {
                         path: 'A.md',
                         resolvedPath: 'A.md',
                         outcome: 'updated',
+                        writes: 1,
                         errors: [],
                         skipped: []
                     }
@@ -411,6 +416,7 @@ describe('DataviewSerializerPlugin.refreshNotes', () => {
                     path: 'A.md',
                     resolvedPath: 'A.md',
                     outcome: 'failed',
+                    writes: 0,
                     errors: [
                         { query: 'LIST BROKEN', message: 'Dataview cannot parse LIST BROKEN' }
                     ],
@@ -458,6 +464,7 @@ describe('DataviewSerializerPlugin.refreshNotes', () => {
                 path: 'A.md',
                 resolvedPath: 'A.md',
                 outcome: 'failed',
+                writes: 0,
                 errors: [{ query: '', message: 'Write failed' }],
                 skipped: []
             })
@@ -1050,8 +1057,22 @@ describe('DataviewSerializerPlugin.refreshNotes', () => {
             const skipped = [{ query: broken, reason: unresolvedSkipReason(['[[Gone]]']) }]
 
             expect(report.notes).toEqual([
-                { path: 'A.md', resolvedPath: 'A.md', outcome: 'updated', errors: [], skipped },
-                { path: 'B.md', resolvedPath: 'B.md', outcome: 'unchanged', errors: [], skipped }
+                {
+                    path: 'A.md',
+                    resolvedPath: 'A.md',
+                    outcome: 'updated',
+                    writes: 1,
+                    errors: [],
+                    skipped
+                },
+                {
+                    path: 'B.md',
+                    resolvedPath: 'B.md',
+                    outcome: 'unchanged',
+                    writes: 0,
+                    errors: [],
+                    skipped
+                }
             ])
             expect(contents.get('A.md')).toContain(block(broken, '- [[Previous]]'))
         })
@@ -1071,8 +1092,22 @@ describe('DataviewSerializerPlugin.refreshNotes', () => {
             const skipped = [{ query: 'dv.list([1])', reason: DATAVIEWJS_OFF_SKIP_REASON }]
 
             expect(report.notes).toEqual([
-                { path: 'A.md', resolvedPath: 'A.md', outcome: 'updated', errors: [], skipped },
-                { path: 'B.md', resolvedPath: 'B.md', outcome: 'unchanged', errors: [], skipped }
+                {
+                    path: 'A.md',
+                    resolvedPath: 'A.md',
+                    outcome: 'updated',
+                    writes: 1,
+                    errors: [],
+                    skipped
+                },
+                {
+                    path: 'B.md',
+                    resolvedPath: 'B.md',
+                    outcome: 'unchanged',
+                    writes: 0,
+                    errors: [],
+                    skipped
+                }
             ])
             expect(contents.get('A.md')).toContain(dvjs('dv.list([1])', '- old'))
             expect(contents.get('B.md')).toBe(dvjs('dv.list([1])', '- old'))
@@ -1129,7 +1164,10 @@ describe('DataviewSerializerPlugin.refreshNotes places each output exactly', () 
 
         expect(outcomes(report)).toEqual([['A.md', 'updated']])
         expect(tryQueryMarkdown).toHaveBeenCalled()
-        expect(contents.get('A.md')).toBe(fresh(query))
+        // The definition line keeps its trailing spaces
+        expect(contents.get('A.md')).toBe(
+            fresh(query).replace(`${query} -->\n`, `${query} -->  \n`)
+        )
     })
 
     it('serializes a query whose marker line ends with a tab', async () => {
@@ -1140,7 +1178,9 @@ describe('DataviewSerializerPlugin.refreshNotes places each output exactly', () 
         const report = await plugin.refreshNotes(['A.md'])
 
         expect(outcomes(report)).toEqual([['A.md', 'updated']])
-        expect(contents.get('A.md')).toBe(fresh(query))
+        expect(contents.get('A.md')).toBe(
+            fresh(query).replace(`${query} -->\n`, `${query} -->\t\n`)
+        )
     })
 
     it('replaces the block of a note with CRLF line ends, keeping them', async () => {
@@ -1292,6 +1332,245 @@ describe('DataviewSerializerPlugin run lock', () => {
         await Promise.all([event, refresh])
 
         expect(stats.maxQueriesInFlight).toBe(1)
+    })
+})
+
+describe('DataviewSerializerPlugin.refreshNotes review round 3 cases', () => {
+    const query = 'LIST FROM #a'
+    const start = `<!-- SerializedQuery: ${query} -->`
+    const end = '<!-- SerializedQuery END -->'
+    const def = `<!-- QueryToSerialize: ${query} -->`
+
+    it('fails a note with a stale second block behind a current one', async () => {
+        const content = [def, start, '- [[Fresh]]', end, start, '- [[Old]]', end, ''].join('\n')
+        const { plugin, contents } = createRefresher({ 'A.md': content })
+
+        const report = await plugin.refreshNotes(['A.md'])
+
+        expect(report.notes[0]?.outcome).toBe('failed')
+        expect(report.notes[0]?.errors[0]?.message).toContain('result block')
+        expect(contents.get('A.md')).toBe(content)
+    })
+
+    it('fails a note with a stale second block when the first one changes', async () => {
+        const content = [def, start, '- [[Old]]', end, start, '- [[Older]]', end, ''].join('\n')
+        const { plugin, contents } = createRefresher({ 'A.md': content })
+
+        const report = await plugin.refreshNotes(['A.md'])
+
+        expect(report.notes[0]?.outcome).toBe('failed')
+        expect(report.notes[0]?.writes).toBe(0)
+        expect(contents.get('A.md')).toBe(content)
+    })
+
+    for (const output of ['', '- [[Fresh]]\n']) {
+        it(`fails a note whose old block is detached by a blank line (result ${output ? 'set' : 'empty'})`, async () => {
+            const content = [def, '', start, '- [[Old]]', end, ''].join('\n')
+            const { plugin, contents } = createRefresher(
+                { 'A.md': content },
+                { queryOutput: () => output }
+            )
+
+            const report = await plugin.refreshNotes(['A.md'])
+
+            expect(report.notes[0]?.outcome).toBe('failed')
+            expect(contents.get('A.md')).toBe(content)
+        })
+    }
+
+    it('clears the stale block of a multi-line definition', async () => {
+        const definition = '<!-- QueryToSerialize: LIST\nFROM #a -->'
+        const { plugin, contents } = createRefresher(
+            { 'A.md': [definition, start, '- [[Old]]', end, ''].join('\n') },
+            { queryOutput: () => '' }
+        )
+
+        const report = await plugin.refreshNotes(['A.md'])
+
+        expect(outcomes(report)).toEqual([['A.md', 'updated']])
+        expect(contents.get('A.md')).toBe([definition, start, '', end, ''].join('\n'))
+    })
+
+    it('does not run a multi-line once query that has output', async () => {
+        const content = [
+            '<!-- QueryToSerializeOnce: LIST\nFROM #a -->',
+            start,
+            '- [[Frozen]]',
+            end,
+            ''
+        ].join('\n')
+        const { plugin, contents, tryQueryMarkdown } = createRefresher({ 'A.md': content })
+
+        const report = await plugin.refreshNotes(['A.md'])
+
+        expect(outcomes(report)).toEqual([['A.md', 'no-queries']])
+        expect(tryQueryMarkdown).not.toHaveBeenCalled()
+        expect(contents.get('A.md')).toBe(content)
+    })
+
+    it('does not eject a DataviewJS once-and-eject query with an empty result', async () => {
+        const content = [
+            '> [!note]',
+            '> <!-- DataviewJSToSerializeOnceAndEject: const nothing = 1 -->',
+            '> end of callout',
+            ''
+        ].join('\n')
+        const { plugin, contents } = createRefresher({ 'A.md': content })
+
+        const report = await plugin.refreshNotes(['A.md'])
+
+        expect(outcomes(report)).toEqual([['A.md', 'unchanged']])
+        expect(contents.get('A.md')).toBe(content)
+    })
+
+    it('counts the writes of a note that a later pass fails', async () => {
+        let calls = 0
+        const { plugin, contents } = createRefresher(
+            { 'A.md': block(query, '- [[Old]]') },
+            {
+                onQuery: () => {
+                    if (++calls > 1) {
+                        throw new Error('Dataview: timeout')
+                    }
+                }
+            }
+        )
+
+        const report = await plugin.refreshNotes(['A.md'])
+
+        expect(report.notes[0]?.outcome).toBe('failed')
+        expect(report.notes[0]?.writes).toBe(1)
+        expect(contents.get('A.md')).toBe(fresh(query))
+    })
+
+    it('reports the later copies of a query as skipped', async () => {
+        const content = [
+            def,
+            '',
+            '> [!note]',
+            `> ${def}`,
+            `> ${start}`,
+            '> - [[Old]]',
+            `> ${end}`,
+            ''
+        ].join('\n')
+        const { plugin } = createRefresher({ 'A.md': content })
+
+        const report = await plugin.refreshNotes(['A.md'])
+
+        expect(report.notes[0]?.skipped).toEqual([{ query, reason: DUPLICATE_QUERY_SKIP_REASON }])
+    })
+
+    it('reports the later copy of a query whose first copy is a once query with output', async () => {
+        const content = [
+            block(query, '- [[Frozen]]', 'QueryToSerializeOnce'),
+            block(query, '- [[Old]]')
+        ].join('\n')
+        const { plugin } = createRefresher({ 'A.md': content })
+
+        const report = await plugin.refreshNotes(['A.md'])
+
+        expect(report.notes[0]?.skipped).toEqual([{ query, reason: DUPLICATE_QUERY_SKIP_REASON }])
+    })
+
+    it('leaves inline markers inside a result block alone', async () => {
+        const task = 'TASK FROM #a'
+        const row = '- Pay <!-- IQ: =this.amount -->12<!-- /IQ -->\n'
+        const { plugin, contents } = createRefresher(
+            { 'A.md': `<!-- QueryToSerialize: ${task} -->\n` },
+            { queryOutput: () => row, inlineValue: 'changed' }
+        )
+
+        const first = await plugin.refreshNotes(['A.md'])
+        const second = await plugin.refreshNotes(['A.md'])
+
+        expect(outcomes(first)).toEqual([['A.md', 'updated']])
+        expect(first.notes[0]?.errors).toEqual([])
+        expect(contents.get('A.md')).toContain(row)
+        expect(outcomes(second)).toEqual([['A.md', 'unchanged']])
+    })
+
+    it('reports the later copies of a DataviewJS query as skipped', async () => {
+        const js = 'dv.list([1])'
+        const content = [dvjs(js, '- 1'), `> ${dvjs(js).trimEnd()}`, ''].join('\n')
+        const { plugin } = createRefresher({ 'A.md': content })
+
+        const report = await plugin.refreshNotes(['A.md'])
+
+        expect(report.notes[0]?.skipped).toEqual([
+            { query: js, reason: DUPLICATE_QUERY_SKIP_REASON }
+        ])
+    })
+
+    it('treats a marker in the output of an ejected query as note text', async () => {
+        // Once ejected, the output is ordinary note text: its marker is a live
+        // inline query, serialized by the next pass as by any later run
+        const row = '- row with <!-- IQ: =this.inner -->v<!-- /IQ --> inside\n'
+        const { plugin, contents } = createRefresher(
+            { 'A.md': block(query, undefined, 'QueryToSerializeOnceAndEject') },
+            { queryOutput: () => row, inlineValue: 'changed' }
+        )
+
+        const report = await plugin.refreshNotes(['A.md'])
+
+        expect(outcomes(report)).toEqual([['A.md', 'updated']])
+        expect(report.notes[0]?.errors).toEqual([])
+        expect(contents.get('A.md')).toBe(`${row.replace('-->v<', '-->changed<')}\n`)
+    })
+
+    it('leaves an inline once-and-eject query whose value is already shown (as before)', async () => {
+        const content = 'Total: <!-- IQOnceAndEject: =this.total -->42<!-- /IQ -->\n'
+        const { plugin, contents } = createRefresher({ 'A.md': content }, { inlineValue: '42' })
+
+        const report = await plugin.refreshNotes(['A.md'])
+
+        expect(outcomes(report)).toEqual([['A.md', 'unchanged']])
+        expect(contents.get('A.md')).toBe(content)
+    })
+
+    it('keeps trailing spaces after the closing flag of a one-line definition', async () => {
+        const { plugin, contents } = createRefresher({
+            'A.md': `${def}  \n${start}\n- [[Old]]\n${end}\n`
+        })
+
+        await plugin.refreshNotes(['A.md'])
+
+        expect(contents.get('A.md')).toBe(`${def}  \n${start}\n- [[Fresh]]\n\n${end}\n`)
+    })
+
+    it('keeps a note that has no final line end without one', async () => {
+        const { plugin, contents } = createRefresher({
+            'A.md': `${def}\n${start}\n- [[Old]]\n${end}`,
+            'B.md': def
+        })
+
+        const report = await plugin.refreshNotes(['A.md', 'B.md'])
+
+        expect(outcomes(report)).toEqual([
+            ['A.md', 'updated'],
+            ['B.md', 'updated']
+        ])
+        expect(contents.get('A.md')).toBe(`${def}\n${start}\n- [[Fresh]]\n\n${end}`)
+        expect(contents.get('B.md')).toBe(`${def}\n${start}\n- [[Fresh]]\n\n${end}`)
+    })
+
+    it('flags only the note that never settles', async () => {
+        let tick = 0
+        const { plugin } = createRefresher(
+            {
+                'Clock.md': 'Now: <!-- IQ: =date(now) -->old<!-- /IQ -->\n',
+                'Other.md': block('LIST FROM #x', '- [[Fresh]]')
+            },
+            { simulateIndex: true, inlineValue: () => `12:00:0${tick++}` }
+        )
+
+        const report = await plugin.refreshNotes(['Clock.md', 'Other.md'])
+
+        expect(report.unsettledPaths).toEqual(['Clock.md'])
+        expect(report.notes.map((note) => [note.outcome, note.writes, note.errors])).toEqual([
+            ['updated', MAX_REFRESH_PASSES, [{ query: '', message: UNSETTLED_MESSAGE }]],
+            ['unchanged', 0, []]
+        ])
     })
 })
 

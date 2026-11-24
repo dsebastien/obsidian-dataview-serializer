@@ -4,12 +4,16 @@ import type { RefreshedNote, RefreshOutcome, RefreshState } from './api'
 import {
     DATAVIEWJS_OFF_SKIP_REASON,
     INDEX_POLL_INTERVAL_MS,
+    INDEX_RELOAD_DELAY_MS,
+    INDEX_WAIT_MAX_MS,
     INDEX_WAIT_TIMEOUT_MS,
+    MAX_RELOADS_PER_WAIT,
     MAX_REFRESH_PASSES,
     STALE_PATHS_REPORTED,
     UNSETTLED_MESSAGE,
     createMarkdownFileResolver,
     findStaleIndexedPaths,
+    indexWaitTimeout,
     isDataviewIndexReady,
     requestIndexReload,
     runNoteRefresh,
@@ -30,8 +34,10 @@ const createFile = (path: string, mtime?: number): TFile => {
     })
 }
 
+/** A run; 'updated' runs wrote the note unless `written` says otherwise */
 const run = (status: FileRun['status'], extra: Partial<FileRun> = {}): FileRun => ({
     status,
+    written: status === 'updated',
     errors: [],
     skipped: [],
     ...extra
@@ -61,7 +67,7 @@ const createHost = (
         Array.isArray(entry)
             ? entry
             : !(entry instanceof Error) && entry.status === 'updated'
-              ? [entry, { ...entry, status: 'unchanged' }]
+              ? [entry, { ...entry, status: 'unchanged', written: false }]
               : [entry]
     const host: RefreshNotesHost = {
         isDisabledOnDevice: () => false,
@@ -92,6 +98,7 @@ const notRun = (path: string): RefreshedNote => ({
     path,
     resolvedPath: null,
     outcome: 'not-run',
+    writes: 0,
     errors: [],
     skipped: []
 })
@@ -318,20 +325,40 @@ describe('runNoteRefresh', () => {
                 INDEX_POLL_INTERVAL_MS
             ])
             expect(processed).toEqual(['A.md'])
-            // Asked once, after Dataview had a first chance to catch up alone
+            // Dataview caught up alone, before the re-index delay
+            expect(reindexed).toEqual([])
+        })
+
+        it(`asks Dataview to re-index a note still stale after ${INDEX_RELOAD_DELAY_MS} ms`, async () => {
+            let waited = 0
+            const { host, reindexed, waits } = createHost(
+                { 'A.md': run('unchanged') },
+                {
+                    findStaleIndexedPaths: () =>
+                        waited < INDEX_RELOAD_DELAY_MS + 1000 ? ['Other.md'] : []
+                }
+            )
+            host.sleep = (ms) => {
+                waits.push(ms)
+                waited += ms
+                return Promise.resolve()
+            }
+
+            await runNoteRefresh(['A.md'], host)
+
             expect(reindexed).toEqual(['Other.md'])
         })
 
-        it('does not ask Dataview to re-index when it catches up alone', async () => {
-            let polls = 0
+        it(`asks for at most ${MAX_RELOADS_PER_WAIT} re-index requests per wait`, async () => {
+            const stale = Array.from({ length: MAX_RELOADS_PER_WAIT + 20 }, (_, i) => `S${i}.md`)
             const { host, reindexed } = createHost(
                 { 'A.md': run('unchanged') },
-                { findStaleIndexedPaths: () => (++polls > 1 ? [] : ['Other.md']) }
+                { findStaleIndexedPaths: () => stale }
             )
 
             await runNoteRefresh(['A.md'], host)
 
-            expect(reindexed).toEqual([])
+            expect(reindexed).toHaveLength(MAX_RELOADS_PER_WAIT)
         })
 
         it('gives up when Dataview stays behind, and says which notes', async () => {
@@ -352,6 +379,13 @@ describe('runNoteRefresh', () => {
             expect(processed).toEqual([])
             // Each stale note re-indexed once, however long it waited
             expect(reindexed).toEqual(stale)
+        })
+
+        it('waits longer after a large write, up to a maximum', () => {
+            expect(indexWaitTimeout(0)).toBe(INDEX_WAIT_TIMEOUT_MS)
+            expect(indexWaitTimeout(10)).toBeGreaterThan(INDEX_WAIT_TIMEOUT_MS)
+            expect(indexWaitTimeout(100)).toBeGreaterThan(indexWaitTimeout(10))
+            expect(indexWaitTimeout(1_000_000)).toBe(INDEX_WAIT_MAX_MS)
         })
 
         it('checks the states in order', async () => {
@@ -536,6 +570,7 @@ describe('runNoteRefresh', () => {
                 path: 'A.md',
                 resolvedPath: 'A.md',
                 outcome: 'failed',
+                writes: 0,
                 errors: [{ query: '', message: 'Disk on fire' }],
                 skipped: []
             })
@@ -599,11 +634,25 @@ describe('runNoteRefresh passes', () => {
         // A note without queries is not run again
         expect(processed).toEqual(['A.md', 'B.md', 'C.md', 'A.md', 'B.md', 'A.md', 'B.md'])
         expect(waits).toEqual([])
-        expect(report.notes.map((note) => [note.outcome, note.errors])).toEqual([
-            ['updated', []],
-            ['unchanged', []],
-            ['no-queries', []]
+        expect(report.unsettledPaths).toBeUndefined()
+        expect(report.notes.map((note) => [note.outcome, note.writes, note.errors])).toEqual([
+            ['updated', 2, []],
+            ['unchanged', 0, []],
+            ['no-queries', 0, []]
         ])
+    })
+
+    it('counts only real writes, not a newer version that already held the text', async () => {
+        const { host, processed } = createHost({
+            'A.md': run('updated', { written: false })
+        })
+
+        const report = await runNoteRefresh(['A.md'], host)
+
+        // Nothing written: no second pass
+        expect(processed).toEqual(['A.md'])
+        expect(report.notes[0]?.outcome).toBe('updated')
+        expect(report.notes[0]?.writes).toBe(0)
     })
 
     it('waits for the index between passes', async () => {
@@ -623,7 +672,7 @@ describe('runNoteRefresh passes', () => {
         expect(report.notes[0]?.errors).toEqual([])
     })
 
-    it('reports a failure of the last pass, even when an earlier pass wrote', async () => {
+    it('reports a failure of the last pass, with the writes of the earlier passes', async () => {
         const { host } = createHost({
             'A.md': [
                 run('updated'),
@@ -634,33 +683,47 @@ describe('runNoteRefresh passes', () => {
         const [note] = (await runNoteRefresh(['A.md'], host)).notes
 
         expect(note?.outcome).toBe('failed')
+        expect(note?.writes).toBe(1)
         expect(note?.errors).toEqual([{ query: 'Q', message: 'Bad' }])
     })
 
-    it(`stops after ${MAX_REFRESH_PASSES} passes and flags the notes as not settled`, async () => {
+    it('reports a note a pass left empty as updated', async () => {
+        const { host } = createHost({ 'A.md': [run('updated'), run('empty')] })
+
+        const [note] = (await runNoteRefresh(['A.md'], host)).notes
+
+        expect(note?.outcome).toBe('updated')
+        expect(note?.writes).toBe(1)
+    })
+
+    it(`stops after ${MAX_REFRESH_PASSES} passes and flags only the notes still changing`, async () => {
         const { host, processed } = createHost({
             'A.md': [run('updated')],
-            'B.md': run('unchanged'),
-            'C.md': run('no-queries'),
-            'D.md': run('ignored-by-flag')
+            'B.md': run('updated'),
+            'C.md': run('unchanged'),
+            'D.md': run('no-queries'),
+            'E.md': run('ignored-by-flag')
         })
 
-        const report = await runNoteRefresh(['A.md', 'B.md', 'C.md', 'D.md'], host)
+        const report = await runNoteRefresh(['A.md', 'B.md', 'C.md', 'D.md', 'E.md'], host)
 
         expect(processed.filter((path) => path === 'A.md')).toHaveLength(MAX_REFRESH_PASSES)
-        expect(report.notes.map((note) => [note.outcome, note.errors])).toEqual([
-            ['updated', [{ query: '', message: UNSETTLED_MESSAGE }]],
-            ['unchanged', [{ query: '', message: UNSETTLED_MESSAGE }]],
-            ['no-queries', []],
-            ['ignored', []]
+        expect(report.unsettledPaths).toEqual(['A.md'])
+        expect(report.notes.map((note) => [note.outcome, note.writes, note.errors])).toEqual([
+            ['updated', MAX_REFRESH_PASSES, [{ query: '', message: UNSETTLED_MESSAGE }]],
+            ['updated', 1, []],
+            ['unchanged', 0, []],
+            ['no-queries', 0, []],
+            ['ignored', 0, []]
         ])
     })
 
-    it('flags the notes as not settled when the index stays behind between passes', async () => {
+    it('flags every note that ran when the index stays behind between passes', async () => {
         let ran = false
         const { host, processed } = createHost({
             'A.md': run('updated'),
-            'B.md': run('unchanged')
+            'B.md': run('unchanged'),
+            'C.md': run('no-queries')
         })
         const refreshFile = host.refreshFile.bind(host)
         host.refreshFile = (file) => {
@@ -669,13 +732,15 @@ describe('runNoteRefresh passes', () => {
         }
         host.findStaleIndexedPaths = () => (ran ? ['A.md'] : [])
 
-        const report = await runNoteRefresh(['A.md', 'B.md'], host)
+        const report = await runNoteRefresh(['A.md', 'B.md', 'C.md'], host)
 
         expect(report.state).toBe('ready')
-        expect(processed).toEqual(['A.md', 'B.md'])
+        expect(processed).toEqual(['A.md', 'B.md', 'C.md'])
+        expect(report.unsettledPaths).toEqual(['A.md', 'B.md'])
         expect(report.notes.map((note) => [note.outcome, note.errors])).toEqual([
             ['updated', [{ query: '', message: UNSETTLED_MESSAGE }]],
-            ['unchanged', [{ query: '', message: UNSETTLED_MESSAGE }]]
+            ['unchanged', [{ query: '', message: UNSETTLED_MESSAGE }]],
+            ['no-queries', []]
         ])
     })
 })

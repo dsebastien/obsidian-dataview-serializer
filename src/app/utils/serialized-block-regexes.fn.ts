@@ -11,7 +11,7 @@ import {
 } from '../constants'
 import { buildBlockquotePrefixPattern } from './blockquote.fn'
 import { escapeRegExp } from './escape-reg-exp.fn'
-import { matchOutsideCode, type CodeRange } from './code-ranges.fn'
+import { findCodeRanges, isInsideCode, matchOutsideCode, type CodeRange } from './code-ranges.fn'
 
 /**
  * Regexes used to locate an existing serialized block so it can be detected,
@@ -57,7 +57,22 @@ export interface BlockQueryRegexParams {
     flagClose: string
     /** The query's indentation (used to allow a blockquote prefix) */
     indentation: string
+    /**
+     * For multi-line queries, the original text of the definition (from the
+     * opening flag to the closing flag). Undefined for single-line queries.
+     */
+    originalQueryDefinition?: string | undefined
 }
+
+/**
+ * The definition of a query as a regex source: its original text for a
+ * multi-line definition (the one-line query never appears in the note),
+ * otherwise the flags around the query.
+ */
+const definitionPattern = (params: BlockQueryRegexParams): string =>
+    params.originalQueryDefinition
+        ? escapeRegExp(params.originalQueryDefinition)
+        : `${escapeRegExp(params.flagOpen)}${escapeRegExp(params.query)}\\s*${escapeRegExp(params.flagClose)}`
 
 /**
  * Match a query definition immediately followed by a result start marker.
@@ -72,7 +87,7 @@ export interface BlockQueryRegexParams {
 export const buildAlreadySerializedRegex = (params: BlockQueryRegexParams): RegExp => {
     const prefix = buildBlockquotePrefixPattern(params.indentation)
     return new RegExp(
-        `${escapeRegExp(params.flagOpen)}${escapeRegExp(params.query)}\\s*${escapeRegExp(params.flagClose)}${LINE_END}${prefix}${ANY_SERIALIZED_QUERY_START}[^\\n]*${escapeRegExp(QUERY_FLAG_CLOSE)}`,
+        `${definitionPattern(params)}${LINE_END}${prefix}${ANY_SERIALIZED_QUERY_START}[^\\n]*${escapeRegExp(QUERY_FLAG_CLOSE)}`,
         'm'
     )
 }
@@ -107,7 +122,7 @@ export const matchExistingSerializedBlock = (
 ): ExistingSerializedBlock | null => {
     const prefix = buildBlockquotePrefixPattern(params.indentation)
     const regex = new RegExp(
-        `${escapeRegExp(params.flagOpen)}${escapeRegExp(params.query)}\\s*${escapeRegExp(params.flagClose)}${LINE_END}(${prefix})${ANY_SERIALIZED_QUERY_START}[^\\n]*${escapeRegExp(QUERY_FLAG_CLOSE)}${LINE_END}([\\s\\S]*?)(${prefix})${ANY_SERIALIZED_QUERY_END}`,
+        `${definitionPattern(params)}${LINE_END}(${prefix})${ANY_SERIALIZED_QUERY_START}[^\\n]*${escapeRegExp(QUERY_FLAG_CLOSE)}${LINE_END}([\\s\\S]*?)(${prefix})${ANY_SERIALIZED_QUERY_END}`,
         'm'
     )
 
@@ -124,13 +139,7 @@ export const matchExistingSerializedBlock = (
     }
 }
 
-export interface BlockQueryReplacementRegexParams extends BlockQueryRegexParams {
-    /**
-     * For multi-line queries, the original text of the definition (from the
-     * opening flag to the closing flag). Undefined for single-line queries.
-     */
-    originalQueryDefinition?: string | undefined
-}
+export type BlockQueryReplacementRegexParams = BlockQueryRegexParams
 
 /**
  * Match the query definition plus any result block that follows it, so both can
@@ -219,4 +228,40 @@ export const buildDataviewJSReplacementRegex = (params: DataviewJSRegexParams): 
         `(${escapeRegExp(params.originalQueryDefinition)}${LINE_END})(?:${prefix}${ANY_SERIALIZED_DATAVIEWJS_START}${escapeRegExp(QUERY_FLAG_CLOSE)}${LINE_END}[\\s\\S]*?${prefix}${ANY_SERIALIZED_DATAVIEWJS_END}${LINE_END})?`,
         'gm'
     )
+}
+
+/** Every result start marker (block and DataviewJS, both syntaxes) */
+const ANY_RESULT_START = `(?:${ANY_SERIALIZED_QUERY_START}|${ANY_SERIALIZED_DATAVIEWJS_START})`
+/** Every result end marker (block and DataviewJS, both syntaxes) */
+const ANY_RESULT_END = `(?:${ANY_SERIALIZED_QUERY_END}|${ANY_SERIALIZED_DATAVIEWJS_END})`
+
+/** A span of text: `start` included, `end` excluded */
+export interface ResultBlockRange {
+    start: number
+    end: number
+}
+
+/**
+ * The spans of the result blocks of a document, from a result start marker to
+ * the next result end marker, outside code. Text inside them is query output:
+ * a query marker in it is part of the output, not a live query.
+ *
+ * @param text The document text
+ * @param codeRanges Code ranges of `text`, computed when omitted
+ */
+export const findResultBlockRanges = (
+    text: string,
+    codeRanges: readonly CodeRange[] = findCodeRanges(text)
+): ResultBlockRange[] => {
+    const ranges: ResultBlockRange[] = []
+    const regex = new RegExp(`${ANY_RESULT_START}[\\s\\S]*?${ANY_RESULT_END}`, 'g')
+    let match: RegExpExecArray | null
+    while ((match = regex.exec(text)) !== null) {
+        if (isInsideCode(codeRanges, match.index)) {
+            regex.lastIndex = match.index + 1
+            continue
+        }
+        ranges.push({ start: match.index, end: match.index + match[0].length })
+    }
+    return ranges
 }

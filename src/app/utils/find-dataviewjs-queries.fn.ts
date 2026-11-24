@@ -222,7 +222,29 @@ function extractJSCode(accumulatedLines: string[], flagOpen: string, indentation
  * @returns Array of DataviewJS queries with their context information
  */
 export function findDataviewJSQueries(text: string): DataviewJSQueryWithContext[] {
+    return findDataviewJSQueriesWithDuplicates(text).queries
+}
+
+/**
+ * `findDataviewJSQueries`, plus the later copies of a query that it leaves out
+ * (same JavaScript code), in document order. Only the first copy is
+ * serialized; the refresh API reports the others.
+ *
+ * @param text The document text to search for queries
+ */
+export function findDataviewJSQueriesWithDuplicates(text: string): {
+    queries: DataviewJSQueryWithContext[]
+    duplicates: DataviewJSQueryWithContext[]
+} {
     const retVal: DataviewJSQueryWithContext[] = []
+    const duplicates: DataviewJSQueryWithContext[] = []
+    const add = (query: DataviewJSQueryWithContext): void => {
+        if (retVal.some((item) => item.jsCode === query.jsCode)) {
+            duplicates.push(query)
+        } else {
+            retVal.push(query)
+        }
+    }
     const lines: string[] = text.split('\n')
     const codeRanges = findCodeRanges(text)
     let multiLineState = createInitialMultiLineState()
@@ -253,20 +275,16 @@ export function findDataviewJSQueries(text: string): DataviewJSQueryWithContext[
                     : QUERY_FLAG_CLOSE.trim()
 
                 if (jsCode) {
-                    // Check for duplicates (same JS code)
-                    const isDuplicate = retVal.some((item) => item.jsCode === jsCode)
-
-                    if (!isDuplicate) {
-                        retVal.push({
-                            jsCode,
-                            indentation: multiLineState.indentation,
-                            updateMode: multiLineState.updateMode,
-                            flagOpen: multiLineState.flagOpen,
-                            flagClose,
-                            syntaxVariant: multiLineState.syntaxVariant,
-                            originalQueryDefinition: multiLineState.accumulatedLines.join('\n')
-                        })
-                    }
+                    // A later copy (same JS code) is kept apart (see `add`)
+                    add({
+                        jsCode,
+                        indentation: multiLineState.indentation,
+                        updateMode: multiLineState.updateMode,
+                        flagOpen: multiLineState.flagOpen,
+                        flagClose,
+                        syntaxVariant: multiLineState.syntaxVariant,
+                        originalQueryDefinition: multiLineState.accumulatedLines.join('\n')
+                    })
                 }
 
                 // Reset state
@@ -319,8 +337,8 @@ export function findDataviewJSQueries(text: string): DataviewJSQueryWithContext[
                             .substring(openFlagIndex + flagLength, closeFlagIndex)
                             .trim()
 
-                        if (jsCode && !retVal.some((item) => item.jsCode === jsCode)) {
-                            retVal.push({
+                        if (jsCode) {
+                            add({
                                 jsCode,
                                 indentation,
                                 updateMode,
@@ -352,7 +370,7 @@ export function findDataviewJSQueries(text: string): DataviewJSQueryWithContext[
     // it means we have an incomplete query (no closing flag found).
     // We simply ignore it.
 
-    return retVal
+    return { queries: retVal, duplicates }
 }
 
 /**

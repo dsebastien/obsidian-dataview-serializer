@@ -9,6 +9,7 @@ import {
     buildAlreadySerializedRegex,
     buildBlockQueryReplacementRegex,
     buildDataviewJSReplacementRegex,
+    findResultBlockRanges,
     matchExistingDataviewJSBlock,
     matchExistingSerializedBlock
 } from './serialized-block-regexes.fn'
@@ -296,5 +297,67 @@ describe('serialized block regexes', () => {
                 })
             })
         }
+    })
+
+    describe('multi-line definitions', () => {
+        const definition = ['<!-- QueryToSerialize: LIST', 'FROM #project -->'].join('\n')
+        const multiParams = { ...params, originalQueryDefinition: definition }
+        const text = [
+            definition,
+            `${SERIALIZED_QUERY_START}${query}${QUERY_FLAG_CLOSE}`,
+            '- [[A]]',
+            SERIALIZED_QUERY_END,
+            ''
+        ].join('\n')
+
+        it('detects the serialized block of a multi-line definition', () => {
+            expect(text.match(buildAlreadySerializedRegex(multiParams))).not.toBeNull()
+            expect(`${definition}\n`.match(buildAlreadySerializedRegex(multiParams))).toBeNull()
+        })
+
+        it('matches the existing block of a multi-line definition', () => {
+            expect(matchExistingSerializedBlock(text, multiParams)?.content).toBe('- [[A]]\n')
+        })
+    })
+
+    describe('findResultBlockRanges', () => {
+        it('covers every result block, legacy, alternative and DataviewJS', () => {
+            const text = [
+                'before',
+                `${SERIALIZED_QUERY_START}${query}${QUERY_FLAG_CLOSE}`,
+                '- inside 1',
+                SERIALIZED_QUERY_END,
+                'between',
+                '<!-- dataview-serializer-js-result -->',
+                '- inside 2',
+                '<!-- dataview-serializer-js-result-end -->',
+                'after'
+            ].join('\n')
+
+            const ranges = findResultBlockRanges(text)
+            const inside = (needle: string): boolean => {
+                const at = text.indexOf(needle)
+                return ranges.some((range) => at >= range.start && at < range.end)
+            }
+
+            expect(ranges).toHaveLength(2)
+            expect(inside('- inside 1')).toBe(true)
+            expect(inside('- inside 2')).toBe(true)
+            expect(inside('before')).toBe(false)
+            expect(inside('between')).toBe(false)
+            expect(inside('after')).toBe(false)
+        })
+
+        it('ignores result markers inside code', () => {
+            const text = [
+                '```',
+                `${SERIALIZED_QUERY_START}${query}${QUERY_FLAG_CLOSE}`,
+                SERIALIZED_QUERY_END,
+                '```',
+                'after'
+            ].join('\n')
+
+            expect(findResultBlockRanges(text)).toEqual([])
+        })
     })
 })

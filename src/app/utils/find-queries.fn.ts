@@ -259,8 +259,28 @@ function extractMultiLineQuery(
  * @param text The document text to search for queries
  * @returns Array of queries with their context information
  */
-export const findQueries = (text: string): QueryWithContext[] => {
+export const findQueries = (text: string): QueryWithContext[] =>
+    findQueriesWithDuplicates(text).queries
+
+/**
+ * `findQueries`, plus the later copies of a query that it leaves out (same
+ * query text, any update mode, indentation or syntax), in document order. Only
+ * the first copy of a query is serialized; the refresh API reports the others.
+ *
+ * @param text The document text to search for queries
+ */
+export const findQueriesWithDuplicates = (
+    text: string
+): { queries: QueryWithContext[]; duplicates: QueryWithContext[] } => {
     const retVal: QueryWithContext[] = []
+    const duplicates: QueryWithContext[] = []
+    const add = (query: QueryWithContext): void => {
+        if (retVal.some((item) => item.query === query.query)) {
+            duplicates.push(query)
+        } else {
+            retVal.push(query)
+        }
+    }
     const lines: string[] = text.split('\n')
     const codeRanges = findCodeRanges(text)
     let multiLineState = createInitialMultiLineState()
@@ -290,12 +310,8 @@ export const findQueries = (text: string): QueryWithContext[] => {
                     ? QUERY_FLAG_CLOSE
                     : QUERY_FLAG_CLOSE.trim()
 
-                if (
-                    foundQuery &&
-                    !retVal.some((item) => item.query === foundQuery) &&
-                    isSupportedQueryType(foundQuery)
-                ) {
-                    retVal.push({
+                if (foundQuery && isSupportedQueryType(foundQuery)) {
+                    add({
                         query: foundQuery,
                         indentation: multiLineState.indentation,
                         updateMode: multiLineState.updateMode,
@@ -352,11 +368,8 @@ export const findQueries = (text: string): QueryWithContext[] => {
                         .substring(openFlagIndex + flagLength, closeFlagIndex)
                         .trim()
 
-                    if (
-                        !retVal.some((item) => item.query === foundQuery) &&
-                        isSupportedQueryType(foundQuery)
-                    ) {
-                        retVal.push({
+                    if (isSupportedQueryType(foundQuery)) {
+                        add({
                             query: foundQuery,
                             indentation,
                             updateMode,
@@ -386,5 +399,5 @@ export const findQueries = (text: string): QueryWithContext[] => {
     // it means we have an incomplete multi-line query (no closing flag found).
     // We simply ignore it, similar to how we ignore single-line queries without closing flags.
 
-    return retVal
+    return { queries: retVal, duplicates }
 }

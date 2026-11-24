@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'bun:test'
-import { findQueries } from './find-queries.fn'
+import { findQueries, findQueriesWithDuplicates } from './find-queries.fn'
 import {
     QUERY_FLAG_OPEN,
     QUERY_FLAG_CLOSE,
@@ -699,5 +699,40 @@ ${makeAltOnceAndEjectQuery('list from "eject"')}`
             expect(result[0]!.indentation).toBe('    ')
             expect(result[0]!.syntaxVariant).toBe('alternative')
         })
+    })
+})
+
+describe('findQueriesWithDuplicates', () => {
+    it('returns what findQueries returns, plus the later copies of a query', () => {
+        const text = [
+            '<!-- QueryToSerialize: LIST FROM #a -->',
+            '<!-- QueryToSerialize: LIST FROM #b -->',
+            '> <!-- QueryToSerializeManual: LIST FROM #a -->',
+            '<!-- QueryToSerialize: LIST',
+            'FROM #a -->',
+            '```',
+            '<!-- QueryToSerialize: LIST FROM #a -->',
+            '```',
+            ''
+        ].join('\n')
+
+        const { queries, duplicates } = findQueriesWithDuplicates(text)
+
+        expect(queries).toEqual(findQueries(text))
+        expect(queries.map((query) => query.query)).toEqual(['LIST FROM #a', 'LIST FROM #b'])
+        // The copy inside code is an example, not a duplicate
+        expect(duplicates.map((query) => [query.query, query.indentation])).toEqual([
+            ['LIST FROM #a', '> '],
+            ['LIST FROM #a', '']
+        ])
+        expect(duplicates[1]?.originalQueryDefinition).toBe(
+            '<!-- QueryToSerialize: LIST\nFROM #a -->'
+        )
+    })
+
+    it('finds no duplicates in a note without them', () => {
+        expect(findQueriesWithDuplicates('<!-- QueryToSerialize: LIST -->\n').duplicates).toEqual(
+            []
+        )
     })
 })

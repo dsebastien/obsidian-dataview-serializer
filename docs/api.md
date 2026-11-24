@@ -90,6 +90,8 @@ const refreshed = report.notes.filter(
         note.errors.length === 0 &&
         note.skipped.length === 0
 )
+// Each write fires one file event
+const fileEvents = report.notes.reduce((total, note) => total + note.writes, 0)
 ```
 
 It runs like an automatic update, without the throttles:
@@ -98,16 +100,26 @@ It runs like an automatic update, without the throttles:
 - Manual queries, and once queries that already have output, are not run again.
 - It runs even when automatic updates are disabled. DataviewJS queries run only when DataviewJS support is on; otherwise they keep their output and are listed in `skipped`.
 - It reads the notes from disk, not from Obsidian's cache.
-- A query that returns nothing clears its existing result block, so the note always holds the current result. A query that was never serialized and returns nothing is left as it is (it shows nothing either way): a once query stays open, a once-and-eject query is not ejected. An inline query that returns nothing shows `-`.
-- A note with a failing query is not written at all, not even the output of its other queries. The same goes for an output that cannot be put in its place (for example a result block whose end marker is missing): the note is `failed`.
+- A query that returns nothing clears its existing result block, so the note always holds the current result. A query that was never serialized and returns nothing is left as it is (it shows nothing either way): a once query stays open, a once-and-eject query (block or DataviewJS) is not ejected. An inline query that returns nothing shows `-`.
+- Only the first copy of a query is serialized when the same query text appears more than once in a note; the later copies keep their output and are listed in `skipped`.
+- A query marker inside a result block is part of that output (a task that holds an inline query, say), not a live query: it is left alone.
+- It changes nothing outside the result blocks: a query line keeps its trailing spaces, and the end of the note keeps its final line end, or its lack of one.
+- A note with a failing query is not written at all, not even the output of its other queries. The same goes for an output that cannot be put in its place, and for a query followed by a stale result block (a second block, or an old one separated from it by a blank line): the note is `failed`, so you can remove the extra block by hand.
 - It waits for other runs on the same note (a file event, a command) to finish first.
 - It shows no notice.
 
-**Before you call it, let Obsidian save and index your own edits.** Dataview indexes a saved note a moment later. `refreshNotes` waits up to about 5 seconds for Dataview to index every saved note of the vault, and asks Dataview to index again a note that stays behind. If Dataview is still behind, nothing runs, `state` is `dataview-index-busy`, and `stalePaths` names the first notes still behind.
+**Before you call it, let Obsidian save and index your own edits.** Dataview indexes a saved note a moment later. `refreshNotes` waits up to about 5 seconds for Dataview to index every saved note of the vault, and, from 2 seconds into the wait, asks Dataview to index again the notes that stay behind (up to 50 per wait). If Dataview is still behind, nothing runs, `state` is `dataview-index-busy`, and `stalePaths` names the first notes still behind. They can be any notes of the vault, not only the notes of the call. If the same note stays stale call after call, save it again (an edit is enough) or restart Obsidian, so that Dataview indexes it anew.
 
-**Notes of one call that list each other.** When a refresh writes a note, a list in another note of the same call may not show the change yet: Dataview has not indexed the write. So, after a pass that wrote something, `refreshNotes` waits for Dataview and runs another pass over the notes of the call, until a pass writes nothing (at most 3 passes). If the passes do not settle (still writing after the third pass, or Dataview still behind between passes), every `updated` or `unchanged` note gets an error that starts with `Not settled`: call `refreshNotes` again.
+**Notes of one call that list each other.** When a refresh writes a note, a list in another note of the same call may not show the change yet: Dataview has not indexed the write. So, after a pass that wrote something, `refreshNotes` waits for Dataview (5 seconds plus 50 ms per note written, at most 30 seconds) and runs another pass over the notes of the call, until a pass writes nothing (at most 3 passes). `writes` counts the writes of every pass. If the passes do not settle, the notes concerned get an error that starts with `Not settled` and are listed in `unsettledPaths`:
 
-`paths` must be an array; anything else rejects with a `TypeError`. Each path must be the exact vault path of the note: a path that differs only in its form (a non-breaking space for a space, decomposed accents, extra slashes) is `not-found`, because it can name another note.
+- A note that still changed in the third pass: it changes on every run, for example a note that shows the current time (`<!-- IQ: =date(now) -->`) or its own modification time. Such a note never settles; its output is fresh, but it will be different on the next call.
+- When Dataview stays behind between passes: every note that ran in the last pass, since none of them could see the writes. Call `refreshNotes` again.
+
+**How long it can take.** Up to about 5 seconds of index wait before the first pass; then for each of up to 3 passes: the queries (a DataviewJS query stops after 5 seconds; a block or inline query has no time limit), any wait for other runs on the same note (no time limit), and an index wait of up to 30 seconds. A call that writes nothing runs one pass.
+
+**When the outcome is `conflict`**, the note changed while it was refreshed (you, a sync, another plugin). Call `refreshNotes` again for that note.
+
+`paths` must be an array; anything else rejects with a `TypeError`. An entry that is not a string is `not-found`. Each path must be the exact vault path of the note: a path that differs only in its form (a non-breaking space for a space, decomposed accents, extra slashes) is `not-found`, because it can name another note.
 
 Returns:
 
@@ -120,6 +132,7 @@ Returns:
             path: 'Projects/Dashboard.md', // as given
             resolvedPath: 'Projects/Dashboard.md', // the note found, or null
             outcome: 'updated',
+            writes: 1, // times this call wrote the note's file
             errors: [],
             skipped: [
                 {
@@ -129,6 +142,8 @@ Returns:
             ]
         }
     ]
+    // stalePaths: with 'dataview-index-busy' only
+    // unsettledPaths: with 'ready' only, when some notes did not settle
 }
 ```
 
@@ -147,10 +162,12 @@ Outcomes (with several passes: the last pass's, and `updated` if any pass wrote)
 - `no-queries`: the note holds no query that a refresh runs (none at all, or only manual queries and once queries that already have output), or is empty.
 - `ignored`: the per-note ignore flag excludes the note, or the serializer never processes that kind of file: a note named `Canvas.md`, or an Excalidraw drawing (recognized only while the Excalidraw plugin runs; otherwise the drawing is processed like any note).
 - `not-found`: there is no Markdown file at exactly that path.
-- `conflict`: the note changed during the refresh, so the write was refused and the newer version kept.
-- `failed`: a query failed, an output could not be put in its place, or an error occurred. The last pass wrote nothing. `errors` lists the failures; an error that is not tied to a query has `query: ''`.
+- `conflict`: the note changed during the refresh, so the write was refused and the newer version kept. Call again.
+- `failed`: a query failed, an output could not be put in its place, a stale result block follows a query, or an error occurred. The last pass wrote nothing; an earlier pass can have written the note, see `writes`. `errors` lists the failures; an error that is not tied to a query has `query: ''`.
 - `not-run`: `state` is not `ready`.
 
-`skipped` lists the queries left untouched on purpose, which keep their previous output: a query whose FROM source does not exist (see **Skip queries that reference missing notes or folders** in [Configuration](configuration.md#general-settings)), or a DataviewJS query while DataviewJS support is off. A note can be `updated` or `unchanged` and still have skipped queries: check `skipped` when every query must have run.
+`writes` is how many times this call wrote the note's file: 0 when never, up to 3 with several passes, also when the final outcome is `failed`. Each write fires one file event.
+
+`skipped` lists the queries left untouched on purpose, which keep their previous output: a query whose FROM source does not exist (see **Skip queries that reference missing notes or folders** in [Configuration](configuration.md#general-settings)), a DataviewJS query while DataviewJS support is off, or a later copy of a query. A note can be `updated` or `unchanged` and still have skipped queries: check `skipped` when every query must have run.
 
 `resolvedPath` is the vault path of the note the entry is about (`null` for `not-found` and `not-run`). Two entries with the same path are processed once and both show that note.

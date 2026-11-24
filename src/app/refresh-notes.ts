@@ -12,6 +12,29 @@ export const INDEX_WAIT_TIMEOUT_MS = 5000
 /** How often it checks the Dataview index while waiting */
 export const INDEX_POLL_INTERVAL_MS = 250
 
+/** Extra wait per note written by the previous pass (Dataview re-indexes each one) */
+export const INDEX_WAIT_PER_WRITE_MS = 50
+
+/** The longest a single index wait can last, however many notes were written */
+export const INDEX_WAIT_MAX_MS = 30_000
+
+/**
+ * Time into a wait after which a note still stale is asked to re-index.
+ * Dataview normally catches up on its own before that.
+ */
+export const INDEX_RELOAD_DELAY_MS = 2000
+
+/** Re-index requests per wait, at most (a large sync must not flood Dataview) */
+export const MAX_RELOADS_PER_WAIT = 50
+
+/**
+ * How long to wait for the index, after a pass that wrote `written` notes
+ * (0 before the first pass): `INDEX_WAIT_TIMEOUT_MS`, plus
+ * `INDEX_WAIT_PER_WRITE_MS` per note written, at most `INDEX_WAIT_MAX_MS`.
+ */
+export const indexWaitTimeout = (written: number): number =>
+    Math.min(INDEX_WAIT_TIMEOUT_MS + INDEX_WAIT_PER_WRITE_MS * written, INDEX_WAIT_MAX_MS)
+
 /** Stale notes named in a 'dataview-index-busy' report */
 export const STALE_PATHS_REPORTED = 5
 
@@ -23,11 +46,17 @@ export const STALE_PATHS_REPORTED = 5
 export const MAX_REFRESH_PASSES = 3
 
 /**
- * Error added to the notes of a call whose passes did not settle: a note may
- * still list an older version of another note of the call
+ * Error added to the notes whose passes did not settle: a note that still
+ * changed in the last pass (a self-changing note, such as one showing the
+ * current time, never settles), or, when Dataview stayed behind between
+ * passes, every note that ran in the last pass
  */
 export const UNSETTLED_MESSAGE =
-    'Not settled: notes of this call were still changing, or Dataview had not indexed them, when the refresh stopped. Run it again.'
+    'Not settled: this note still changed in the last pass, or Dataview had not indexed the notes written by this call when it stopped. A note that changes on every run (such as one showing the current time) never settles.'
+
+/** Reason given for a later copy of a query: only the first copy of a query text is serialized */
+export const DUPLICATE_QUERY_SKIP_REASON =
+    'The same query appears earlier in the note; only its first copy is serialized, so this copy kept its previous output'
 
 /** Reason given for a DataviewJS query left alone while DataviewJS support is off */
 export const DATAVIEWJS_OFF_SKIP_REASON = 'DataviewJS support is off; the previous output was kept'
@@ -66,6 +95,8 @@ export type FileRunStatus =
 /** What processing one note reports to the refresh API */
 export interface FileRun {
     status: FileRunStatus
+    /** The run wrote the note's file */
+    written: boolean
     errors: Array<{ message: string; query: string }>
     /** Queries left untouched on purpose, with the reason */
     skipped: RefreshSkippedQuery[]
@@ -238,23 +269,24 @@ const FINAL_STATUSES: ReadonlySet<FileRunStatus> = new Set<FileRunStatus>([
  * The API entry for one note, from how its last pass ended. A 'failed'
  * outcome always carries at least one error.
  *
- * @param wrote an earlier pass wrote the note
- * @param unsettled the passes did not settle (see `UNSETTLED_MESSAGE`)
+ * @param writes how many times the call wrote the note
+ * @param unsettled the note did not settle (see `UNSETTLED_MESSAGE`)
  */
 export const toRefreshedNote = (
     path: string,
     file: TFile,
     run: FileRun,
-    wrote = false,
+    writes = 0,
     unsettled = false
 ): RefreshedNote => {
+    const wrote = writes > 0
     const errors = run.errors.map(({ query, message }) => ({ query, message }))
     const skipped = run.skipped.map(({ query, reason }) => ({ query, reason }))
     const note = (outcome: RefreshedNote['outcome']): RefreshedNote => {
         if (unsettled && (outcome === 'updated' || outcome === 'unchanged')) {
             errors.push({ query: '', message: UNSETTLED_MESSAGE })
         }
-        return { path, resolvedPath: file.path, outcome, errors, skipped }
+        return { path, resolvedPath: file.path, outcome, writes, errors, skipped }
     }
     const failed = (message?: string): RefreshedNote => {
         if (message !== undefined || errors.length === 0) {
@@ -273,13 +305,14 @@ export const toRefreshedNote = (
             return note(wrote ? 'updated' : 'unchanged')
         case 'no-queries':
             return note(wrote ? 'updated' : 'no-queries')
+        // Empty after a pass wrote it (an ejected query that left nothing)
         case 'empty':
-            return note('no-queries')
+            return note(wrote ? 'updated' : 'no-queries')
         case 'excluded-file-type':
         case 'ignored-by-flag':
             return note('ignored')
         case 'not-processable':
-            return { path, resolvedPath: null, outcome: 'not-found', errors, skipped }
+            return { path, resolvedPath: null, outcome: 'not-found', writes, errors, skipped }
         case 'query-errors':
             return failed()
         case 'exception':
@@ -294,20 +327,23 @@ export const toRefreshedNote = (
 }
 
 /**
- * Wait until Dataview has indexed every saved note, for at most
- * `INDEX_WAIT_TIMEOUT_MS`. A note still stale after the first poll is
- * re-indexed once (Dataview usually catches up on its own; one that it never
- * re-indexes would otherwise block every call).
+ * Wait until Dataview has indexed every saved note, for at most `timeoutMs`.
+ * A note still stale `INDEX_RELOAD_DELAY_MS` into the wait is asked once to
+ * re-index (Dataview usually catches up on its own; one that it never
+ * re-indexes would otherwise block every call), at most `MAX_RELOADS_PER_WAIT`.
  *
  * @returns the notes still stale (empty when the index is current)
  */
-const waitForIndex = async (host: RefreshNotesHost): Promise<string[]> => {
+const waitForIndex = async (host: RefreshNotesHost, timeoutMs: number): Promise<string[]> => {
     const reindexed = new Set<string>()
     let waited = 0
     let stale = host.findStaleIndexedPaths()
-    while (stale.length > 0 && waited < INDEX_WAIT_TIMEOUT_MS) {
-        if (waited > 0) {
+    while (stale.length > 0 && waited < timeoutMs) {
+        if (waited >= INDEX_RELOAD_DELAY_MS) {
             for (const path of stale) {
+                if (reindexed.size >= MAX_RELOADS_PER_WAIT) {
+                    break
+                }
                 if (!reindexed.has(path)) {
                     reindexed.add(path)
                     host.reindex(path)
@@ -330,7 +366,8 @@ const waitForIndex = async (host: RefreshNotesHost): Promise<string[]> => {
  * within `INDEX_WAIT_TIMEOUT_MS`. Each note is processed once per pass, even
  * when given several times. A pass that wrote a note is followed by another
  * (up to `MAX_REFRESH_PASSES`) once Dataview indexed the writes; when the
- * passes do not settle, the notes that ran get the `UNSETTLED_MESSAGE` error.
+ * passes do not settle, the notes concerned get the `UNSETTLED_MESSAGE` error
+ * and are listed in `unsettledPaths`.
  * The report has one entry per input path, in input order.
  *
  * @throws TypeError when `paths` is not an array
@@ -352,6 +389,7 @@ export async function runNoteRefresh(
             path,
             resolvedPath: null,
             outcome: 'not-run',
+            writes: 0,
             errors: [],
             skipped: []
         }))
@@ -366,7 +404,7 @@ export async function runNoteRefresh(
     if (!host.isDataviewIndexReady()) {
         return notRun('dataview-index-not-ready')
     }
-    const stale = await waitForIndex(host)
+    const stale = await waitForIndex(host, indexWaitTimeout(0))
     if (stale.length > 0) {
         return notRun('dataview-index-busy', stale.slice(0, STALE_PATHS_REPORTED))
     }
@@ -382,8 +420,8 @@ export async function runNoteRefresh(
     }
 
     const runsByPath = new Map<string, FileRun>()
-    const wrote = new Set<string>()
-    let unsettled = false
+    const writes = new Map<string, number>()
+    const unsettled = new Set<string>()
     let toRun = [...uniqueFiles.values()]
     for (let pass = 1; toRun.length > 0; pass++) {
         const runs = await processInBatches(
@@ -392,6 +430,7 @@ export async function runNoteRefresh(
                 host.refreshFile(file).catch(
                     (error: unknown): FileRun => ({
                         status: 'exception',
+                        written: false,
                         errors: [],
                         skipped: [],
                         exception: errorMessage(error)
@@ -399,21 +438,31 @@ export async function runNoteRefresh(
                 ),
             REFRESH_CONCURRENCY
         )
-        let passWrote = false
+        const writtenNow: string[] = []
         toRun.forEach((file, index) => {
             const run = runs[index]!
             runsByPath.set(file.path, run)
-            if (run.status === 'updated') {
-                wrote.add(file.path)
-                passWrote = true
+            if (run.written) {
+                writes.set(file.path, (writes.get(file.path) ?? 0) + 1)
+                writtenNow.push(file.path)
             }
         })
 
-        if (!passWrote) {
+        if (writtenNow.length === 0) {
             break
         }
-        if (pass >= MAX_REFRESH_PASSES || (await waitForIndex(host)).length > 0) {
-            unsettled = true
+        if (pass >= MAX_REFRESH_PASSES) {
+            // Still changing after the last pass: those notes never settled
+            writtenNow.forEach((path) => unsettled.add(path))
+            break
+        }
+        if ((await waitForIndex(host, indexWaitTimeout(writtenNow.length))).length > 0) {
+            // No later pass can run: no note that ran may have seen the writes
+            toRun.forEach((file) => {
+                if (!FINAL_STATUSES.has(runsByPath.get(file.path)?.status ?? 'no-queries')) {
+                    unsettled.add(file.path)
+                }
+            })
             break
         }
         toRun = [...uniqueFiles.values()].filter(
@@ -421,14 +470,29 @@ export async function runNoteRefresh(
         )
     }
 
+    const unsettledPaths = [...uniqueFiles.keys()].filter((path) => unsettled.has(path))
     return {
         state: 'ready',
+        ...(unsettledPaths.length > 0 ? { unsettledPaths } : {}),
         notes: paths.map((path, index): RefreshedNote => {
             const file = filesByInput[index]
             const run = file ? runsByPath.get(file.path) : undefined
             return file && run
-                ? toRefreshedNote(path, file, run, wrote.has(file.path), unsettled)
-                : { path, resolvedPath: null, outcome: 'not-found', errors: [], skipped: [] }
+                ? toRefreshedNote(
+                      path,
+                      file,
+                      run,
+                      writes.get(file.path) ?? 0,
+                      unsettled.has(file.path)
+                  )
+                : {
+                      path,
+                      resolvedPath: null,
+                      outcome: 'not-found',
+                      writes: 0,
+                      errors: [],
+                      skipped: []
+                  }
         })
     }
 }

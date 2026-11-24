@@ -36,7 +36,8 @@ export type RefreshState =
  * - 'not-found': no Markdown file at exactly that path
  * - 'conflict': the note changed during the refresh, so the write was refused
  * - 'failed': an exception, a query error, or an output that could not be
- *   placed in the note; nothing was written by the last pass
+ *   placed in the note. The last pass wrote nothing; an earlier pass can have
+ *   written the note, see `RefreshedNote.writes`
  * - 'not-run': the report state is not 'ready'
  */
 export type RefreshOutcome =
@@ -66,10 +67,16 @@ export interface RefreshedNote {
     resolvedPath: string | null
     outcome: RefreshOutcome
     /**
+     * How many times this call wrote the note's file: 0 when never; 2 or 3
+     * when several passes wrote it, whatever the final outcome (a 'failed'
+     * note can have been written by an earlier pass). Each write fires one
+     * file event.
+     */
+    writes: number
+    /**
      * Never empty when the outcome is 'failed'. An error that is not tied to a
-     * query has `query: ''`. Also set on an 'updated' or 'unchanged' note when
-     * the passes of the call did not settle: the note may still list an older
-     * version of another note of the call.
+     * query has `query: ''`. Also set (the "Not settled" error) on an 'updated'
+     * or 'unchanged' note listed in `RefreshReport.unsettledPaths`.
      */
     errors: Array<{ query: string; message: string }>
     /**
@@ -85,9 +92,18 @@ export interface RefreshReport {
     state: RefreshState
     /**
      * With 'dataview-index-busy' only: the first notes Dataview has not
-     * indexed at their saved version
+     * indexed at their saved version (any note of the vault, not only the
+     * notes of the call)
      */
     stalePaths?: string[]
+    /**
+     * With 'ready' only, when the passes did not settle: the notes that still
+     * changed in the last pass (a self-changing note, such as one that shows
+     * the current time, never settles), or, when Dataview stayed behind
+     * between passes, every note that ran in the last pass. Each gets the
+     * "Not settled" error.
+     */
+    unsettledPaths?: string[]
     /** Exactly one entry per input path, in input order (duplicates kept) */
     notes: RefreshedNote[]
 }

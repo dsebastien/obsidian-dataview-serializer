@@ -1,5 +1,9 @@
 import { describe, expect, test } from 'bun:test'
-import { findDataviewJSQueries, buildSerializedDataviewJS } from './find-dataviewjs-queries.fn'
+import {
+    findDataviewJSQueries,
+    buildSerializedDataviewJS,
+    findDataviewJSQueriesWithDuplicates
+} from './find-dataviewjs-queries.fn'
 
 describe('findDataviewJSQueries', () => {
     describe('legacy syntax', () => {
@@ -252,5 +256,24 @@ describe('buildSerializedDataviewJS', () => {
         expect(result).toContain('<!-- dataview-serializer-js-result -->')
         expect(result).toContain('<!-- dataview-serializer-js-result-end -->')
         expect(result).toContain('- Item 1\n- Item 2')
+    })
+})
+
+describe('findDataviewJSQueriesWithDuplicates', () => {
+    test('returns what findDataviewJSQueries returns, plus the later copies', () => {
+        const text = [
+            '<!-- DataviewJSToSerialize: dv.list([1]) -->',
+            '<!-- DataviewJSToSerialize: dv.list([2]) -->',
+            '> <!-- DataviewJSToSerializeManual: dv.list([1]) -->',
+            ''
+        ].join('\n')
+
+        const { queries, duplicates } = findDataviewJSQueriesWithDuplicates(text)
+
+        expect(queries).toEqual(findDataviewJSQueries(text))
+        expect(queries.map((query) => query.jsCode)).toEqual(['dv.list([1])', 'dv.list([2])'])
+        expect(duplicates.map((query) => [query.jsCode, query.indentation])).toEqual([
+            ['dv.list([1])', '> ']
+        ])
     })
 })
