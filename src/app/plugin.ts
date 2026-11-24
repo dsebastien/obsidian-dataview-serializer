@@ -111,7 +111,12 @@ import { RenameQueryUpdater } from './rename-query-updater'
 import { QueryValidator } from './query-validator'
 import { QueryValidationModal } from './ui/query-validation-modal'
 import type { DataviewSerializerApi, RefreshReport } from './api'
-import { runNoteRefresh, type FileRun, type FileRunStatus } from './refresh-notes'
+import {
+    isDataviewIndexReady,
+    runNoteRefresh,
+    type FileRun,
+    type FileRunStatus
+} from './refresh-notes'
 import {
     buildUnresolvedReferencesNotice,
     UnresolvedReferenceNoticeThrottle,
@@ -1452,6 +1457,10 @@ export class DataviewSerializerPlugin extends Plugin {
         return runNoteRefresh(paths, {
             isDisabledOnDevice: () => this.isDisabledOnDevice(),
             isDataviewLoaded: () => this.dataviewApi !== undefined,
+            isDataviewIndexReady: () => {
+                const dataviewApi = this.dataviewApi
+                return dataviewApi !== undefined && isDataviewIndexReady(dataviewApi)
+            },
             getMarkdownFile: (path) => {
                 const file = this.app.vault.getFileByPath(normalizePath(path))
                 return file?.extension === MARKDOWN_FILE_EXTENSION ? file : null

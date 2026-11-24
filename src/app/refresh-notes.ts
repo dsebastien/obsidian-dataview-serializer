@@ -42,6 +42,8 @@ export interface FileRun {
 export interface RefreshNotesHost {
     isDisabledOnDevice(): boolean
     isDataviewLoaded(): boolean
+    /** False while Dataview is still building its index (see `isDataviewIndexReady`) */
+    isDataviewIndexReady(): boolean
     /** The Markdown note at that vault path, or null */
     getMarkdownFile(path: string): TFile | null
     /**
@@ -49,6 +51,21 @@ export interface RefreshNotesHost {
      * query fails, no notice
      */
     refreshFile(file: TFile): Promise<FileRun>
+}
+
+/**
+ * Whether Dataview has finished indexing the vault. Just after startup its
+ * index is partial, and queries run then return lists with missing rows.
+ * Read defensively: a Dataview without `index.initialized` counts as ready.
+ *
+ * @param dataviewApi the Dataview API (`api.index` is its `FullIndex`)
+ */
+export const isDataviewIndexReady = (dataviewApi: object): boolean => {
+    const index: unknown = 'index' in dataviewApi ? dataviewApi.index : undefined
+    if (typeof index !== 'object' || index === null || !('initialized' in index)) {
+        return true
+    }
+    return index.initialized !== false
 }
 
 const errorMessage = (error: unknown): string =>
@@ -98,8 +115,8 @@ export const toRefreshedNote = (path: string, run: FileRun): RefreshedNote => {
  * Refresh the serialized queries of the given notes and report what happened
  * to each one (`DataviewSerializerApi.refreshNotes`).
  *
- * Nothing runs when the plugin is disabled on this device or Dataview is not
- * loaded. Each note is processed once, even when given several times; the
+ * Nothing runs when the plugin is disabled on this device, Dataview is not
+ * loaded, or its index is still loading. Each note is processed once, even when given several times; the
  * report has one entry per input path, in input order.
  */
 export async function runNoteRefresh(
@@ -116,6 +133,9 @@ export async function runNoteRefresh(
     }
     if (!host.isDataviewLoaded()) {
         return notRun('dataview-not-loaded')
+    }
+    if (!host.isDataviewIndexReady()) {
+        return notRun('dataview-index-not-ready')
     }
 
     const filesByInput = paths.map((path) =>

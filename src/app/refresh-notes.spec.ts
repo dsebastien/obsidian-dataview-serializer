@@ -3,7 +3,12 @@ import * as obsidian from 'obsidian'
 import { TFile } from 'obsidian'
 import { add } from 'date-fns'
 import { DataviewSerializerPlugin } from './plugin'
-import { runNoteRefresh, type FileRun, type RefreshNotesHost } from './refresh-notes'
+import {
+    isDataviewIndexReady,
+    runNoteRefresh,
+    type FileRun,
+    type RefreshNotesHost
+} from './refresh-notes'
 import { createDefaultSettings, type PluginSettings } from './types/plugin-settings.intf'
 
 // Records every notice, so a test can check that the API shows none
@@ -49,12 +54,15 @@ const run = (status: FileRun['status'], extra: Partial<FileRun> = {}): FileRun =
  */
 const createHost = (
     runs: Record<string, FileRun | Error>,
-    overrides: Partial<Pick<RefreshNotesHost, 'isDisabledOnDevice' | 'isDataviewLoaded'>> = {}
+    overrides: Partial<
+        Pick<RefreshNotesHost, 'isDisabledOnDevice' | 'isDataviewLoaded' | 'isDataviewIndexReady'>
+    > = {}
 ) => {
     const processed: string[] = []
     const host: RefreshNotesHost = {
         isDisabledOnDevice: () => false,
         isDataviewLoaded: () => true,
+        isDataviewIndexReady: () => true,
         getMarkdownFile: (path) => (path in runs ? createFile(path) : null),
         refreshFile: (file) => {
             processed.push(file.path)
@@ -65,6 +73,23 @@ const createHost = (
     }
     return { host, processed }
 }
+
+describe('isDataviewIndexReady', () => {
+    it('is ready once the index is initialized', () => {
+        expect(isDataviewIndexReady({ index: { initialized: true } })).toBe(true)
+    })
+
+    it('is not ready while the index is loading', () => {
+        expect(isDataviewIndexReady({ index: { initialized: false } })).toBe(false)
+    })
+
+    it('counts an older Dataview without the flag as ready', () => {
+        expect(isDataviewIndexReady({})).toBe(true)
+        expect(isDataviewIndexReady({ index: {} })).toBe(true)
+        expect(isDataviewIndexReady({ index: null })).toBe(true)
+        expect(isDataviewIndexReady({ index: 'odd' })).toBe(true)
+    })
+})
 
 describe('runNoteRefresh', () => {
     describe('state', () => {
@@ -108,6 +133,28 @@ describe('runNoteRefresh', () => {
             )
 
             expect((await runNoteRefresh([], host)).state).toBe('disabled-on-device')
+        })
+
+        it('runs nothing while the Dataview index is still loading', async () => {
+            const { host, processed } = createHost(
+                { 'A.md': run('updated') },
+                { isDataviewIndexReady: () => false }
+            )
+
+            const report = await runNoteRefresh(['A.md', 'Missing.md'], host)
+
+            expect(report.state).toBe('dataview-index-not-ready')
+            expect(report.notes.map((note) => note.outcome)).toEqual(['not-run', 'not-run'])
+            expect(processed).toEqual([])
+        })
+
+        it('reports a missing Dataview before its index', async () => {
+            const { host } = createHost(
+                {},
+                { isDataviewLoaded: () => false, isDataviewIndexReady: () => false }
+            )
+
+            expect((await runNoteRefresh([], host)).state).toBe('dataview-not-loaded')
         })
 
         it('is ready with an empty list', async () => {
@@ -267,6 +314,8 @@ interface RefresherOptions {
     settings?: Partial<PluginSettings>
     failingQueries?: string[]
     disabledOnDevice?: boolean
+    /** The Dataview API's `index` (default: initialized); absent when the key is undefined */
+    dataviewIndex?: unknown
     /** Called when Dataview runs a block query (to simulate another writer) */
     onQuery?: (query: string, contents: Map<string, string>) => void
     nextPossibleUpdates?: Map<string, Date>
@@ -320,6 +369,11 @@ const createRefresher = (
                 plugins: {
                     dataview: {
                         api: {
+                            ...('dataviewIndex' in options
+                                ? options.dataviewIndex === undefined
+                                    ? {}
+                                    : { index: options.dataviewIndex }
+                                : { index: { initialized: true } }),
                             tryQueryMarkdown,
                             page: () => ({}),
                             evaluate: (expression: string) =>
@@ -547,6 +601,36 @@ describe('DataviewSerializerPlugin.refreshNotes', () => {
             expect(report.state).toBe('dataview-not-loaded')
             expect(outcomes(report)).toEqual([['A.md', 'not-run']])
             expect(cachedRead).not.toHaveBeenCalled()
+        })
+
+        it('runs nothing while the Dataview index is still loading', async () => {
+            const { plugin, cachedRead, tryQueryMarkdown, contents } = createRefresher(
+                { 'A.md': block('LIST FROM #a', '- [[Old]]') },
+                { dataviewIndex: { initialized: false } }
+            )
+
+            const report = await plugin.refreshNotes(['A.md', 'A.md'])
+
+            expect(report.state).toBe('dataview-index-not-ready')
+            expect(outcomes(report)).toEqual([
+                ['A.md', 'not-run'],
+                ['A.md', 'not-run']
+            ])
+            expect(cachedRead).not.toHaveBeenCalled()
+            expect(tryQueryMarkdown).not.toHaveBeenCalled()
+            expect(contents.get('A.md')).toBe(block('LIST FROM #a', '- [[Old]]'))
+        })
+
+        it('runs with an older Dataview that does not expose the index flag', async () => {
+            const { plugin } = createRefresher(
+                { 'A.md': block('LIST FROM #a', '- [[Old]]') },
+                { dataviewIndex: undefined }
+            )
+
+            const report = await plugin.refreshNotes(['A.md'])
+
+            expect(report.state).toBe('ready')
+            expect(outcomes(report)).toEqual([['A.md', 'updated']])
         })
     })
 

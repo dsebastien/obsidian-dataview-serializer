@@ -2,9 +2,17 @@ import type { QueryValidationReport } from './query-validator'
 
 /**
  * Whether a `refreshNotes` call processed the notes. Anything but 'ready'
- * means nothing ran and every note has the outcome 'not-run'.
+ * means nothing ran and every note has the outcome 'not-run':
+ * - 'disabled-on-device': the plugin is disabled on this device
+ * - 'dataview-not-loaded': Dataview is not loaded
+ * - 'dataview-index-not-ready': Dataview is still indexing the vault (just
+ *   after startup), so queries would return incomplete results
  */
-export type RefreshState = 'ready' | 'disabled-on-device' | 'dataview-not-loaded'
+export type RefreshState =
+    | 'ready'
+    | 'disabled-on-device'
+    | 'dataview-not-loaded'
+    | 'dataview-index-not-ready'
 
 /**
  * What `refreshNotes` did with one note:
@@ -107,7 +115,8 @@ export interface DataviewSerializerApi {
      *
      * @param paths vault paths of the notes
      * @returns one entry per path, in input order; when the plugin is
-     *          disabled on this device or Dataview is not loaded, nothing runs
+     *          disabled on this device, Dataview is not loaded or its index is
+     *          still loading, nothing runs
      */
     refreshNotes(paths: string[]): Promise<RefreshReport>
 }

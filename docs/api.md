@@ -81,7 +81,8 @@ Re-serializes the queries of the given notes now, and reports exactly what happe
 ```js
 const report = await api.refreshNotes(['Projects/Dashboard.md', 'People/Alice.md'])
 if (report.state !== 'ready') {
-    // Nothing ran: the plugin is disabled on this device, or Dataview is not loaded
+    // Nothing ran: the plugin is disabled on this device, Dataview is not loaded,
+    // or Dataview is still indexing the vault (try again a little later)
 }
 const refreshed = report.notes.filter((note) => ['updated', 'unchanged'].includes(note.outcome))
 ```
@@ -98,7 +99,7 @@ Returns:
 
 ```js
 {
-    state: 'ready', // 'disabled-on-device' | 'dataview-not-loaded': nothing ran
+    state: 'ready', // 'disabled-on-device' | 'dataview-not-loaded' | 'dataview-index-not-ready': nothing ran
     notes: [
         // Exactly one entry per given path, in the same order (duplicates kept)
         {
@@ -115,6 +116,12 @@ Returns:
     ]
 }
 ```
+
+States other than `ready`:
+
+- `disabled-on-device`: the plugin is disabled on this device.
+- `dataview-not-loaded`: Dataview is disabled or reloading.
+- `dataview-index-not-ready`: Dataview is still indexing the vault, which happens just after Obsidian starts. Queries run at that time return incomplete results, so nothing runs. Call again once the index is ready.
 
 Outcomes:
 
