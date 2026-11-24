@@ -11,6 +11,7 @@ When a note's YAML frontmatter contains the property `dataview_serializer_ignore
 - The "Scan and serialize all Dataview queries" command (silent skip; the same code path that ignores configured folders).
 - The "Scan and serialize Dataview queries in current file" command — MUST show a `Notice` explaining why nothing was done.
 - The per-query refresh button (block and inline) — MUST show the same notice.
+- `api.refreshNotes()` — no notice; the note is reported with outcome `ignored`.
 
 Truthy means: boolean `true`, non-zero numbers, or any non-empty string that is not `false`, `no`, `n`, `0`, or `off` (case-insensitive, whitespace-trimmed). Arrays and objects are treated as truthy. Missing/`null`/`undefined` mean the note is processed normally.
 
@@ -22,7 +23,7 @@ Conversion and removal commands (`convert-dataview-query-at-cursor`, `convert-al
 
 The per-device "Disable on this device" flag MUST be stored only in device-local storage via `app.loadLocalStorage`/`app.saveLocalStorage` (key `DEVICE_DISABLED_STORAGE_KEY` in `src/app/constants.ts`). It MUST NEVER be a member of `PluginSettings`, written to `data.json`, or otherwise synced — its entire purpose is to stay local to the device it is toggled on.
 
-When the flag is set on a device, the plugin MUST be fully inert there: no file-event listeners registered, `processFile` short-circuits immediately (covering schedulers and any programmatic caller), all commands no-op with a notice, and the per-query refresh buttons render nothing. The flag is orthogonal to the synced `disableAutomaticUpdates` setting; when the device flag is cleared, event handlers are re-registered only if `disableAutomaticUpdates` is false.
+When the flag is set on a device, the plugin MUST be fully inert there: no file-event listeners registered, `processFile` short-circuits immediately (covering schedulers and any programmatic caller), all commands no-op with a notice, the per-query refresh buttons render nothing, and `api.refreshNotes()` runs nothing (state `disabled-on-device`, every note `not-run`). The flag is orthogonal to the synced `disableAutomaticUpdates` setting; when the device flag is cleared, event handlers are re-registered only if `disableAutomaticUpdates` is false.
 
 ## Periodic full serialization
 
@@ -41,6 +42,10 @@ When `updateQueriesOnRename` is on (default) and the plugin is not disabled on t
 ## Query validation
 
 "Validate all queries" (command) and `api.validateQueries()` are read-only and cover the full-scan scope (`foldersToScan`, minus ignored folders and notes with the per-note ignore flag). Unresolved references use the #88 rules (positive FROM sources only). A self-reference is a link (anywhere in the query) resolving to the note itself; only those without `#heading`/`#^block` are fixable, by replacing the link with `[[]]` in the definition and its result header through `Vault.process`, marked as a plugin write, then re-serialized like an automatic update. Quoted own paths are not self-references (`FROM "x.md"` is the note itself, `FROM [[]]` its backlinks). Dataview errors are only checked when asked (`runQueries`), since that runs every query. When the plugin is disabled on the device, the command no-ops with the usual notice and fixes write nothing; `api.validateQueries()` still works (no mutation). See [#89](https://github.com/dsebastien/obsidian-dataview-serializer/issues/89).
+
+## Refresh API
+
+`api.refreshNotes(paths)` re-serializes the given notes for a caller that must know which ones are up to date (e.g. before publishing them); its report is a contract other tools code against (`src/app/api.ts`, `docs/api.md`). It runs only when the plugin is not disabled on the device and Dataview is loaded (otherwise state says why, nothing runs, every note `not-run`). It is forced (cooldown, "Folders to scan" and ignored folders do not apply) but MUST honor the per-note ignore flag; it uses automatic query modes (manual and already-serialized once queries are not run); it ignores `disableAutomaticUpdates` and follows `enableDataviewJS`. A note with any failing query (query error or exception) MUST NOT be written at all and is reported `failed` with at least one error; a refused write (newer content) is `conflict`. One report entry per input path, in input order, duplicates kept; each note is processed once. No notice. It shares the processing of `processFile` (`runFile` in `plugin.ts`); the other callers keep their behavior (partial writes on query errors, notices).
 
 ## Queries inside code are examples
 
