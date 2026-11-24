@@ -87,7 +87,7 @@
         "typescript-eslint": "8.71.1"
     },
     "dependencies": {
-        "date-fns": "^3.6.0",
+        "date-fns": "^4.4.0",
         "immer": "11.1.21"
     },
     "overrides": {
