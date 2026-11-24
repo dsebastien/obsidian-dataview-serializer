@@ -110,7 +110,8 @@ import { findUnresolvedFromSources } from './utils/extract-from-sources.fn'
 import { RenameQueryUpdater } from './rename-query-updater'
 import { QueryValidator } from './query-validator'
 import { QueryValidationModal } from './ui/query-validation-modal'
-import type { DataviewSerializerApi } from './api'
+import type { DataviewSerializerApi, RefreshReport } from './api'
+import { runNoteRefresh, type FileRun, type FileRunStatus } from './refresh-notes'
 import {
     buildUnresolvedReferencesNotice,
     UnresolvedReferenceNoticeThrottle,
@@ -145,6 +146,47 @@ interface FileProcessingResult {
      */
     skipped: SkippedQuery[]
 }
+
+/**
+ * How one run of the file processing behaves. `processFile` maps its
+ * positional arguments onto it; the refresh API sets the last two.
+ */
+interface FileProcessingOptions {
+    /** Bypass the cooldown and the ignored folders (never the per-note ignore flag) */
+    force: boolean
+    /** Only process this query */
+    targetQuery?: string | undefined
+    /** Manual queries run and once queries re-run */
+    isManualTrigger: boolean
+    /** Write nothing when a query of the note fails */
+    writeOnlyWithoutErrors?: boolean
+    /** Show no notice (the caller reports errors itself) */
+    silent?: boolean
+}
+
+/**
+ * Outcome of one run of the file processing: what `processFile` returns,
+ * plus how the run ended (used by the refresh API).
+ */
+interface FileRunDetails {
+    result: FileProcessingResult
+    status: FileRunStatus
+    /** The message of the exception, when the status is 'exception' */
+    exception?: string
+}
+
+/**
+ * The queries of a note that a run actually processes: not filtered out by
+ * the target query, nor skipped by their update mode
+ */
+interface QueryTally {
+    queriesToRun: number
+}
+
+/**
+ * Why a note is not processed (see `getIgnoreReason`)
+ */
+type IgnoreReason = 'not-processable' | 'ignored-by-flag' | 'throttled'
 
 /**
  * A query error, with the file it occurred in
@@ -248,7 +290,8 @@ export class DataviewSerializerPlugin extends Plugin {
                 ...(options?.runQueries !== undefined ? { runQueries: options.runQueries } : {}),
                 ...(options?.paths !== undefined ? { paths: options.paths } : {})
             }),
-        fixSelfReferences: (path, query) => this.queryValidator.fixSelfReferences(path, query)
+        fixSelfReferences: (path, query) => this.queryValidator.fixSelfReferences(path, query),
+        refreshNotes: (paths) => this.refreshNotes(paths)
     }
 
     /**
@@ -1397,33 +1440,79 @@ export class DataviewSerializerPlugin extends Plugin {
         targetQuery?: string,
         isManualTrigger = false
     ): Promise<FileProcessingResult> {
+        const run = await this.runFile(_file, { force, targetQuery, isManualTrigger })
+        return run.result
+    }
+
+    /**
+     * Refresh the serialized queries of the given notes now and report what
+     * happened to each one. Backs `api.refreshNotes`; see `DataviewSerializerApi`.
+     */
+    refreshNotes(paths: string[]): Promise<RefreshReport> {
+        return runNoteRefresh(paths, {
+            isDisabledOnDevice: () => this.isDisabledOnDevice(),
+            isDataviewLoaded: () => this.dataviewApi !== undefined,
+            getMarkdownFile: (path) => {
+                const file = this.app.vault.getFileByPath(normalizePath(path))
+                return file?.extension === MARKDOWN_FILE_EXTENSION ? file : null
+            },
+            refreshFile: async (file): Promise<FileRun> => {
+                // Forced (no cooldown, ignored folders or scan scope), automatic
+                // query modes, all-or-nothing write, silent
+                const run = await this.runFile(file, {
+                    force: true,
+                    isManualTrigger: false,
+                    writeOnlyWithoutErrors: true,
+                    silent: true
+                })
+                return {
+                    status: run.status,
+                    errors: run.result.errors,
+                    skipped: run.result.skipped,
+                    ...(run.exception !== undefined ? { exception: run.exception } : {})
+                }
+            }
+        })
+    }
+
+    /**
+     * Serialize the queries of one file. The single implementation behind
+     * `processFile` and the refresh API; the options say how it behaves.
+     */
+    private async runFile(
+        _file: TAbstractFile,
+        options: FileProcessingOptions
+    ): Promise<FileRunDetails> {
+        const { force, targetQuery, isManualTrigger } = options
         const emptyResult: FileProcessingResult = { filePath: '', errors: [], skipped: [] }
 
         // Fully inert when disabled on this device, regardless of how we got here
         // (file events, schedulers, or any programmatic caller).
         if (this.isDisabledOnDevice()) {
-            return emptyResult
+            return { result: emptyResult, status: 'disabled-on-device' }
         }
 
         if (!(_file instanceof TFile)) {
-            return emptyResult
+            return { result: emptyResult, status: 'not-processable' }
         }
 
         // Safe from here on
         const file = _file
         const result: FileProcessingResult = { filePath: file.path, errors: [], skipped: [] }
 
-        const shouldBeIgnored = await this.shouldFileBeIgnored(file, force)
-        if (shouldBeIgnored) {
-            return result
+        const ignoreReason = await this.getIgnoreReason(file, force)
+        if (ignoreReason !== null) {
+            return { result, status: ignoreReason }
         }
 
         // Dataview disabled or mid-reload: nothing can answer the queries, and
         // reporting each one as failed would only flood the error notices
         if (!this.dataviewApi) {
             log(`Dataview is not loaded, skipping: ${file.path}`, 'debug')
-            return result
+            return { result, status: 'dataview-not-loaded' }
         }
+
+        const tally: QueryTally = { queriesToRun: 0 }
 
         try {
             //log(`Processing file: ${file.path}`, 'debug');
@@ -1444,7 +1533,7 @@ export class DataviewSerializerPlugin extends Plugin {
                 foundDataviewJSQueries.length === 0
             ) {
                 // No queries to serialize found in the file
-                return result
+                return { result, status: 'no-queries' }
             }
 
             // Process the modified file
@@ -1527,6 +1616,7 @@ export class DataviewSerializerPlugin extends Plugin {
                     log(`[DEBUG] Skipping query due to shouldSkipQuery`, 'debug')
                     continue
                 }
+                tally.queriesToRun++
 
                 // A FROM pointing at a missing note or folder (renamed, usually)
                 // serializes to nothing: keep the previous output instead, and
@@ -1545,7 +1635,8 @@ export class DataviewSerializerPlugin extends Plugin {
                     app: this.app,
                     indentation,
                     linkFormat: this.settings.linkFormat,
-                    getVaultNameIndex
+                    getVaultNameIndex,
+                    ...(options.silent ? { notifyOnError: false } : {})
                 })
 
                 // Check for errors
@@ -1704,7 +1795,8 @@ export class DataviewSerializerPlugin extends Plugin {
                 file.path,
                 result,
                 targetQuery,
-                isManualTrigger
+                isManualTrigger,
+                tally
             )
 
             // Process DataviewJS queries (if enabled)
@@ -1717,7 +1809,8 @@ export class DataviewSerializerPlugin extends Plugin {
                     foundDataviewJSQueries,
                     targetQuery,
                     isManualTrigger,
-                    textCodeRanges
+                    textCodeRanges,
+                    tally
                 )
             }
 
@@ -1735,9 +1828,22 @@ export class DataviewSerializerPlugin extends Plugin {
                 'debug'
             )
 
+            const hasErrors = result.errors.length > 0
+
+            // All or nothing (refresh API): a note with a failing query keeps
+            // its current text, including the output of the queries that worked
+            if (options.writeOnlyWithoutErrors && hasErrors) {
+                return { result, status: 'query-errors' }
+            }
+
             if (updatedText === text) {
                 startCooldown()
-                return result
+                const status: FileRunStatus = hasErrors
+                    ? 'query-errors'
+                    : tally.queriesToRun === 0
+                      ? 'no-queries'
+                      : 'unchanged'
+                return { result, status }
             }
 
             this.filesToIgnoreFileEvents.add(file.path)
@@ -1753,6 +1859,7 @@ export class DataviewSerializerPlugin extends Plugin {
             if (await this.saveSerializedContent(file, text, updatedText)) {
                 result.updated = true
                 startCooldown()
+                return { result, status: hasErrors ? 'query-errors' : 'updated' }
             } else {
                 // No cooldown here on purpose: the write that overtook this run
                 // fires its own modify event, and that event must be allowed to
@@ -1762,6 +1869,7 @@ export class DataviewSerializerPlugin extends Plugin {
                     `The file [${file.path}] changed while its queries were being serialized. The newer content was kept and will be serialized by the run that change triggers.`,
                     'info'
                 )
+                return { result, status: 'conflict' }
             }
         } catch (e: unknown) {
             // Ensure cleanup on error
@@ -1769,9 +1877,12 @@ export class DataviewSerializerPlugin extends Plugin {
                 this.filesToIgnoreFileEvents.delete(file.path)
             }
             log('Failed to process the file', 'warn', e)
+            return {
+                result,
+                status: 'exception',
+                exception: e instanceof Error ? e.message : String(e)
+            }
         }
-
-        return result
     }
 
     /**
@@ -1819,6 +1930,7 @@ export class DataviewSerializerPlugin extends Plugin {
      * @param result The file processing result to add errors to
      * @param targetQuery Optional specific query to process
      * @param isManualTrigger Whether this is a manual trigger (vs automatic)
+     * @param tally Counts the queries this run processes
      * @returns The updated text with serialized inline queries
      */
     private processInlineQueries(
@@ -1827,7 +1939,8 @@ export class DataviewSerializerPlugin extends Plugin {
         filePath: string,
         result: FileProcessingResult,
         targetQuery?: string,
-        isManualTrigger = false
+        isManualTrigger = false,
+        tally: QueryTally = { queriesToRun: 0 }
     ): string {
         const foundInlineQueries: InlineQueryWithContext[] = findInlineQueries(updatedText)
 
@@ -1854,6 +1967,7 @@ export class DataviewSerializerPlugin extends Plugin {
             if (shouldSkipQuery({ updateMode, isManualTrigger, isAlreadySerialized })) {
                 continue
             }
+            tally.queriesToRun++
 
             // Same rule as block queries: an expression with a FROM clause
             // referencing a missing note or folder keeps its previous output
@@ -1934,6 +2048,7 @@ export class DataviewSerializerPlugin extends Plugin {
      * @param targetQuery Optional specific query to process
      * @param isManualTrigger Whether this is a manual trigger (vs automatic)
      * @param originalCodeRanges Code ranges of `originalText` (matches inside code are skipped)
+     * @param tally Counts the queries this run processes
      * @returns The updated text with serialized DataviewJS queries
      */
     private async processDataviewJSQueries(
@@ -1944,7 +2059,8 @@ export class DataviewSerializerPlugin extends Plugin {
         foundDataviewJSQueries: DataviewJSQueryWithContext[],
         targetQuery?: string,
         isManualTrigger = false,
-        originalCodeRanges: CodeRange[] = findCodeRanges(originalText)
+        originalCodeRanges: CodeRange[] = findCodeRanges(originalText),
+        tally: QueryTally = { queriesToRun: 0 }
     ): Promise<string> {
         log(
             `[DEBUG] Processing ${foundDataviewJSQueries.length} DataviewJS queries in file [${filePath}]`,
@@ -2007,6 +2123,7 @@ export class DataviewSerializerPlugin extends Plugin {
                 log(`[DEBUG] Skipping DataviewJS query due to shouldSkipQuery`, 'debug')
                 continue
             }
+            tally.queriesToRun++
 
             log(`Processing DataviewJS query in file [${filePath}]`, 'debug')
 
@@ -2112,27 +2229,39 @@ export class DataviewSerializerPlugin extends Plugin {
     }
 
     async shouldFileBeIgnored(file: TFile, force = false): Promise<boolean> {
+        return (await this.getIgnoreReason(file, force)) !== null
+    }
+
+    /**
+     * Why the file must not be processed, or null when it must be.
+     *
+     * @returns 'ignored-by-flag' for the per-note ignore flag (honored even on
+     *          forced runs), 'throttled' for the cooldown and the ignored
+     *          folders (bypassed by forced runs), 'not-processable' for the
+     *          rest (no path, not Markdown, Canvas, Excalidraw, empty)
+     */
+    private async getIgnoreReason(file: TFile, force: boolean): Promise<IgnoreReason | null> {
         if (!file.path) {
-            return true
+            return 'not-processable'
         }
 
         if (MARKDOWN_FILE_EXTENSION !== file.extension) {
-            return true
+            return 'not-processable'
         }
 
         // Ignored Canvas files
         if (DEFAULT_CANVAS_FILE_NAME === file.name) {
-            return true
+            return 'not-processable'
         }
 
         if (isExcalidrawFile(file)) {
-            return true
+            return 'not-processable'
         }
 
         // Respect the per-note ignore frontmatter flag, even on manual/forced runs.
         if (this.isFileIgnoredByFrontmatter(file)) {
             log(`Ignoring file [${file.path}] due to frontmatter flag`, 'debug')
-            return true
+            return 'ignored-by-flag'
         }
 
         // Cooldown and ignored-folder rejections are metadata-only, so they too
@@ -2144,7 +2273,7 @@ export class DataviewSerializerPlugin extends Plugin {
                 const nextPossibleUpdateForFile = this.nextPossibleUpdates.get(file.path)!
                 if (isAfter(nextPossibleUpdateForFile, new Date())) {
                     log('File has been updated recently. Ignoring', 'debug', file.path)
-                    return true
+                    return 'throttled'
                 } else {
                     log('File has not been updated recently. Processing', 'debug', file.path)
                 }
@@ -2154,7 +2283,7 @@ export class DataviewSerializerPlugin extends Plugin {
                 file.path.startsWith(ignoredFolder)
             )
             if (isInIgnoredFolder) {
-                return true
+                return 'throttled'
             }
         }
 
@@ -2163,6 +2292,6 @@ export class DataviewSerializerPlugin extends Plugin {
         // so the two reads can no longer disagree or hit the disk twice.
         const fileContent = (await this.app.vault.cachedRead(file)).trim()
 
-        return fileContent.length === 0
+        return fileContent.length === 0 ? 'not-processable' : null
     }
 }

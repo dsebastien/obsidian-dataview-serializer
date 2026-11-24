@@ -112,6 +112,11 @@ interface SerializeQueryParams {
      * never walk the vault. Defaults to indexing `params.app`'s vault.
      */
     getVaultNameIndex?: () => VaultNameIndex
+    /**
+     * Show a notice when the query fails (default true). The refresh API turns
+     * it off: it reports errors to its caller instead.
+     */
+    notifyOnError?: boolean
 }
 
 export const serializeQuery = async (
@@ -331,7 +336,9 @@ export const serializeQuery = async (
     } catch (err: unknown) {
         const errorMessage = err instanceof Error ? err.message : String(err)
         log(`Failed to serialize query in file: ${params.originFile}`, 'warn', err)
-        new Notice(`Dataview Serializer: Invalid query found in ${params.originFile}`)
+        if (params.notifyOnError ?? true) {
+            new Notice(`Dataview Serializer: Invalid query found in ${params.originFile}`)
+        }
         return {
             success: false,
             serializedContent: '',
