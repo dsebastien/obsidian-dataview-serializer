@@ -43,8 +43,12 @@ void mock.module('obsidian', () => ({
             return Promise.resolve()
         }
     },
-    // Close enough to Obsidian's: collapse and trim slashes
-    normalizePath: (path: string) => path.replace(/\/+/g, '/').replace(/^\/|\/$/g, '') || '/',
+    // Close enough to Obsidian's: collapse and trim slashes, turn non-breaking
+    // spaces into spaces, and compose Unicode (NFC)
+    normalizePath: (path: string) =>
+        (path.replace(/\/+/g, '/').replace(/^\/|\/$/g, '') || '/')
+            .replace(/\u00A0|\u202F/g, ' ')
+            .normalize('NFC'),
     debounce: (fn: (...args: unknown[]) => unknown) => fn,
     setIcon: () => {}
 }))

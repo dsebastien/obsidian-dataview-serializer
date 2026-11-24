@@ -2,25 +2,34 @@ import type { QueryValidationReport } from './query-validator'
 
 /**
  * Whether a `refreshNotes` call processed the notes. Anything but 'ready'
- * means nothing ran and every note has the outcome 'not-run':
+ * means nothing ran and every note has the outcome 'not-run'. Checked in this
+ * order:
  * - 'disabled-on-device': the plugin is disabled on this device
  * - 'dataview-not-loaded': Dataview is not loaded
  * - 'dataview-index-not-ready': Dataview is still indexing the vault (just
  *   after startup), so queries would return incomplete results
+ * - 'dataview-index-busy': Dataview has not indexed the latest saved version
+ *   of every note yet, after waiting about 5 seconds (recent edits)
  */
 export type RefreshState =
     | 'ready'
     | 'disabled-on-device'
     | 'dataview-not-loaded'
     | 'dataview-index-not-ready'
+    | 'dataview-index-busy'
 
 /**
  * What `refreshNotes` did with one note:
- * - 'updated': the note had queries to run, all ran, the new text was written
- * - 'unchanged': the note had queries to run, all ran, the text was already up to date
+ * - 'updated': the note had queries to run, none failed, and the new output
+ *   was written (or the note already held exactly that text)
+ * - 'unchanged': the note had queries to run, none failed, and the output they
+ *   produced was already in the note
  * - 'no-queries': the note holds no query that a refresh runs (none at all, or
- *   only manual / once / once-and-eject queries that are not run again)
- * - 'ignored': the per-note ignore flag of the frontmatter excludes it
+ *   only manual / once / once-and-eject queries that are not run again), or
+ *   is empty
+ * - 'ignored': the per-note ignore flag of the frontmatter excludes it, or the
+ *   serializer never processes that kind of file (the Canvas file, an
+ *   Excalidraw drawing)
  * - 'not-found': no Markdown file at that path
  * - 'conflict': the note changed during the refresh, so the write was refused
  * - 'failed': an exception or a query error; nothing was written for this note
@@ -36,10 +45,22 @@ export type RefreshOutcome =
     | 'failed'
     | 'not-run'
 
+/** A query that a refresh left untouched on purpose, and why */
+export interface RefreshSkippedQuery {
+    query: string
+    reason: string
+}
+
 /** The result of `refreshNotes` for one note */
 export interface RefreshedNote {
     /** The path as given to `refreshNotes` */
     path: string
+    /**
+     * The vault path of the note the entry is about, which can differ from
+     * `path` (another Unicode or space form of the same name); null when no
+     * note was found or nothing ran
+     */
+    resolvedPath: string | null
     outcome: RefreshOutcome
     /**
      * Never empty when the outcome is 'failed'. An exception that is not tied
@@ -47,10 +68,11 @@ export interface RefreshedNote {
      */
     errors: Array<{ query: string; message: string }>
     /**
-     * Queries left untouched on purpose (e.g. a FROM source that does not
-     * exist keeps the previous output). Can be set with any outcome.
+     * Queries left untouched on purpose, which keep their previous output (a
+     * FROM source that does not exist, a DataviewJS query while DataviewJS
+     * support is off). Can be set with any outcome.
      */
-    skipped: Array<{ query: string; reason: string }>
+    skipped: RefreshSkippedQuery[]
 }
 
 /** Outcome of a `refreshNotes` call. Plain data, safe to serialize as JSON. */
@@ -111,12 +133,17 @@ export interface DataviewSerializerApi {
      * "Folders to scan" and the ignored folders do not apply, the per-note
      * ignore flag does; manual queries and once queries that already have
      * output are not run again. Runs even when automatic updates are disabled.
+     * Reads the notes from disk. An empty result replaces the previous output.
      * A note with a failing query is not written at all. Shows no notice.
+     *
+     * Waits up to about 5 seconds for Dataview to index recent edits. Let
+     * Obsidian save and index your own edits before calling it.
      *
      * @param paths vault paths of the notes
      * @returns one entry per path, in input order; when the plugin is
-     *          disabled on this device, Dataview is not loaded or its index is
-     *          still loading, nothing runs
+     *          disabled on this device, Dataview is not loaded, or its index is
+     *          loading or behind, nothing runs (see `RefreshState`)
+     * @throws TypeError when `paths` is not an array
      */
     refreshNotes(paths: string[]): Promise<RefreshReport>
 }
