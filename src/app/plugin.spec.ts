@@ -197,17 +197,25 @@ const createWriter = (initialContent: string) => {
 
 const writerFile = Object.assign(new TFile(), { path: 'Journal/2026-09-06.md' })
 
+/** Call the private `saveSerializedContent` */
+const save = (
+    plugin: DataviewSerializerPlugin,
+    expectedText: string,
+    updatedText: string
+): Promise<string> => {
+    const method: unknown = Reflect.get(plugin, 'saveSerializedContent')
+    if (typeof method !== 'function') {
+        throw new Error('saveSerializedContent is missing')
+    }
+    const saveContent = method as (f: TFile, e: string, u: string) => Promise<string>
+    return saveContent.call(plugin, writerFile, expectedText, updatedText)
+}
+
 describe('DataviewSerializerPlugin.saveSerializedContent', () => {
     it('should write when the note still holds the content the queries were serialized from', async () => {
         const { plugin, state } = createWriter('before')
 
-        const written = await (
-            plugin as unknown as {
-                saveSerializedContent: (f: TFile, e: string, u: string) => Promise<boolean>
-            }
-        ).saveSerializedContent(writerFile, 'before', 'serialized')
-
-        expect(written).toBe(true)
+        expect(await save(plugin, 'before', 'serialized')).toBe('written')
         expect(state.content).toBe('serialized')
     })
 
@@ -217,24 +225,21 @@ describe('DataviewSerializerPlugin.saveSerializedContent', () => {
         // a plain write replaced the rendered note with the raw template.
         const { plugin, state } = createWriter('rendered by another writer')
 
-        const written = await (
-            plugin as unknown as {
-                saveSerializedContent: (f: TFile, e: string, u: string) => Promise<boolean>
-            }
-        ).saveSerializedContent(writerFile, 'before', 'serialized')
-
-        expect(written).toBe(false)
+        expect(await save(plugin, 'before', 'serialized')).toBe('conflict')
         expect(state.content).toBe('rendered by another writer')
+    })
+
+    it('should report a newer version that already holds the serialized text', async () => {
+        const { plugin, state } = createWriter('serialized')
+
+        expect(await save(plugin, 'before', 'serialized')).toBe('already-there')
+        expect(state.content).toBe('serialized')
     })
 
     it('should write through the vault under a single lock rather than reading first', async () => {
         const { plugin, process } = createWriter('before')
 
-        await (
-            plugin as unknown as {
-                saveSerializedContent: (f: TFile, e: string, u: string) => Promise<boolean>
-            }
-        ).saveSerializedContent(writerFile, 'before', 'serialized')
+        await save(plugin, 'before', 'serialized')
 
         expect(process).toHaveBeenCalledTimes(1)
     })

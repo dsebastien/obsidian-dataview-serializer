@@ -204,4 +204,97 @@ describe('serialized block regexes', () => {
             expect(result?.endPrefix).toBe('')
         })
     })
+
+    describe('line ends and trailing whitespace', () => {
+        const crlf = (text: string): string => text.replace(/\n/g, '\r\n')
+
+        for (const [name, transform] of [
+            [
+                'trailing spaces after the closing flag',
+                (t: string) => t.replace(/-->\n/g, '-->  \n')
+            ],
+            [
+                'a trailing tab after the closing flag',
+                (t: string) => t.replace(/-->\n/g, '-->\t\n')
+            ],
+            ['CRLF line ends', crlf],
+            ['CRLF and trailing spaces', (t: string) => crlf(t.replace(/-->\n/g, '--> \n'))]
+        ] as const) {
+            describe(name, () => {
+                const text = transform(buildBlock(''))
+                const quoted = transform(buildBlock('> '))
+
+                it('detects the serialized block', () => {
+                    expect(text.match(buildAlreadySerializedRegex(params))).not.toBeNull()
+                    expect(quoted.match(buildAlreadySerializedRegex(quotedParams))).not.toBeNull()
+                })
+
+                it('matches the existing block, up to the end marker', () => {
+                    const result = matchExistingSerializedBlock(text, params)
+
+                    expect(result?.content.replace(/\r/g, '')).toBe('- [[A]]\n')
+                    expect(text.slice(0, result?.end).endsWith(SERIALIZED_QUERY_END)).toBe(true)
+                })
+
+                it('replaces the definition and its block, line end included', () => {
+                    const matches = text.match(buildBlockQueryReplacementRegex(params))
+                    const quotedMatches = quoted.match(
+                        buildBlockQueryReplacementRegex(quotedParams)
+                    )
+
+                    expect(matches?.[0]).toBe(text)
+                    expect(quotedMatches?.[0]).toBe(quoted)
+                })
+
+                it('replaces a definition that has no block yet', () => {
+                    const definition = transform(`${QUERY_FLAG_OPEN}${query}${QUERY_FLAG_CLOSE}\n`)
+
+                    expect(definition.match(buildBlockQueryReplacementRegex(params))?.[0]).toBe(
+                        definition
+                    )
+                })
+
+                it('handles a multi-line definition', () => {
+                    const definition = ['<!-- QueryToSerialize:', 'LIST FROM #project', '-->'].join(
+                        '\n'
+                    )
+                    const multiLine = transform(
+                        [
+                            definition,
+                            `${SERIALIZED_QUERY_START}${query}${QUERY_FLAG_CLOSE}`,
+                            '- [[A]]',
+                            SERIALIZED_QUERY_END,
+                            ''
+                        ].join('\n')
+                    )
+                    const originalQueryDefinition = transform(definition)
+
+                    const matches = multiLine.match(
+                        buildBlockQueryReplacementRegex({ ...params, originalQueryDefinition })
+                    )
+
+                    expect(matches?.[0]).toBe(multiLine)
+                })
+
+                it('matches DataviewJS blocks', () => {
+                    const definition = '<!-- DataviewJSToSerialize: dv.list([1]) -->'
+                    const dvjs = transform(
+                        [
+                            definition,
+                            '<!-- SerializedDataviewJS -->',
+                            '- 1',
+                            '<!-- SerializedDataviewJS END -->',
+                            ''
+                        ].join('\n')
+                    )
+                    const dvjsParams = { originalQueryDefinition: definition, indentation: '' }
+
+                    expect(
+                        matchExistingDataviewJSBlock(dvjs, dvjsParams)?.content.replace(/\r/g, '')
+                    ).toBe('- 1\n')
+                    expect(dvjs.match(buildDataviewJSReplacementRegex(dvjsParams))?.[0]).toBe(dvjs)
+                })
+            })
+        }
+    })
 })

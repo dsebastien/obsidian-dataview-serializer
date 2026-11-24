@@ -59,7 +59,7 @@ import { serializeQuery } from './utils/serialize-query.fn'
 import { buildVaultNameIndex } from './utils/vault-name-index.fn'
 import type { VaultNameIndex } from './utils/vault-name-index.fn'
 import { findQueries, type QueryWithContext } from './utils/find-queries.fn'
-import { getBlockquotePrefix, stripLinePrefix } from './utils/blockquote.fn'
+import { getBlockquotePrefix, stripBlockquoteMarkers, stripLinePrefix } from './utils/blockquote.fn'
 import { buildSerializedBlock } from './utils/build-serialized-block.fn'
 import {
     buildAlreadySerializedRegex,
@@ -113,9 +113,10 @@ import { QueryValidationModal } from './ui/query-validation-modal'
 import type { DataviewSerializerApi, RefreshReport, RefreshSkippedQuery } from './api'
 import {
     DATAVIEWJS_OFF_SKIP_REASON,
-    findMarkdownFile,
-    isDataviewIndexCurrent,
+    createMarkdownFileResolver,
+    findStaleIndexedPaths,
     isDataviewIndexReady,
+    requestIndexReload,
     runNoteRefresh,
     unresolvedSkipReason,
     type FileRun,
@@ -199,13 +200,76 @@ interface RunContext {
     refreshMode: boolean
     /** See `FileRunDetails.otherSkipped` */
     otherSkipped: RefreshSkippedQuery[]
+    /** Line end of the note (`\r\n` when it holds one), used in what is written */
+    lineEnding: string
+    /** What the run placed in the text, checked before writing (refresh mode) */
+    placements: Placement[]
 }
 
-const createRunContext = (refreshMode = false): RunContext => ({
+/**
+ * What a query placed in the text: its result block (then `placed` must be in
+ * the text, followed by no other result block), or, for once-and-eject, the
+ * removal of its definition (then `definition` must no longer match).
+ */
+type Placement =
+    | { query: string; placed: string; resultStarts: readonly string[] }
+    | { query: string; definition: RegExp }
+
+const createRunContext = (refreshMode = false, lineEnding = '\n'): RunContext => ({
     queriesToRun: 0,
     refreshMode,
-    otherSkipped: []
+    otherSkipped: [],
+    lineEnding,
+    placements: []
 })
+
+/** The line end a note uses: CRLF when it holds any, LF otherwise */
+const lineEndingOf = (text: string): string => (text.includes('\r\n') ? '\r\n' : '\n')
+
+/** `text` with LF line ends */
+const toLf = (text: string): string => text.replace(/\r\n/g, '\n')
+
+/** `text` with the given line ends (unchanged for LF, so LF notes stay byte for byte) */
+const withLineEnding = (text: string, lineEnding: string): string =>
+    lineEnding === '\n' ? text : toLf(text).replace(/\n/g, lineEnding)
+
+/** Result start markers, trimmed, to spot a second result block */
+const QUERY_RESULT_STARTS = [SERIALIZED_QUERY_START.trim(), SERIALIZED_QUERY_START_ALT.trim()]
+const DATAVIEWJS_RESULT_STARTS = [
+    SERIALIZED_DATAVIEWJS_START.trim(),
+    SERIALIZED_DATAVIEWJS_START_ALT.trim()
+]
+
+/**
+ * Why a placement did not land in `text`, or null when it did. Guards the
+ * refresh API against an output that the replacement could not put in place
+ * (a marker the regexes do not recognize) or that left a second result block.
+ */
+const checkPlacement = (
+    text: string,
+    placement: Placement,
+    codeRanges: readonly CodeRange[]
+): string | null => {
+    if ('definition' in placement) {
+        return matchOutsideCode(text, placement.definition, codeRanges)
+            ? 'The query could not be removed from the note (once-and-eject); nothing was written'
+            : null
+    }
+
+    const index = indexOfOutsideCode(text, placement.placed, codeRanges)
+    if (index === -1) {
+        return 'The new result block could not be placed in the note; nothing was written'
+    }
+    const next = text
+        .slice(index + placement.placed.length)
+        .split('\n')
+        .map((line) => stripBlockquoteMarkers(line).trim())
+        .find((line) => line !== '')
+    if (next !== undefined && placement.resultStarts.some((start) => next.startsWith(start))) {
+        return 'More than one result block follows this query; nothing was written'
+    }
+    return null
+}
 
 /**
  * How a DataviewJS query is named in errors and skip reports
@@ -1484,6 +1548,8 @@ export class DataviewSerializerPlugin extends Plugin {
      * happened to each one. Backs `api.refreshNotes`; see `DataviewSerializerApi`.
      */
     refreshNotes(paths: string[]): Promise<RefreshReport> {
+        // One resolver per call: it lists the vault at most once
+        const resolveFile = createMarkdownFileResolver(this.app.vault)
         return runNoteRefresh(paths, {
             isDisabledOnDevice: () => this.isDisabledOnDevice(),
             isDataviewLoaded: () => this.dataviewApi !== undefined,
@@ -1491,15 +1557,21 @@ export class DataviewSerializerPlugin extends Plugin {
                 const dataviewApi = this.dataviewApi
                 return dataviewApi === undefined || isDataviewIndexReady(dataviewApi)
             },
-            isDataviewIndexCurrent: () => {
+            findStaleIndexedPaths: () => {
                 const dataviewApi = this.dataviewApi
-                return (
-                    dataviewApi === undefined ||
-                    isDataviewIndexCurrent(dataviewApi, this.app.vault.getMarkdownFiles())
-                )
+                return dataviewApi === undefined
+                    ? []
+                    : findStaleIndexedPaths(dataviewApi, this.app.vault.getMarkdownFiles())
+            },
+            reindex: (path) => {
+                const dataviewApi = this.dataviewApi
+                const file = this.app.vault.getFileByPath(path)
+                if (dataviewApi !== undefined && file !== null) {
+                    requestIndexReload(dataviewApi, file)
+                }
             },
             sleep: (ms) => this.sleep(ms),
-            resolveFile: (path) => findMarkdownFile(path, this.app.vault, normalizePath),
+            resolveFile,
             refreshFile: async (file): Promise<FileRun> => {
                 const run = await this.runFile(file, {
                     force: true,
@@ -1528,33 +1600,35 @@ export class DataviewSerializerPlugin extends Plugin {
     }
 
     /**
-     * Runs in progress, per note path. Created on first use, so instances built
-     * without the constructor (tests) get one too.
+     * Runs in progress, per note. Keyed on the `TFile`, which Obsidian keeps
+     * across a rename, so a rename during a run does not let a second run in.
+     * Created on first use, so instances built without the constructor (tests)
+     * get one too.
      */
-    private fileRunLocks: Map<string, Promise<void>> | undefined
+    private fileRunLocks: WeakMap<TFile, Promise<void>> | undefined
 
     /**
      * Run `task` once the runs already started on the same note have finished,
      * so two runs (a file event and an API call, say) never serialize one
      * note at the same time. Runs of different notes do not wait for each other.
      */
-    private async withFileRunLock<T>(path: string, task: () => Promise<T>): Promise<T> {
-        const locks = (this.fileRunLocks ??= new Map<string, Promise<void>>())
-        const previous = locks.get(path) ?? Promise.resolve()
+    private async withFileRunLock<T>(file: TFile, task: () => Promise<T>): Promise<T> {
+        const locks = (this.fileRunLocks ??= new WeakMap<TFile, Promise<void>>())
+        const previous = locks.get(file) ?? Promise.resolve()
         let release = (): void => {}
         const current = new Promise<void>((resolve) => {
             release = resolve
         })
         const tail = previous.then(() => current)
-        locks.set(path, tail)
+        locks.set(file, tail)
 
         await previous
         try {
             return await task()
         } finally {
             release()
-            if (locks.get(path) === tail) {
-                locks.delete(path)
+            if (locks.get(file) === tail) {
+                locks.delete(file)
             }
         }
     }
@@ -1581,7 +1655,7 @@ export class DataviewSerializerPlugin extends Plugin {
         }
 
         const file = _file
-        return this.withFileRunLock(file.path, () => this.runLockedFile(file, options))
+        return this.withFileRunLock(file, () => this.runLockedFile(file, options))
     }
 
     /** `runFile`, once no other run of the note is in progress */
@@ -1620,6 +1694,7 @@ export class DataviewSerializerPlugin extends Plugin {
             //log(`Processing file: ${file.path}`, 'debug');
 
             const text = await readContent()
+            run.lineEnding = lineEndingOf(text)
             const foundQueries: QueryWithContext[] = findQueries(text)
             // Only a presence test is needed here; processInlineQueries parses the
             // (possibly rewritten) text itself, so parsing it twice served no purpose.
@@ -1775,7 +1850,7 @@ export class DataviewSerializerPlugin extends Plugin {
                     // blank ones) is stripped before comparing, so that structural markers
                     // never make identical results look different.
                     const existingContent = stripLinePrefix(
-                        existingBlock.content,
+                        toLf(existingBlock.content),
                         blockquotePrefix
                     ).trim()
                     const newContent = stripLinePrefix(serializedQuery, blockquotePrefix).trim()
@@ -1802,9 +1877,11 @@ export class DataviewSerializerPlugin extends Plugin {
                     }
                 }
 
-                // An empty result is normally left out (the previous output stays);
-                // the refresh API writes it, so the note holds the current result
-                if ('' !== serializedQuery || refreshMode) {
+                // An empty result is normally left out (the previous output stays).
+                // The refresh API writes it over an existing result block, so the
+                // note holds the current result; a query never serialized is left
+                // alone (it shows nothing either way, and once queries stay open).
+                if ('' !== serializedQuery || (refreshMode && existingBlock !== null)) {
                     // Match the query definition, optionally followed by an existing
                     // serialized block, so both can be replaced in one go
                     const originalQueryDefinition = queryWithContext.originalQueryDefinition
@@ -1874,6 +1951,11 @@ export class DataviewSerializerPlugin extends Plugin {
                             blankLineBeforeEnd: needsTrailingNewline
                         })
                     }
+                    // Written with the note's own line ends
+                    queryAndSerializedQuery = withLineEnding(
+                        queryAndSerializedQuery,
+                        run.lineEnding
+                    )
                     log(
                         `[DEBUG] Replacement string length: ${queryAndSerializedQuery.length}, first 200 chars: "${queryAndSerializedQuery.substring(0, 200)}"`,
                         'debug'
@@ -1885,6 +1967,17 @@ export class DataviewSerializerPlugin extends Plugin {
                         queryToSerializeRegex,
                         () => queryAndSerializedQuery
                     )
+                    if (refreshMode) {
+                        run.placements.push(
+                            updateMode === 'once-and-eject'
+                                ? { query: foundQuery, definition: queryToSerializeRegex }
+                                : {
+                                      query: foundQuery,
+                                      placed: queryAndSerializedQuery,
+                                      resultStarts: QUERY_RESULT_STARTS
+                                  }
+                        )
+                    }
                     log(
                         `[DEBUG] After replacement - text length before: ${textLengthBefore}, after: ${updatedText.length}, diff: ${updatedText.length - textLengthBefore}`,
                         'debug'
@@ -1932,6 +2025,17 @@ export class DataviewSerializerPlugin extends Plugin {
                 'debug'
             )
 
+            // Refresh API: every output must have landed where it belongs
+            if (refreshMode && run.placements.length > 0) {
+                const codeRanges = findCodeRanges(updatedText)
+                for (const placement of run.placements) {
+                    const problem = checkPlacement(updatedText, placement, codeRanges)
+                    if (problem !== null) {
+                        result.errors.push({ query: placement.query, message: problem })
+                    }
+                }
+            }
+
             const hasErrors = result.errors.length > 0
 
             // All or nothing (refresh API): a note with a failing query keeps
@@ -1961,9 +2065,16 @@ export class DataviewSerializerPlugin extends Plugin {
             }, 2000)
             log('The file content has changed. Saving the modifications', 'info')
 
-            if (await this.saveSerializedContent(file, text, updatedText)) {
+            const written = await this.saveSerializedContent(file, text, updatedText)
+            if (written === 'written') {
                 result.updated = true
                 startCooldown()
+                return details(hasErrors ? 'query-errors' : 'updated')
+            } else if (written === 'already-there') {
+                // Another writer saved this very text: the note holds the output.
+                // Nothing was written, so no modify event of ours will clear the
+                // entry, and no cooldown (the other write's event may reprocess).
+                this.filesToIgnoreFileEvents.delete(file.path)
                 return details(hasErrors ? 'query-errors' : 'updated')
             } else {
                 // No cooldown here on purpose: the write that overtook this run
@@ -2000,33 +2111,33 @@ export class DataviewSerializerPlugin extends Plugin {
      * @param file The note to write
      * @param expectedText The content the serialization was computed from
      * @param updatedText The serialized content to save
-     * @returns true when the note was written, or when the newer version already
-     *          holds exactly the serialized content; false when a different newer
-     *          version was left alone
+     * @returns 'written'; 'already-there' when the newer version already holds
+     *          exactly `updatedText` (nothing written, nothing lost);
+     *          'conflict' when a different newer version was kept and nothing
+     *          written
      */
     private async saveSerializedContent(
         file: TFile,
         expectedText: string,
         updatedText: string
-    ): Promise<boolean> {
-        let written = true
+    ): Promise<'written' | 'already-there' | 'conflict'> {
+        let state: 'written' | 'already-there' | 'conflict' = 'written'
 
         await this.app.vault.process(file, (currentText: string) => {
-            // Another writer got there first with the very same text: nothing
-            // is lost, the note holds the serialized content
             if (currentText === updatedText) {
+                state = 'already-there'
                 return currentText
             }
 
             if (currentText !== expectedText) {
-                written = false
+                state = 'conflict'
                 return currentText
             }
 
             return updatedText
         })
 
-        return written
+        return state
     }
 
     /**
@@ -2280,7 +2391,7 @@ export class DataviewSerializerPlugin extends Plugin {
                 // Strip the blockquote prefix before comparing so structural markers
                 // never make identical results look different
                 const existingContent = stripLinePrefix(
-                    existingBlock.content,
+                    toLf(existingBlock.content),
                     blockquotePrefix
                 ).trim()
                 const newContent = stripLinePrefix(serializedContent, blockquotePrefix).trim()
@@ -2298,9 +2409,14 @@ export class DataviewSerializerPlugin extends Plugin {
             }
 
             // Build the replacement
-            // An empty result is normally left out (the previous output stays);
-            // the refresh API writes it, so the note holds the current result
-            if (serializedContent !== '' || updateMode === 'once-and-eject' || run.refreshMode) {
+            // An empty result is normally left out (the previous output stays). The
+            // refresh API writes it over an existing result block, so the note holds
+            // the current result.
+            if (
+                serializedContent !== '' ||
+                updateMode === 'once-and-eject' ||
+                (run.refreshMode && existingBlock !== null)
+            ) {
                 // Regex to match the query definition and any existing serialized block
                 const queryToSerializeRegex = buildDataviewJSReplacementRegex(dataviewJSRegexParams)
 
@@ -2328,11 +2444,21 @@ export class DataviewSerializerPlugin extends Plugin {
                     })
                 }
 
+                // Written with the note's own line ends
+                replacement = withLineEnding(replacement, run.lineEnding)
                 updatedText = replaceOutsideCode(
                     updatedText,
                     queryToSerializeRegex,
                     () => replacement
                 )
+                if (run.refreshMode) {
+                    const query = dataviewJSQueryLabel(jsCode)
+                    run.placements.push(
+                        updateMode === 'once-and-eject'
+                            ? { query, definition: queryToSerializeRegex }
+                            : { query, placed: replacement, resultStarts: DATAVIEWJS_RESULT_STARTS }
+                    )
+                }
             }
         }
 

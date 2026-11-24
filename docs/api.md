@@ -98,14 +98,16 @@ It runs like an automatic update, without the throttles:
 - Manual queries, and once queries that already have output, are not run again.
 - It runs even when automatic updates are disabled. DataviewJS queries run only when DataviewJS support is on; otherwise they keep their output and are listed in `skipped`.
 - It reads the notes from disk, not from Obsidian's cache.
-- An empty result replaces the previous output (an empty block), so the note always holds the current result. A once-and-eject query with an empty result is ejected.
-- A note with a failing query is not written at all, not even the output of its other queries.
+- A query that returns nothing clears its existing result block, so the note always holds the current result. A query that was never serialized and returns nothing is left as it is (it shows nothing either way): a once query stays open, a once-and-eject query is not ejected. An inline query that returns nothing shows `-`.
+- A note with a failing query is not written at all, not even the output of its other queries. The same goes for an output that cannot be put in its place (for example a result block whose end marker is missing): the note is `failed`.
 - It waits for other runs on the same note (a file event, a command) to finish first.
 - It shows no notice.
 
-**Before you call it, let Obsidian save and index your own edits.** Dataview indexes a saved note a moment later. `refreshNotes` waits up to about 5 seconds for Dataview to index every saved note of the vault; if Dataview is still behind, nothing runs and `state` is `dataview-index-busy`.
+**Before you call it, let Obsidian save and index your own edits.** Dataview indexes a saved note a moment later. `refreshNotes` waits up to about 5 seconds for Dataview to index every saved note of the vault, and asks Dataview to index again a note that stays behind. If Dataview is still behind, nothing runs, `state` is `dataview-index-busy`, and `stalePaths` names the first notes still behind.
 
-`paths` must be an array; anything else rejects with a `TypeError`.
+**Notes of one call that list each other.** When a refresh writes a note, a list in another note of the same call may not show the change yet: Dataview has not indexed the write. So, after a pass that wrote something, `refreshNotes` waits for Dataview and runs another pass over the notes of the call, until a pass writes nothing (at most 3 passes). If the passes do not settle (still writing after the third pass, or Dataview still behind between passes), every `updated` or `unchanged` note gets an error that starts with `Not settled`: call `refreshNotes` again.
+
+`paths` must be an array; anything else rejects with a `TypeError`. Each path must be the exact vault path of the note: a path that differs only in its form (a non-breaking space for a space, decomposed accents, extra slashes) is `not-found`, because it can name another note.
 
 Returns:
 
@@ -116,7 +118,7 @@ Returns:
         // Exactly one entry per given path, in the same order (duplicates kept)
         {
             path: 'Projects/Dashboard.md', // as given
-            resolvedPath: 'Projects/Dashboard.md', // the note it found, or null
+            resolvedPath: 'Projects/Dashboard.md', // the note found, or null
             outcome: 'updated',
             errors: [],
             skipped: [
@@ -135,20 +137,20 @@ States (checked in this order; anything but `ready` means nothing ran and every 
 - `disabled-on-device`: the plugin is disabled on this device.
 - `dataview-not-loaded`: Dataview is disabled or reloading.
 - `dataview-index-not-ready`: Dataview is still indexing the vault, which happens just after Obsidian starts. Queries run at that time return incomplete results.
-- `dataview-index-busy`: Dataview has not indexed the latest saved version of every note, after waiting about 5 seconds (recent edits, a sync). Queries would run against old data.
+- `dataview-index-busy`: Dataview has not indexed the latest saved version of every note, after waiting about 5 seconds (recent edits, a sync). Queries would run against old data. `stalePaths` lists the first notes still behind.
 - `ready`: the notes were processed.
 
-Outcomes:
+Outcomes (with several passes: the last pass's, and `updated` if any pass wrote):
 
 - `updated`: the note had queries to run, none failed, and the new output was written (or the note already held exactly that text).
 - `unchanged`: the note had queries to run, none failed, and the note already held their output.
-- `no-queries`: the note holds no query that a refresh runs (none at all, or only manual and once queries that are not run again), or is empty.
-- `ignored`: the per-note ignore flag excludes the note, or the serializer never processes that kind of file (a note named `Canvas.md`, an Excalidraw drawing).
-- `not-found`: there is no Markdown file at that path.
+- `no-queries`: the note holds no query that a refresh runs (none at all, or only manual queries and once queries that already have output), or is empty.
+- `ignored`: the per-note ignore flag excludes the note, or the serializer never processes that kind of file: a note named `Canvas.md`, or an Excalidraw drawing (recognized only while the Excalidraw plugin runs; otherwise the drawing is processed like any note).
+- `not-found`: there is no Markdown file at exactly that path.
 - `conflict`: the note changed during the refresh, so the write was refused and the newer version kept.
-- `failed`: a query failed or an error occurred. Nothing was written. `errors` lists the failures; an error that is not tied to a query has `query: ''`.
+- `failed`: a query failed, an output could not be put in its place, or an error occurred. The last pass wrote nothing. `errors` lists the failures; an error that is not tied to a query has `query: ''`.
 - `not-run`: `state` is not `ready`.
 
 `skipped` lists the queries left untouched on purpose, which keep their previous output: a query whose FROM source does not exist (see **Skip queries that reference missing notes or folders** in [Configuration](configuration.md#general-settings)), or a DataviewJS query while DataviewJS support is off. A note can be `updated` or `unchanged` and still have skipped queries: check `skipped` when every query must have run.
 
-`resolvedPath` is the vault path of the note the entry is about (`null` for `not-found` and `not-run`). The exact path is looked up first; if no note has it, the path is normalized as Obsidian does (non-breaking spaces become spaces, Unicode is composed), so `resolvedPath` can differ from `path`. Two paths that lead to the same note are processed once and both entries show that note.
+`resolvedPath` is the vault path of the note the entry is about (`null` for `not-found` and `not-run`). Two entries with the same path are processed once and both show that note.

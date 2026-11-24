@@ -59,7 +59,9 @@ export const buildSerializedBlock = (params: BuildSerializedBlockParams): string
         lines.push(blankLine)
     }
 
-    lines.push(params.content)
+    // An empty result inside a blockquote still needs its quote marker: a bare
+    // empty line would end the blockquote and split the callout
+    lines.push(params.content === '' ? blankLine : params.content)
 
     if (params.blankLineBeforeEnd) {
         lines.push(blankLine)

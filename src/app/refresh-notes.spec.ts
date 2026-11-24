@@ -1,12 +1,17 @@
 import { describe, expect, it } from 'bun:test'
-import { normalizePath, TFile } from 'obsidian'
+import { TFile } from 'obsidian'
 import type { RefreshedNote, RefreshOutcome, RefreshState } from './api'
 import {
     DATAVIEWJS_OFF_SKIP_REASON,
+    INDEX_POLL_INTERVAL_MS,
     INDEX_WAIT_TIMEOUT_MS,
-    findMarkdownFile,
-    isDataviewIndexCurrent,
+    MAX_REFRESH_PASSES,
+    STALE_PATHS_REPORTED,
+    UNSETTLED_MESSAGE,
+    createMarkdownFileResolver,
+    findStaleIndexedPaths,
     isDataviewIndexReady,
+    requestIndexReload,
     runNoteRefresh,
     unresolvedSkipReason,
     type FileRun,
@@ -35,38 +40,52 @@ const run = (status: FileRun['status'], extra: Partial<FileRun> = {}): FileRun =
 type HostOverrides = Partial<
     Pick<
         RefreshNotesHost,
-        | 'isDisabledOnDevice'
-        | 'isDataviewLoaded'
-        | 'isDataviewIndexReady'
-        | 'isDataviewIndexCurrent'
+        'isDisabledOnDevice' | 'isDataviewLoaded' | 'isDataviewIndexReady' | 'findStaleIndexedPaths'
     >
 >
 
 /**
- * Fake host for the orchestration: the notes that exist and the run each
- * one returns. Records which notes were processed and how long it waited.
+ * Fake host for the orchestration: the notes that exist and the run each one
+ * returns. An array gives one run per pass (the last one repeats); a single
+ * 'updated' run is followed by 'unchanged' runs, as a note that settles does.
+ * Records which notes were processed, how long it waited, what it re-indexed.
  */
-const createHost = (runs: Record<string, FileRun | Error>, overrides: HostOverrides = {}) => {
+const createHost = (
+    runs: Record<string, FileRun | Error | FileRun[]>,
+    overrides: HostOverrides = {}
+) => {
     const processed: string[] = []
     const waits: number[] = []
+    const reindexed: string[] = []
+    const runsOf = (entry: FileRun | Error | FileRun[]): Array<FileRun | Error> =>
+        Array.isArray(entry)
+            ? entry
+            : !(entry instanceof Error) && entry.status === 'updated'
+              ? [entry, { ...entry, status: 'unchanged' }]
+              : [entry]
     const host: RefreshNotesHost = {
         isDisabledOnDevice: () => false,
         isDataviewLoaded: () => true,
         isDataviewIndexReady: () => true,
-        isDataviewIndexCurrent: () => true,
+        findStaleIndexedPaths: () => [],
+        reindex: (path) => {
+            reindexed.push(path)
+        },
         sleep: (ms) => {
             waits.push(ms)
             return Promise.resolve()
         },
         resolveFile: (path) => (path in runs ? createFile(path) : null),
         refreshFile: (file) => {
+            const pass = processed.filter((path) => path === file.path).length
             processed.push(file.path)
-            const result = runs[file.path]!
+            const sequence = runsOf(runs[file.path]!)
+            const result = sequence[Math.min(pass, sequence.length - 1)]!
             return result instanceof Error ? Promise.reject(result) : Promise.resolve(result)
         },
         ...overrides
     }
-    return { host, processed, waits }
+    return { host, processed, waits, reindexed }
 }
 
 const notRun = (path: string): RefreshedNote => ({
@@ -94,88 +113,149 @@ describe('isDataviewIndexReady', () => {
     })
 })
 
-describe('isDataviewIndexCurrent', () => {
+describe('findStaleIndexedPaths', () => {
     // Dataview stores page mtimes as Luxon DateTimes
     const page = (mtime: number) => ({ mtime: { toMillis: () => mtime } })
     const index = (pages: Record<string, unknown>) => ({
         index: { initialized: true, pages: new Map(Object.entries(pages)) }
     })
 
-    it('is current when every note is indexed at its saved version', () => {
+    it('finds nothing when every note is indexed at its saved version', () => {
         const files = [createFile('A.md', 1000), createFile('B.md', 2000)]
 
         expect(
-            isDataviewIndexCurrent(index({ 'A.md': page(1000), 'B.md': page(2000) }), files)
-        ).toBe(true)
+            findStaleIndexedPaths(index({ 'A.md': page(1000), 'B.md': page(2000) }), files)
+        ).toEqual([])
     })
 
-    it('is behind when a note was saved after Dataview indexed it', () => {
+    it('finds a note saved after Dataview indexed it', () => {
         const files = [createFile('A.md', 1000), createFile('B.md', 2500)]
 
         expect(
-            isDataviewIndexCurrent(index({ 'A.md': page(1000), 'B.md': page(2000) }), files)
-        ).toBe(false)
+            findStaleIndexedPaths(index({ 'A.md': page(1000), 'B.md': page(2000) }), files)
+        ).toEqual(['B.md'])
     })
 
-    it('is behind when a note is not indexed yet', () => {
-        expect(isDataviewIndexCurrent(index({}), [createFile('New.md', 1000)])).toBe(false)
+    it('finds a note whose indexed version is newer than the file (its time went back)', () => {
+        expect(
+            findStaleIndexedPaths(index({ 'A.md': page(5000) }), [createFile('A.md', 1000)])
+        ).toEqual(['A.md'])
+    })
+
+    it('finds a note that is not indexed yet', () => {
+        expect(findStaleIndexedPaths(index({}), [createFile('New.md', 1000)])).toEqual(['New.md'])
     })
 
     it('accepts a page mtime stored as a number', () => {
         expect(
-            isDataviewIndexCurrent(index({ 'A.md': { mtime: 1000 } }), [createFile('A.md', 1000)])
-        ).toBe(true)
+            findStaleIndexedPaths(index({ 'A.md': { mtime: 1000 } }), [createFile('A.md', 1000)])
+        ).toEqual([])
     })
 
     it('counts what it cannot read as current (older Dataview)', () => {
         const files = [createFile('A.md', 1000)]
 
-        expect(isDataviewIndexCurrent({}, files)).toBe(true)
-        expect(isDataviewIndexCurrent({ index: { initialized: true } }, files)).toBe(true)
-        expect(isDataviewIndexCurrent({ index: { pages: {} } }, files)).toBe(true)
-        expect(isDataviewIndexCurrent(index({ 'A.md': {} }), files)).toBe(true)
-        expect(isDataviewIndexCurrent(index({ 'A.md': { mtime: 'x' } }), files)).toBe(true)
+        expect(findStaleIndexedPaths({}, files)).toEqual([])
+        expect(findStaleIndexedPaths({ index: { initialized: true } }, files)).toEqual([])
+        expect(findStaleIndexedPaths({ index: { pages: {} } }, files)).toEqual([])
+        expect(findStaleIndexedPaths(index({ 'A.md': {} }), files)).toEqual([])
+        expect(findStaleIndexedPaths(index({ 'A.md': { mtime: 'x' } }), files)).toEqual([])
         // A file without stat
-        expect(isDataviewIndexCurrent(index({}), [createFile('A.md')])).toBe(true)
+        expect(findStaleIndexedPaths(index({}), [createFile('A.md')])).toEqual([])
     })
 })
 
-describe('findMarkdownFile', () => {
+describe('requestIndexReload', () => {
+    it('asks the Dataview index to reload the file', () => {
+        const reloaded: string[] = []
+        const index = {
+            name: 'index',
+            reload(this: { name: string }, target: TFile): Promise<void> {
+                reloaded.push(`${this.name}:${target.path}`)
+                return Promise.resolve()
+            }
+        }
+
+        requestIndexReload({ index }, createFile('A.md', 1000))
+
+        expect(reloaded).toEqual(['index:A.md'])
+    })
+
+    it('does nothing with an older Dataview, and never throws', () => {
+        const file = createFile('A.md', 1000)
+        const throwing = {
+            reload: (): Promise<void> => {
+                throw new Error('nope')
+            }
+        }
+        const rejecting = { reload: (): Promise<void> => Promise.reject(new Error('no')) }
+
+        expect(() => requestIndexReload({}, file)).not.toThrow()
+        expect(() => requestIndexReload({ index: {} }, file)).not.toThrow()
+        expect(() => requestIndexReload({ index: throwing }, file)).not.toThrow()
+        expect(() => requestIndexReload({ index: rejecting }, file)).not.toThrow()
+    })
+})
+
+describe('createMarkdownFileResolver', () => {
     const vaultOf = (paths: string[], options: { lookupNormalizes?: boolean } = {}) => {
         const files = new Map(paths.map((path) => [path, createFile(path)]))
+        let scans = 0
         return {
-            getFileByPath: (path: string) =>
-                files.get(options.lookupNormalizes ? normalizePath(path) : path) ?? null,
-            getMarkdownFiles: () => [...files.values()].filter((f) => f.extension === 'md')
+            vault: {
+                getFileByPath: (path: string) =>
+                    files.get(options.lookupNormalizes ? path.replace(/\u00A0/g, ' ') : path) ??
+                    null,
+                getMarkdownFiles: () => {
+                    scans++
+                    return [...files.values()].filter((f) => f.extension === 'md')
+                }
+            },
+            scans: () => scans
         }
     }
 
-    it('prefers the exact path, even when its normalized form is another note', () => {
-        const vault = vaultOf(['a b.md', 'a b.md'])
+    it('finds the note at the exact path, even when a look-alike exists', () => {
+        const { vault } = vaultOf(['a\u00A0b.md', 'a b.md'])
+        const resolve = createMarkdownFileResolver(vault)
 
-        expect(findMarkdownFile('a b.md', vault, normalizePath)?.path).toBe('a b.md')
-        expect(findMarkdownFile('a b.md', vault, normalizePath)?.path).toBe('a b.md')
+        expect(resolve('a\u00A0b.md')?.path).toBe('a\u00A0b.md')
+        expect(resolve('a b.md')?.path).toBe('a b.md')
     })
 
-    it('finds the exact path by scanning when the lookup normalizes', () => {
-        const vault = vaultOf(['a b.md', 'a b.md'], { lookupNormalizes: true })
+    it('finds the exact path through the vault list when the lookup normalizes', () => {
+        const { vault } = vaultOf(['a\u00A0b.md', 'a b.md'], { lookupNormalizes: true })
 
-        expect(findMarkdownFile('a b.md', vault, normalizePath)?.path).toBe('a b.md')
+        expect(createMarkdownFileResolver(vault)('a\u00A0b.md')?.path).toBe('a\u00A0b.md')
     })
 
-    it('falls back to the normalized path', () => {
-        const vault = vaultOf(['a b.md', 'café.md', 'Notes/x.md'])
+    it('does not fall back to another form of the path', () => {
+        const { vault } = vaultOf(['a b.md', 'café.md', 'Notes/x.md'])
+        const resolve = createMarkdownFileResolver(vault)
 
-        expect(findMarkdownFile('a b.md', vault, normalizePath)?.path).toBe('a b.md')
-        expect(findMarkdownFile('café.md', vault, normalizePath)?.path).toBe('café.md')
-        expect(findMarkdownFile('/Notes//x.md', vault, normalizePath)?.path).toBe('Notes/x.md')
+        expect(resolve('a\u00A0b.md')).toBeNull()
+        expect(resolve('a\u202Fb.md')).toBeNull()
+        expect(resolve('cafe\u0301.md')).toBeNull()
+        expect(resolve('/Notes//x.md')).toBeNull()
     })
 
     it('finds nothing for a missing note or a file that is not Markdown', () => {
-        const vault = vaultOf(['image.png'])
+        const { vault } = vaultOf(['image.png'])
+        const resolve = createMarkdownFileResolver(vault)
 
-        expect(findMarkdownFile('Missing.md', vault, normalizePath)).toBeNull()
-        expect(findMarkdownFile('image.png', vault, normalizePath)).toBeNull()
+        expect(resolve('Missing.md')).toBeNull()
+        expect(resolve('image.png')).toBeNull()
+    })
+
+    it('lists the vault at most once per resolver', () => {
+        const { vault, scans } = vaultOf(['A.md'])
+        const resolve = createMarkdownFileResolver(vault)
+
+        for (const path of ['X.md', 'Y.md', 'Z.md', 'A.md']) {
+            resolve(path)
+        }
+
+        expect(scans()).toBe(1)
     })
 })
 
@@ -223,40 +303,67 @@ describe('runNoteRefresh', () => {
 
         it('waits for Dataview to index recent edits, then runs', async () => {
             let polls = 0
-            const { host, processed, waits } = createHost(
-                { 'A.md': run('updated') },
-                { isDataviewIndexCurrent: () => ++polls > 3 }
+            const { host, processed, waits, reindexed } = createHost(
+                { 'A.md': run('unchanged') },
+                { findStaleIndexedPaths: () => (++polls > 3 ? [] : ['Other.md']) }
             )
 
             const report = await runNoteRefresh(['A.md'], host)
 
             expect(report.state).toBe('ready')
-            expect(waits).toHaveLength(3)
+            expect(report.stalePaths).toBeUndefined()
+            expect(waits).toEqual([
+                INDEX_POLL_INTERVAL_MS,
+                INDEX_POLL_INTERVAL_MS,
+                INDEX_POLL_INTERVAL_MS
+            ])
             expect(processed).toEqual(['A.md'])
+            // Asked once, after Dataview had a first chance to catch up alone
+            expect(reindexed).toEqual(['Other.md'])
         })
 
-        it('gives up when Dataview stays behind for too long', async () => {
-            const { host, processed, waits } = createHost(
+        it('does not ask Dataview to re-index when it catches up alone', async () => {
+            let polls = 0
+            const { host, reindexed } = createHost(
+                { 'A.md': run('unchanged') },
+                { findStaleIndexedPaths: () => (++polls > 1 ? [] : ['Other.md']) }
+            )
+
+            await runNoteRefresh(['A.md'], host)
+
+            expect(reindexed).toEqual([])
+        })
+
+        it('gives up when Dataview stays behind, and says which notes', async () => {
+            const stale = Array.from({ length: STALE_PATHS_REPORTED + 3 }, (_, i) => `S${i}.md`)
+            const { host, processed, waits, reindexed } = createHost(
                 { 'A.md': run('updated') },
-                { isDataviewIndexCurrent: () => false }
+                { findStaleIndexedPaths: () => stale }
             )
 
             const report = await runNoteRefresh(['A.md'], host)
 
-            expect(report).toEqual({ state: 'dataview-index-busy', notes: [notRun('A.md')] })
+            expect(report).toEqual({
+                state: 'dataview-index-busy',
+                stalePaths: stale.slice(0, STALE_PATHS_REPORTED),
+                notes: [notRun('A.md')]
+            })
             expect(waits.reduce((total, ms) => total + ms, 0)).toBe(INDEX_WAIT_TIMEOUT_MS)
             expect(processed).toEqual([])
+            // Each stale note re-indexed once, however long it waited
+            expect(reindexed).toEqual(stale)
         })
 
         it('checks the states in order', async () => {
             const never = () => false
+            const stale = () => ['S.md']
             const checks: Array<[HostOverrides, RefreshState]> = [
                 [
                     {
                         isDisabledOnDevice: () => true,
                         isDataviewLoaded: never,
                         isDataviewIndexReady: never,
-                        isDataviewIndexCurrent: never
+                        findStaleIndexedPaths: stale
                     },
                     'disabled-on-device'
                 ],
@@ -264,15 +371,15 @@ describe('runNoteRefresh', () => {
                     {
                         isDataviewLoaded: never,
                         isDataviewIndexReady: never,
-                        isDataviewIndexCurrent: never
+                        findStaleIndexedPaths: stale
                     },
                     'dataview-not-loaded'
                 ],
                 [
-                    { isDataviewIndexReady: never, isDataviewIndexCurrent: never },
+                    { isDataviewIndexReady: never, findStaleIndexedPaths: stale },
                     'dataview-index-not-ready'
                 ],
-                [{ isDataviewIndexCurrent: never }, 'dataview-index-busy']
+                [{ findStaleIndexedPaths: stale }, 'dataview-index-busy']
             ]
 
             for (const [overrides, state] of checks) {
@@ -326,15 +433,15 @@ describe('runNoteRefresh', () => {
             ])
         })
 
-        it('processes a note given twice, or under two paths, only once', async () => {
-            const { host, processed } = createHost({ 'A.md': run('updated') })
+        it('processes a note given twice, or under two paths, once per pass', async () => {
+            const { host, processed } = createHost({ 'A.md': run('unchanged') })
             host.resolveFile = (path) => (path.startsWith('A') ? createFile('A.md') : null)
 
-            const report = await runNoteRefresh(['A.md', 'A.md', 'A .md'], host)
+            const report = await runNoteRefresh(['A.md', 'A.md', 'A\u00A0.md'], host)
 
             expect(processed).toEqual(['A.md'])
             expect(report.notes.map((note) => note.resolvedPath)).toEqual(['A.md', 'A.md', 'A.md'])
-            expect(report.notes[2]?.path).toBe('A .md')
+            expect(report.notes[2]?.path).toBe('A\u00A0.md')
         })
 
         it('gives each entry of a duplicated path its own arrays', async () => {
@@ -476,6 +583,100 @@ describe('runNoteRefresh', () => {
             expect(note.outcome).toBe('unchanged')
             expect(note.skipped).toEqual(skipped)
         })
+    })
+})
+
+describe('runNoteRefresh passes', () => {
+    it('runs another pass after a write, until a pass writes nothing', async () => {
+        const { host, processed, waits } = createHost({
+            'A.md': [run('updated'), run('updated'), run('unchanged')],
+            'B.md': run('unchanged'),
+            'C.md': run('no-queries')
+        })
+
+        const report = await runNoteRefresh(['A.md', 'B.md', 'C.md'], host)
+
+        // A note without queries is not run again
+        expect(processed).toEqual(['A.md', 'B.md', 'C.md', 'A.md', 'B.md', 'A.md', 'B.md'])
+        expect(waits).toEqual([])
+        expect(report.notes.map((note) => [note.outcome, note.errors])).toEqual([
+            ['updated', []],
+            ['unchanged', []],
+            ['no-queries', []]
+        ])
+    })
+
+    it('waits for the index between passes', async () => {
+        let staleChecks = 0
+        const { host, processed } = createHost({ 'A.md': run('updated') })
+        host.findStaleIndexedPaths = () => {
+            staleChecks++
+            // Before the first pass: current. After the write: behind once.
+            return staleChecks === 2 ? ['A.md'] : []
+        }
+
+        const report = await runNoteRefresh(['A.md'], host)
+
+        expect(processed).toEqual(['A.md', 'A.md'])
+        expect(staleChecks).toBe(3)
+        expect(report.notes[0]?.outcome).toBe('updated')
+        expect(report.notes[0]?.errors).toEqual([])
+    })
+
+    it('reports a failure of the last pass, even when an earlier pass wrote', async () => {
+        const { host } = createHost({
+            'A.md': [
+                run('updated'),
+                run('query-errors', { errors: [{ query: 'Q', message: 'Bad' }] })
+            ]
+        })
+
+        const [note] = (await runNoteRefresh(['A.md'], host)).notes
+
+        expect(note?.outcome).toBe('failed')
+        expect(note?.errors).toEqual([{ query: 'Q', message: 'Bad' }])
+    })
+
+    it(`stops after ${MAX_REFRESH_PASSES} passes and flags the notes as not settled`, async () => {
+        const { host, processed } = createHost({
+            'A.md': [run('updated')],
+            'B.md': run('unchanged'),
+            'C.md': run('no-queries'),
+            'D.md': run('ignored-by-flag')
+        })
+
+        const report = await runNoteRefresh(['A.md', 'B.md', 'C.md', 'D.md'], host)
+
+        expect(processed.filter((path) => path === 'A.md')).toHaveLength(MAX_REFRESH_PASSES)
+        expect(report.notes.map((note) => [note.outcome, note.errors])).toEqual([
+            ['updated', [{ query: '', message: UNSETTLED_MESSAGE }]],
+            ['unchanged', [{ query: '', message: UNSETTLED_MESSAGE }]],
+            ['no-queries', []],
+            ['ignored', []]
+        ])
+    })
+
+    it('flags the notes as not settled when the index stays behind between passes', async () => {
+        let ran = false
+        const { host, processed } = createHost({
+            'A.md': run('updated'),
+            'B.md': run('unchanged')
+        })
+        const refreshFile = host.refreshFile.bind(host)
+        host.refreshFile = (file) => {
+            ran = true
+            return refreshFile(file)
+        }
+        host.findStaleIndexedPaths = () => (ran ? ['A.md'] : [])
+
+        const report = await runNoteRefresh(['A.md', 'B.md'], host)
+
+        expect(report.state).toBe('ready')
+        expect(processed).toEqual(['A.md', 'B.md'])
+        expect(report.notes.map((note) => [note.outcome, note.errors])).toEqual([
+            ['updated', [{ query: '', message: UNSETTLED_MESSAGE }]],
+            ['unchanged', [{ query: '', message: UNSETTLED_MESSAGE }]]
+        ])
     })
 })
 

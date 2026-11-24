@@ -32,6 +32,13 @@ import { matchOutsideCode, type CodeRange } from './code-ranges.fn'
  * Reference: https://github.com/dsebastien/obsidian-dataview-serializer/issues/91
  */
 
+/**
+ * The end of a marker line: optional trailing spaces or tabs (accepted by the
+ * query finders), then LF, CRLF or the end of the document. In multiline mode
+ * `$` also matches before a `\r`, so `\r?\n` must come first.
+ */
+const LINE_END = '[ \\t]*(?:\\r?\\n|$)'
+
 /** Either result start marker (legacy or alternative syntax) */
 const ANY_SERIALIZED_QUERY_START = `(?:${escapeRegExp(SERIALIZED_QUERY_START)}|${escapeRegExp(SERIALIZED_QUERY_START_ALT)})`
 /** Either result end marker (legacy or alternative syntax) */
@@ -65,7 +72,7 @@ export interface BlockQueryRegexParams {
 export const buildAlreadySerializedRegex = (params: BlockQueryRegexParams): RegExp => {
     const prefix = buildBlockquotePrefixPattern(params.indentation)
     return new RegExp(
-        `${escapeRegExp(params.flagOpen)}${escapeRegExp(params.query)}\\s*${escapeRegExp(params.flagClose)}(?:\\n|$)${prefix}${ANY_SERIALIZED_QUERY_START}[^\\n]*${escapeRegExp(QUERY_FLAG_CLOSE)}`,
+        `${escapeRegExp(params.flagOpen)}${escapeRegExp(params.query)}\\s*${escapeRegExp(params.flagClose)}${LINE_END}${prefix}${ANY_SERIALIZED_QUERY_START}[^\\n]*${escapeRegExp(QUERY_FLAG_CLOSE)}`,
         'm'
     )
 }
@@ -80,6 +87,8 @@ export interface ExistingSerializedBlock {
     startPrefix: string
     /** The blockquote prefix carried by the result end marker */
     endPrefix: string
+    /** Offset right after the result end marker */
+    end: number
 }
 
 /**
@@ -98,7 +107,7 @@ export const matchExistingSerializedBlock = (
 ): ExistingSerializedBlock | null => {
     const prefix = buildBlockquotePrefixPattern(params.indentation)
     const regex = new RegExp(
-        `${escapeRegExp(params.flagOpen)}${escapeRegExp(params.query)}\\s*${escapeRegExp(params.flagClose)}(?:\\n|$)(${prefix})${ANY_SERIALIZED_QUERY_START}[^\\n]*${escapeRegExp(QUERY_FLAG_CLOSE)}(?:\\n|$)([\\s\\S]*?)(${prefix})${ANY_SERIALIZED_QUERY_END}`,
+        `${escapeRegExp(params.flagOpen)}${escapeRegExp(params.query)}\\s*${escapeRegExp(params.flagClose)}${LINE_END}(${prefix})${ANY_SERIALIZED_QUERY_START}[^\\n]*${escapeRegExp(QUERY_FLAG_CLOSE)}${LINE_END}([\\s\\S]*?)(${prefix})${ANY_SERIALIZED_QUERY_END}`,
         'm'
     )
 
@@ -110,7 +119,8 @@ export const matchExistingSerializedBlock = (
     return {
         startPrefix: match[1] ?? '',
         content: match[2] ?? '',
-        endPrefix: match[3] ?? ''
+        endPrefix: match[3] ?? '',
+        end: match.index + match[0].length
     }
 }
 
@@ -135,13 +145,13 @@ export const buildBlockQueryReplacementRegex = (
     const prefix = buildBlockquotePrefixPattern(params.indentation)
     // Always use QUERY_FLAG_CLOSE for result markers (plugin-generated, standard format)
     const serializedClose = escapeRegExp(QUERY_FLAG_CLOSE)
-    const existingBlock = `(?:${prefix}${ANY_SERIALIZED_QUERY_START}[^\\n]*${serializedClose}(?:\\n|$)[\\s\\S]*?${prefix}${ANY_SERIALIZED_QUERY_END}(?:\\n|$))?`
+    const existingBlock = `(?:${prefix}${ANY_SERIALIZED_QUERY_START}[^\\n]*${serializedClose}${LINE_END}[\\s\\S]*?${prefix}${ANY_SERIALIZED_QUERY_END}${LINE_END})?`
 
     if (params.originalQueryDefinition) {
         // Multi-line query: match the original multi-line definition verbatim.
         // Note: it already includes the closing flag.
         return new RegExp(
-            `(${escapeRegExp(params.originalQueryDefinition)}(?:\\n|$))${existingBlock}`,
+            `(${escapeRegExp(params.originalQueryDefinition)}${LINE_END})${existingBlock}`,
             'gm'
         )
     }
@@ -152,7 +162,7 @@ export const buildBlockQueryReplacementRegex = (
     // "LIST FROM #project and #done").
     // \s* before the closing flag allows trailing whitespace between the query and -->.
     return new RegExp(
-        `^(${escapeRegExp(params.indentation)}${escapeRegExp(params.flagOpen)}${escapeRegExp(params.query)}\\s*${escapeRegExp(params.flagClose)}(?:\\n|$))${existingBlock}`,
+        `^(${escapeRegExp(params.indentation)}${escapeRegExp(params.flagOpen)}${escapeRegExp(params.query)}\\s*${escapeRegExp(params.flagClose)}${LINE_END})${existingBlock}`,
         'gm'
     )
 }
@@ -180,7 +190,7 @@ export const matchExistingDataviewJSBlock = (
 ): ExistingSerializedBlock | null => {
     const prefix = buildBlockquotePrefixPattern(params.indentation)
     const regex = new RegExp(
-        `${escapeRegExp(params.originalQueryDefinition)}(?:\\n|$)(${prefix})${ANY_SERIALIZED_DATAVIEWJS_START}${escapeRegExp(QUERY_FLAG_CLOSE)}(?:\\n|$)([\\s\\S]*?)(${prefix})${ANY_SERIALIZED_DATAVIEWJS_END}`,
+        `${escapeRegExp(params.originalQueryDefinition)}${LINE_END}(${prefix})${ANY_SERIALIZED_DATAVIEWJS_START}${escapeRegExp(QUERY_FLAG_CLOSE)}${LINE_END}([\\s\\S]*?)(${prefix})${ANY_SERIALIZED_DATAVIEWJS_END}`,
         'm'
     )
 
@@ -192,7 +202,8 @@ export const matchExistingDataviewJSBlock = (
     return {
         startPrefix: match[1] ?? '',
         content: match[2] ?? '',
-        endPrefix: match[3] ?? ''
+        endPrefix: match[3] ?? '',
+        end: match.index + match[0].length
     }
 }
 
@@ -205,7 +216,7 @@ export const matchExistingDataviewJSBlock = (
 export const buildDataviewJSReplacementRegex = (params: DataviewJSRegexParams): RegExp => {
     const prefix = buildBlockquotePrefixPattern(params.indentation)
     return new RegExp(
-        `(${escapeRegExp(params.originalQueryDefinition)}(?:\\n|$))(?:${prefix}${ANY_SERIALIZED_DATAVIEWJS_START}${escapeRegExp(QUERY_FLAG_CLOSE)}(?:\\n|$)[\\s\\S]*?${prefix}${ANY_SERIALIZED_DATAVIEWJS_END}(?:\\n|$))?`,
+        `(${escapeRegExp(params.originalQueryDefinition)}${LINE_END})(?:${prefix}${ANY_SERIALIZED_DATAVIEWJS_START}${escapeRegExp(QUERY_FLAG_CLOSE)}${LINE_END}[\\s\\S]*?${prefix}${ANY_SERIALIZED_DATAVIEWJS_END}${LINE_END})?`,
         'gm'
     )
 }

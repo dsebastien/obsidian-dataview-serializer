@@ -9,7 +9,8 @@ import type { QueryValidationReport } from './query-validator'
  * - 'dataview-index-not-ready': Dataview is still indexing the vault (just
  *   after startup), so queries would return incomplete results
  * - 'dataview-index-busy': Dataview has not indexed the latest saved version
- *   of every note yet, after waiting about 5 seconds (recent edits)
+ *   of every note yet, after waiting about 5 seconds (recent edits, a sync);
+ *   `RefreshReport.stalePaths` names the first notes still behind
  */
 export type RefreshState =
     | 'ready'
@@ -19,20 +20,23 @@ export type RefreshState =
     | 'dataview-index-busy'
 
 /**
- * What `refreshNotes` did with one note:
+ * What `refreshNotes` did with one note (when a call runs several passes, see
+ * `refreshNotes`, the outcome of the last pass, 'updated' if any pass wrote):
  * - 'updated': the note had queries to run, none failed, and the new output
  *   was written (or the note already held exactly that text)
- * - 'unchanged': the note had queries to run, none failed, and the output they
- *   produced was already in the note
+ * - 'unchanged': the note had queries to run, none failed, and the note already
+ *   held their output (a query that was never serialized and returns nothing
+ *   is left alone and counts as current)
  * - 'no-queries': the note holds no query that a refresh runs (none at all, or
- *   only manual / once / once-and-eject queries that are not run again), or
- *   is empty
+ *   only manual queries and once queries that already have output), or is
+ *   empty
  * - 'ignored': the per-note ignore flag of the frontmatter excludes it, or the
- *   serializer never processes that kind of file (the Canvas file, an
- *   Excalidraw drawing)
- * - 'not-found': no Markdown file at that path
+ *   serializer never processes that kind of file (a note named `Canvas.md`;
+ *   an Excalidraw drawing, recognized only while the Excalidraw plugin runs)
+ * - 'not-found': no Markdown file at exactly that path
  * - 'conflict': the note changed during the refresh, so the write was refused
- * - 'failed': an exception or a query error; nothing was written for this note
+ * - 'failed': an exception, a query error, or an output that could not be
+ *   placed in the note; nothing was written by the last pass
  * - 'not-run': the report state is not 'ready'
  */
 export type RefreshOutcome =
@@ -56,15 +60,16 @@ export interface RefreshedNote {
     /** The path as given to `refreshNotes` */
     path: string
     /**
-     * The vault path of the note the entry is about, which can differ from
-     * `path` (another Unicode or space form of the same name); null when no
-     * note was found or nothing ran
+     * The vault path of the note the entry is about (the path given, matched
+     * exactly); null when no note was found or nothing ran
      */
     resolvedPath: string | null
     outcome: RefreshOutcome
     /**
-     * Never empty when the outcome is 'failed'. An exception that is not tied
-     * to a query has `query: ''`.
+     * Never empty when the outcome is 'failed'. An error that is not tied to a
+     * query has `query: ''`. Also set on an 'updated' or 'unchanged' note when
+     * the passes of the call did not settle: the note may still list an older
+     * version of another note of the call.
      */
     errors: Array<{ query: string; message: string }>
     /**
@@ -78,6 +83,11 @@ export interface RefreshedNote {
 /** Outcome of a `refreshNotes` call. Plain data, safe to serialize as JSON. */
 export interface RefreshReport {
     state: RefreshState
+    /**
+     * With 'dataview-index-busy' only: the first notes Dataview has not
+     * indexed at their saved version
+     */
+    stalePaths?: string[]
     /** Exactly one entry per input path, in input order (duplicates kept) */
     notes: RefreshedNote[]
 }
@@ -133,13 +143,16 @@ export interface DataviewSerializerApi {
      * "Folders to scan" and the ignored folders do not apply, the per-note
      * ignore flag does; manual queries and once queries that already have
      * output are not run again. Runs even when automatic updates are disabled.
-     * Reads the notes from disk. An empty result replaces the previous output.
-     * A note with a failing query is not written at all. Shows no notice.
+     * Reads the notes from disk. An empty result clears an existing result
+     * block (an inline query shows `-`). A note with a failing query, or whose
+     * output cannot be put in its place, is not written at all. Shows no notice.
      *
-     * Waits up to about 5 seconds for Dataview to index recent edits. Let
-     * Obsidian save and index your own edits before calling it.
+     * Waits up to about 5 seconds for Dataview to index recent edits: let
+     * Obsidian save and index your own edits before calling it. When a pass
+     * wrote a note, runs another pass (at most 3) once Dataview indexed the
+     * writes, so notes of one call that list each other are current.
      *
-     * @param paths vault paths of the notes
+     * @param paths vault paths of the notes, matched exactly
      * @returns one entry per path, in input order; when the plugin is
      *          disabled on this device, Dataview is not loaded, or its index is
      *          loading or behind, nothing runs (see `RefreshState`)

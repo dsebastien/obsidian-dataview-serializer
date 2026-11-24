@@ -156,4 +156,35 @@ describe('buildSerializedBlock', () => {
             )
         })
     })
+
+    describe('empty content', () => {
+        it('keeps a callout whole with a bare quote marker', () => {
+            const result = buildSerializedBlock({
+                queryDefinition: `> ${definition}`,
+                startMarker,
+                endMarker: SERIALIZED_QUERY_END,
+                content: '',
+                indentation: '> ',
+                blankLineBeforeContent: false,
+                blankLineBeforeEnd: false
+            })
+
+            expect(result).toBe(`> ${definition}\n> ${startMarker}\n>\n> ${SERIALIZED_QUERY_END}\n`)
+            expect(result.split('\n').slice(0, -1)).not.toContain('')
+        })
+
+        it('writes an empty line outside a blockquote, as before', () => {
+            const result = buildSerializedBlock({
+                queryDefinition: definition,
+                startMarker,
+                endMarker: SERIALIZED_QUERY_END,
+                content: '',
+                indentation: '',
+                blankLineBeforeContent: false,
+                blankLineBeforeEnd: false
+            })
+
+            expect(result).toBe(`${definition}\n${startMarker}\n\n${SERIALIZED_QUERY_END}\n`)
+        })
+    })
 })
