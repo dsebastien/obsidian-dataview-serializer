@@ -696,7 +696,7 @@ describe('runNoteRefresh passes', () => {
         expect(note?.writes).toBe(1)
     })
 
-    it(`stops after ${MAX_REFRESH_PASSES} passes and flags only the notes still changing`, async () => {
+    it(`stops after ${MAX_REFRESH_PASSES} passes and flags every note that ran in the last`, async () => {
         const { host, processed } = createHost({
             'A.md': [run('updated')],
             'B.md': run('updated'),
@@ -708,11 +708,12 @@ describe('runNoteRefresh passes', () => {
         const report = await runNoteRefresh(['A.md', 'B.md', 'C.md', 'D.md', 'E.md'], host)
 
         expect(processed.filter((path) => path === 'A.md')).toHaveLength(MAX_REFRESH_PASSES)
-        expect(report.unsettledPaths).toEqual(['A.md'])
+        // B and C ran in the last pass too: they may list the old version of A
+        expect(report.unsettledPaths).toEqual(['A.md', 'B.md', 'C.md'])
         expect(report.notes.map((note) => [note.outcome, note.writes, note.errors])).toEqual([
             ['updated', MAX_REFRESH_PASSES, [{ query: '', message: UNSETTLED_MESSAGE }]],
-            ['updated', 1, []],
-            ['unchanged', 0, []],
+            ['updated', 1, [{ query: '', message: UNSETTLED_MESSAGE }]],
+            ['unchanged', 0, [{ query: '', message: UNSETTLED_MESSAGE }]],
             ['no-queries', 0, []],
             ['ignored', 0, []]
         ])

@@ -1554,7 +1554,7 @@ describe('DataviewSerializerPlugin.refreshNotes review round 3 cases', () => {
         expect(contents.get('B.md')).toBe(`${def}\n${start}\n- [[Fresh]]\n\n${end}`)
     })
 
-    it('flags only the note that never settles', async () => {
+    it('flags every note of the call that ran with a note that never settles', async () => {
         let tick = 0
         const { plugin } = createRefresher(
             {
@@ -1566,11 +1566,47 @@ describe('DataviewSerializerPlugin.refreshNotes review round 3 cases', () => {
 
         const report = await plugin.refreshNotes(['Clock.md', 'Other.md'])
 
-        expect(report.unsettledPaths).toEqual(['Clock.md'])
+        // Other.md ran in the last pass, which wrote Clock.md: it may list the
+        // old version (call it alone, or without Clock.md)
+        expect(report.unsettledPaths).toEqual(['Clock.md', 'Other.md'])
         expect(report.notes.map((note) => [note.outcome, note.writes, note.errors])).toEqual([
             ['updated', MAX_REFRESH_PASSES, [{ query: '', message: UNSETTLED_MESSAGE }]],
-            ['unchanged', 0, []]
+            ['unchanged', 0, [{ query: '', message: UNSETTLED_MESSAGE }]]
         ])
+    })
+
+    it('flags the end of a chain longer than the passes', async () => {
+        // N2 lists N1, N3 lists N2, N4 lists N3; only N1 is stale at first.
+        // Pass 1 writes N1, pass 2 N2, pass 3 N3: N4 still lists the old N3.
+        const output = (query: string, indexed: ReadonlyMap<string, string>): string => {
+            if (query === 'LIST FROM #n1') {
+                return '- [[Fresh]]\n'
+            }
+            const source = { 'LIST FROM #n2': 'N1', 'LIST FROM #n3': 'N2', 'LIST FROM #n4': 'N3' }[
+                query
+            ]!
+            const upstream = indexed.get(`${source}.md`) ?? ''
+            return upstream.includes('Fresh') || upstream.includes('fresh')
+                ? `- [[${source} fresh]]\n`
+                : `- [[${source} old]]\n`
+        }
+        const { plugin, contents } = createRefresher(
+            {
+                'N1.md': block('LIST FROM #n1', '- [[Old]]'),
+                'N2.md': block('LIST FROM #n2', '- [[N1 old]]\n'),
+                'N3.md': block('LIST FROM #n3', '- [[N2 old]]\n'),
+                'N4.md': block('LIST FROM #n4', '- [[N3 old]]\n')
+            },
+            { simulateIndex: true, queryOutput: output }
+        )
+
+        const report = await plugin.refreshNotes(['N1.md', 'N2.md', 'N3.md', 'N4.md'])
+
+        expect(contents.get('N4.md')).toContain('N3 old')
+        expect(report.unsettledPaths).toEqual(['N1.md', 'N2.md', 'N3.md', 'N4.md'])
+        const n4 = report.notes[3]
+        expect(n4?.outcome).toBe('unchanged')
+        expect(n4?.errors).toEqual([{ query: '', message: UNSETTLED_MESSAGE }])
     })
 })
 

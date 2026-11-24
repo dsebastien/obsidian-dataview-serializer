@@ -46,13 +46,14 @@ export const STALE_PATHS_REPORTED = 5
 export const MAX_REFRESH_PASSES = 3
 
 /**
- * Error added to the notes whose passes did not settle: a note that still
- * changed in the last pass (a self-changing note, such as one showing the
- * current time, never settles), or, when Dataview stayed behind between
- * passes, every note that ran in the last pass
+ * Error added to the notes that did not settle: when the last pass wrote a
+ * note and no later pass could run (pass limit reached, or Dataview still
+ * behind), every note with queries that ran in that pass, since any of them
+ * can list a note written then. A self-changing note (one showing the current
+ * time, say) writes in every pass, so it marks every note of its call.
  */
 export const UNSETTLED_MESSAGE =
-    'Not settled: this note still changed in the last pass, or Dataview had not indexed the notes written by this call when it stopped. A note that changes on every run (such as one showing the current time) never settles.'
+    'Not settled: the last pass of this call still wrote a note, so this note may list an older version of it. A note that changes on every run (such as one showing the current time) never settles: refresh it alone, or the other notes without it.'
 
 /** Reason given for a later copy of a query: only the first copy of a query text is serialized */
 export const DUPLICATE_QUERY_SKIP_REASON =
@@ -366,8 +367,8 @@ const waitForIndex = async (host: RefreshNotesHost, timeoutMs: number): Promise<
  * within `INDEX_WAIT_TIMEOUT_MS`. Each note is processed once per pass, even
  * when given several times. A pass that wrote a note is followed by another
  * (up to `MAX_REFRESH_PASSES`) once Dataview indexed the writes; when the
- * passes do not settle, the notes concerned get the `UNSETTLED_MESSAGE` error
- * and are listed in `unsettledPaths`.
+ * last pass still wrote, every note that ran in it gets the `UNSETTLED_MESSAGE`
+ * error and is listed in `unsettledPaths`.
  * The report has one entry per input path, in input order.
  *
  * @throws TypeError when `paths` is not an array
@@ -451,13 +452,13 @@ export async function runNoteRefresh(
         if (writtenNow.length === 0) {
             break
         }
-        if (pass >= MAX_REFRESH_PASSES) {
-            // Still changing after the last pass: those notes never settled
-            writtenNow.forEach((path) => unsettled.add(path))
-            break
-        }
-        if ((await waitForIndex(host, indexWaitTimeout(writtenNow.length))).length > 0) {
-            // No later pass can run: no note that ran may have seen the writes
+        // The last pass wrote, and no later pass will run (pass limit reached,
+        // or Dataview still behind): no note that ran in it may have seen those
+        // writes, whether it changed or not (it can list a note written then)
+        if (
+            pass >= MAX_REFRESH_PASSES ||
+            (await waitForIndex(host, indexWaitTimeout(writtenNow.length))).length > 0
+        ) {
             toRun.forEach((file) => {
                 if (!FINAL_STATUSES.has(runsByPath.get(file.path)?.status ?? 'no-queries')) {
                     unsettled.add(file.path)

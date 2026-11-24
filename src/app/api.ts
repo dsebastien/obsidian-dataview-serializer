@@ -97,11 +97,12 @@ export interface RefreshReport {
      */
     stalePaths?: string[]
     /**
-     * With 'ready' only, when the passes did not settle: the notes that still
-     * changed in the last pass (a self-changing note, such as one that shows
-     * the current time, never settles), or, when Dataview stayed behind
-     * between passes, every note that ran in the last pass. Each gets the
-     * "Not settled" error.
+     * With 'ready' only, when the passes did not settle: the last pass still
+     * wrote a note and no later pass could run, so every note with queries
+     * that ran in it may list an older version. Each gets the "Not settled"
+     * error. A self-changing note (one that shows the current time, say)
+     * writes in every pass, so it marks every note of its call: refresh it
+     * alone, or the other notes without it.
      */
     unsettledPaths?: string[]
     /** Exactly one entry per input path, in input order (duplicates kept) */
