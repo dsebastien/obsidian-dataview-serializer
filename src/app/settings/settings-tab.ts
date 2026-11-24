@@ -19,7 +19,10 @@ import {
 
 /** The path lists, keyed by the settings field each one edits. */
 type FolderListKey =
-    'foldersToScan' | 'ignoredFolders' | 'foldersToForceUpdate' | 'forceUpdateTriggers'
+    | 'foldersToScan'
+    | 'ignoredFolders'
+    | 'foldersToForceUpdate'
+    | 'forceUpdateTriggers'
 
 /**
  * Settings tab, declared rather than rendered (Obsidian 1.13+).
