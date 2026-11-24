@@ -311,11 +311,7 @@ const dataviewJSQueryLabel = (jsCode: string): string =>
  * Why a note is not processed (see `getIgnoreReason`)
  */
 type IgnoreReason =
-    | 'not-processable'
-    | 'excluded-file-type'
-    | 'empty'
-    | 'ignored-by-flag'
-    | 'throttled'
+    'not-processable' | 'excluded-file-type' | 'empty' | 'ignored-by-flag' | 'throttled'
 
 /**
  * A query error, with the file it occurred in

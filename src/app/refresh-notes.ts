@@ -428,15 +428,13 @@ export async function runNoteRefresh(
         const runs = await processInBatches(
             toRun,
             (file) =>
-                host.refreshFile(file).catch(
-                    (error: unknown): FileRun => ({
-                        status: 'exception',
-                        written: false,
-                        errors: [],
-                        skipped: [],
-                        exception: errorMessage(error)
-                    })
-                ),
+                host.refreshFile(file).catch((error: unknown): FileRun => ({
+                    status: 'exception',
+                    written: false,
+                    errors: [],
+                    skipped: [],
+                    exception: errorMessage(error)
+                })),
             REFRESH_CONCURRENCY
         )
         const writtenNow: string[] = []
