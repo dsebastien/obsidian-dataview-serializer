@@ -1,5 +1,19 @@
 # Release Notes
 
+## 3.9.0 (2026-11-24)
+
+### Features
+
+* **plugin:** add refreshNotes to the public API
+* **plugin:** wait for the Dataview index in refreshNotes
+
+### Bug Fixes
+
+* **plugin:** check every query of a refresh, count writes, settle per note
+* **plugin:** make refreshNotes place, check and settle every output
+* **plugin:** make refreshNotes report only what really holds
+* **plugin:** mark every note of an unsettled last pass in refreshNotes
+
 ## 3.8.0 (2026-11-15)
 
 ### Force update triggers

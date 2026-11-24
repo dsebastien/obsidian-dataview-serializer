@@ -2,6 +2,20 @@
 
 All notable changes to this project will be documented in this file.
 
+## [3.9.0](https://github.com/dsebastien/obsidian-dataview-serializer/compare/3.8.0...3.9.0) (2026-11-24)
+
+### Features
+
+* **plugin:** add refreshNotes to the public API ([9ae9455](https://github.com/dsebastien/obsidian-dataview-serializer/commit/9ae945566de4aa723887e85f35d41370de3bffa1))
+* **plugin:** wait for the Dataview index in refreshNotes ([6217edd](https://github.com/dsebastien/obsidian-dataview-serializer/commit/6217edd80f173b195fadf1fefccf3a125b070b84))
+
+### Bug Fixes
+
+* **plugin:** check every query of a refresh, count writes, settle per note ([3632447](https://github.com/dsebastien/obsidian-dataview-serializer/commit/36324472d79dacd34c6196a6dd04366ee742c0d1))
+* **plugin:** make refreshNotes place, check and settle every output ([5699563](https://github.com/dsebastien/obsidian-dataview-serializer/commit/56995633162bc721816b8292cab5ccd72291e6a2))
+* **plugin:** make refreshNotes report only what really holds ([46083f0](https://github.com/dsebastien/obsidian-dataview-serializer/commit/46083f0ff19e48dfab9fe57d5f4789e3ccda406a))
+* **plugin:** mark every note of an unsettled last pass in refreshNotes ([1040575](https://github.com/dsebastien/obsidian-dataview-serializer/commit/1040575e0cb3b5730a499fb03d56fe08343b13d4))
+
 ## [3.8.0](https://github.com/dsebastien/obsidian-dataview-serializer/compare/3.7.1...3.8.0) (2026-11-15)
 
 ### Force update triggers
@@ -412,6 +426,7 @@ six command ids unchanged, and data.json byte-identical afterwards.
 ## [1.0.2](https://github.com/dsebastien/obsidian-dataview-serializer/compare/1.0.1...1.0.2) (2024-05-14)
 ## [1.0.1](https://github.com/dsebastien/obsidian-dataview-serializer/compare/1.0.0...1.0.1) (2024-05-14)
 ## 1.0.0 (2024-05-13)
+
 
 
 
